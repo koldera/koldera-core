@@ -7,7 +7,8 @@ public static class InfoEndpoints
     public static void MapInfoEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/healthz", () => Results.Json(new { status = "ok" }));
-        app.MapGet("/v1/info", (CoreOptions options) => Results.Json(new
+        var v1 = app.MapGroup("/v1");
+        v1.MapGet("/info", (CoreOptions options) => Results.Json(new
         {
             version = typeof(InfoEndpoints).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0],
             engineVersion = ReadEngineVersion(),
