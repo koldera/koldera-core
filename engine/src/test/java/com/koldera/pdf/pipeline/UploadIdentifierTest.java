@@ -368,9 +368,9 @@ class UploadIdentifierTest {
 
   private static void assertNoConformanceWording(WorkerResult result) {
     String json = WorkerResultCodec.toJson(result).toLowerCase(Locale.ROOT);
-    // Character classes keep the claim words out of this source file.
-    var claim = java.util.regex.Pattern.compile("compl[i]ant|compl[i]ance|certif[i]ed|certif[i]cate|100%|accessible pdf").matcher(json);
-    assertFalse(claim.find(), () -> "no claim wording: " + json);
+    for (String word : List.of("compliant", "compliance", "certified", "certificate", "100%", "accessible pdf")) { // hygiene-allow: claim-word
+      assertFalse(json.contains(word), "no '" + word + "' wording: " + json);
+    }
   }
 
   private void assertScratchClean() throws IOException {

@@ -85,7 +85,7 @@ public final class GeneratedStructureRule implements RemediationRule {
   @Override
   public RuleDecision inspect(PDDocument document, WorkerRequest request) {
     if (!participates(request)) {
-      return RuleDecision.skip("generated-PDF normalization only runs for PDFs this platform generated from HTML", null, null);
+      return RuleDecision.skip("generated-PDF normalization only runs for PDFs generated from HTML by the renderer", null, null);
     }
     if (document.getDocumentCatalog().getStructureTreeRoot() == null) {
       return RuleDecision.skip("document is not tagged; there is no generated structure to normalize", "untagged", null);

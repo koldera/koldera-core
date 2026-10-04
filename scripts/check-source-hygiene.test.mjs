@@ -26,6 +26,12 @@ test("clean code passes", () => {
   assert.deepEqual(findViolations("a.cs", "// Retry once: the first read can race the rename.\nvar x = 1;\n"), []);
 });
 
+test("hygiene-allow marker exempts only the claim-word rule on its line", () => {
+  assert.deepEqual(rulesOf("a.java", 'String F = "compliant"; // hygiene-allow: claim-word'), []);
+  assert.deepEqual(rulesOf("a.java", "int x = 1; // M3b hygiene-allow: claim-word"), ["milestone"]);
+  assert.deepEqual(rulesOf("a.java", 'String F = "compliant";'), ["claim-word"]);
+});
+
 const rulesOf = (file, text) => findViolations(file, text).map((v) => v.rule);
 const script = fileURLToPath(new URL("./check-source-hygiene.mjs", import.meta.url));
 
