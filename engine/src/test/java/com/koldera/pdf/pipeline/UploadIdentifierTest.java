@@ -223,22 +223,6 @@ class UploadIdentifierTest {
   }
 
   @Test
-  void structureFixNeverListsTheIdentifier() throws IOException {
-    Files.write(workspace.inputFile(), SyntheticPdfFactory.untaggedEmbeddedFontArticle());
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(UAID_RULE, 1)));
-
-    WorkerResult result = production().process(upload(WorkerRequest.Mode.STRUCTURE_FIX), workspace);
-
-    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
-    assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
-    assertTrue(result.actions().stream().noneMatch(a -> a.ruleId() == RuleId.PDF_UA_IDENTIFIER_V1), result.actions().toString());
-    assertEquals(2, validator.calls.size());
-    assertEquals("", pdfUaPart());
-    assertSchemaValid(result);
-  }
-
-  @Test
   void aGeneratedFallbackStillWritesNoIdentifier() throws IOException {
     try (var in = UploadIdentifierTest.class.getResourceAsStream("/generated/generated-lists.pdf")) {
       Files.write(workspace.inputFile(), in.readAllBytes());

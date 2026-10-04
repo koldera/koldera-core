@@ -34,11 +34,8 @@ class GeneratedStructureRuleTest {
   void participatesOnlyInFixRunsOverPdfsThisPlatformGenerated() {
     assertEquals(RuleId.PDF_GENERATED_STRUCTURE_V1, rule.id());
     assertTrue(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)));
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.HTML_GENERATED)), "deprecated modes keep their old behaviour");
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.HTML_GENERATED)), "deprecated modes keep their old behaviour");
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.HTML_GENERATED)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
   }
 
   @Test

@@ -39,8 +39,6 @@ public class LanguageCorrectionRuleTest {
     assertEquals(RuleId.PDF_LANG_CORRECTED_FROM_TEXT_V1, rule.id());
     assertTrue(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)), "the renderer sets a generated PDF's language");
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
   }
 

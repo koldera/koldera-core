@@ -73,9 +73,9 @@ class PdfWorkerCliIT {
   }
 
   @Test
-  void safeFixOnMissingLangAndTitleFixtureAppliesBothRulesAndSurvivesIndependentRevalidation() throws IOException {
+  void fixOnMissingLangAndTitleFixtureAppliesTheLanguageRuleAndSurvivesIndependentRevalidation() throws IOException {
     byte[] original = install(SyntheticPdfFactory.build(Options.plain().infoTitle("Fixture Title").displayDocTitle(false)));
-    writeRequest("safe_fix", "\"en-US\"");
+    writeRequest("fix", "\"en-US\"");
 
     int exit = realMain().run(args());
 
@@ -86,10 +86,11 @@ class PdfWorkerCliIT {
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
-    assertEquals(2, result.actions().size());
-    assertTrue(result.actions().stream().allMatch(a -> a.outcome() == ActionOutcome.APPLIED), result.actions().toString());
+    for (var rule : java.util.List.of(WorkerResult.RuleId.PDF_LANG_FROM_EXPLICIT_INPUT_V1, WorkerResult.RuleId.PDF_DISPLAY_TITLE_FROM_EXISTING_TITLE_V1)) {
+      assertTrue(result.actions().stream().anyMatch(a -> a.ruleId() == rule && a.outcome() == ActionOutcome.APPLIED), rule + " in " + result.actions());
+    }
     assertEquals(ValidationStatus.FAILED, result.baseline().status(), "untagged input fails UA-1");
-    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "still untagged after two narrow fixes");
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "fix copies still fail machine checks on this fixture");
     assertTrue(result.baseline().failedRules().size() > result.finalValidation().failedRules().size());
     assertTrue(result.baseline().failedRules().stream().anyMatch(r -> r.ruleId().equals("ISO 14289-1:2014 7.2-34")));
     assertTrue(result.finalValidation().failedRules().stream().noneMatch(r -> r.ruleId().equals("ISO 14289-1:2014 7.2-34")));
@@ -204,9 +205,9 @@ class PdfWorkerCliIT {
   }
 
   @Test
-  void signedSafeFixIsRefusedWithoutOutputOrDigestChange() throws IOException {
+  void signedFixIsRefusedWithoutOutputOrDigestChange() throws IOException {
     byte[] original = install(SyntheticPdfFactory.signed());
-    writeRequest("safe_fix", "\"en-US\"");
+    writeRequest("fix", "\"en-US\"");
 
     assertEquals(0, realMain().run(args()));
 
@@ -223,7 +224,7 @@ class PdfWorkerCliIT {
   @Test
   void corruptInputIsTypedRejectionWithExitZero() throws IOException {
     install(SyntheticPdfFactory.corrupt());
-    writeRequest("safe_fix", "\"en-US\"");
+    writeRequest("fix", "\"en-US\"");
 
     assertEquals(0, realMain().run(args()));
 
@@ -239,7 +240,7 @@ class PdfWorkerCliIT {
     Path jar = Path.of("target", "koldera-pdf-engine.jar").toAbsolutePath();
     assertTrue(Files.isRegularFile(jar), "run via `mvn verify` so the shaded jar exists: " + jar);
     install(SyntheticPdfFactory.build(Options.plain().infoTitle("Jar Fixture")));
-    writeRequest("safe_fix", "\"uk\"");
+    writeRequest("fix", "\"uk\"");
     String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
 
     Process process =

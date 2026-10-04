@@ -1,3 +1,4 @@
+import { navigationTimeout } from "../limits.js";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 export const RENDERER_VERSION = "koldera-html-renderer 0.1.0";
@@ -51,7 +52,7 @@ export async function openIsolated(html: string, timeoutMs: number): Promise<Iso
         blocked += 1;
       }
     });
-    await page.goto(DOCUMENT_URL, { waitUntil: "load", timeout: timeoutMs });
+    await page.goto(DOCUMENT_URL, { waitUntil: "load", timeout: navigationTimeout(timeoutMs) });
     return {
       browser,
       context,

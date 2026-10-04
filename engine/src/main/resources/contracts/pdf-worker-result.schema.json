@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/pdf-worker-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/pdf-worker-result.v1.json",
   "title": "PdfWorkerResultV1",
   "type": "object", "additionalProperties": false,
   "required": ["specVersion", "jobId", "status", "originalSha256", "baseline", "finalValidation", "remediationStatus", "actions", "findings", "artifacts", "manualReviewRequired"],

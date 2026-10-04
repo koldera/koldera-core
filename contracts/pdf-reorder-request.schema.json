@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/pdf-reorder-request.v1.json",
+  "title": "PdfReorderRequestV1",
+  "description": "One explicitly approved permutation of the structure-element kids of ONE parent element (docs/13). The platform resolves the reviewer's opaque node ids to `parentPath` / `orderedKidIndexes`; clients never send paths. The engine applies it to a copy, verifies every invariant and refuses anything ambiguous.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "inputPath", "outputPath", "baseSha256", "parentPath", "orderedKidIndexes"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "inputPath": {"const": "/work/in/document.pdf"},
+    "outputPath": {"const": "/work/out/reordered.pdf"},
+    "baseSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "parentPath": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "kid indexes from the structure tree root to the parent whose kids are permuted; [] is the root itself"},
+    "orderedKidIndexes": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}, "description": "complete permutation of the parent's current kid indexes in the approved order"},
+    "limits": {"type": "object", "additionalProperties": false, "properties": {"maxBytes": {"type": "integer", "minimum": 1}, "maxPages": {"type": "integer", "minimum": 1}, "timeoutSeconds": {"type": "integer", "minimum": 1}}}
+  }
+}

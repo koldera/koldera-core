@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/html-semantic-request.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/html-semantic-request.v1.json",
   "title": "HtmlSemanticRequestV1",
   "description": "Collect DOM order, visual geometry and keyboard focus order of a vetted static HTML source in the isolated renderer. Read-only.",
   "type": "object", "additionalProperties": false,
-  "required": ["specVersion", "jobId", "inputPath", "limits"],
+  "required": ["specVersion", "jobId", "inputPath"],
   "properties": {
     "specVersion": {"const": "1.0"},
     "jobId": {"type": "string", "format": "uuid"},
     "inputPath": {"const": "/work/in/source.html"},
-    "limits": {"type": "object", "additionalProperties": false, "required": ["timeoutSeconds", "maxBytes", "maxNodes", "maxInlineImageBytes", "maxTotalInlineImageBytes"], "properties": {"timeoutSeconds": {"type": "integer", "minimum": 5, "maximum": 120}, "maxBytes": {"type": "integer", "minimum": 1, "maximum": 10485760}, "maxNodes": {"type": "integer", "minimum": 1, "maximum": 20000}, "maxInlineImageBytes": {"type": "integer", "minimum": 1}, "maxTotalInlineImageBytes": {"type": "integer", "minimum": 1}}}
+    "limits": {"type": "object", "additionalProperties": false, "properties": {"timeoutSeconds": {"type": "integer", "minimum": 5}, "maxBytes": {"type": "integer", "minimum": 1}, "maxNodes": {"type": "integer", "minimum": 1}, "maxInlineImageBytes": {"type": "integer", "minimum": 1}, "maxTotalInlineImageBytes": {"type": "integer", "minimum": 1}}}
   }
 }

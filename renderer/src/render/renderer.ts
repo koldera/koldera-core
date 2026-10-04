@@ -1,3 +1,4 @@
+import { budgetFromSeconds, definedOnly, limitOf, navigationTimeout } from "../limits.js";
 import { createHash } from "node:crypto";
 import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -59,8 +60,8 @@ export async function render(request: HtmlRendererRequest, options: RenderOption
   let bytes: Buffer;
   try {
     const info = await stat(inputPath);
-    if (info.size > request.limits.maxBytes) {
-      return base("failed", { code: "LIMIT_EXCEEDED", message: `source is ${info.size} bytes, above maxBytes=${request.limits.maxBytes}` });
+    if (info.size > limitOf(request.limits?.maxBytes)) {
+      return base("failed", { code: "LIMIT_EXCEEDED", message: `source is ${info.size} bytes, above maxBytes=${request.limits?.maxBytes}` });
     }
     bytes = await readFile(inputPath);
   } catch {
@@ -76,7 +77,7 @@ export async function render(request: HtmlRendererRequest, options: RenderOption
   if (options.skipPreflightForTests) {
     html = new TextDecoder("utf-8").decode(bytes);
   } else {
-    const checked = preflight(bytes, { maxInlineImageBytes: request.limits.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits.maxTotalInlineImageBytes });
+    const checked = preflight(bytes, { ...definedOnly({ maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) });
     diagnostics = checked.diagnostics;
     if (!checked.ok) {
       const blocking = checked.diagnostics.filter((d) => d.blocking).length;
@@ -86,7 +87,7 @@ export async function render(request: HtmlRendererRequest, options: RenderOption
     html = checked.vetted;
   }
 
-  const budgetMs = options.renderBudgetMsForTests ?? request.limits.timeoutSeconds * 1000;
+  const budgetMs = options.renderBudgetMsForTests ?? budgetFromSeconds(request.limits?.timeoutSeconds);
   const outcome = await renderVetted(html, request, { workRoot: options.workRoot, budgetMs, onPageForTests: options.onPageForTests });
   if (outcome.contentSelection && request.content) {
     const { kept, dropped } = outcome.contentSelection;
@@ -194,7 +195,7 @@ export async function renderVetted(
         await options.onPrintForTests(page);
       }
       // Requests the page attempts are aborted by the deny-all route and counted; the caller reports the count.
-      const screenshot = options.screenshot ? await page.screenshot({ fullPage: true, type: "png", timeout: remaining() }) : null;
+      const screenshot = options.screenshot ? await page.screenshot({ fullPage: true, type: "png", timeout: navigationTimeout(remaining()) }) : null;
       const pdf = await page.pdf({
         tagged: true,
         printBackground: request.page.printBackground ?? true,
@@ -204,8 +205,8 @@ export async function renderVetted(
         outline: true,
       });
       const pages = (await PDFDocument.load(pdf, { updateMetadata: false, ignoreEncryption: true })).getPageCount();
-      if (pages > request.limits.maxPages) {
-        return finish("failed", "LIMIT_EXCEEDED", `the rendered document has ${pages} pages, above maxPages=${request.limits.maxPages}`, { pages, offline, altMissing, svg });
+      if (pages > limitOf(request.limits?.maxPages)) {
+        return finish("failed", "LIMIT_EXCEEDED", `the rendered document has ${pages} pages, above maxPages=${request.limits?.maxPages}`, { pages, offline, altMissing, svg });
       }
       const tmp = outputPath + ".tmp";
       await writeFile(tmp, pdf);
@@ -223,7 +224,7 @@ export async function renderVetted(
     })();
     // If the timer wins, the abandoned work settles later (browser closed below); never unhandled.
     work.catch(() => undefined);
-    return await Promise.race([work, timeout(remaining())]);
+    return await Promise.race(Number.isFinite(options.budgetMs) ? [work, timeout(remaining())] : [work]);
   } catch (e) {
     if (e instanceof RenderTimeout || (e instanceof Error && /Timeout \d+ms exceeded/.test(e.message))) {
       return finish("failed", "TIMEOUT", `the render exceeded its budget of ${options.budgetMs} ms`);

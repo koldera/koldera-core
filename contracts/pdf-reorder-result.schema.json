@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/pdf-reorder-result.v1.json",
+  "title": "PdfReorderResultV1",
+  "description": "Outcome of an approved sibling-order change. `applied` means every invariant held on the reparsed copy (ParentTree, MCID inventory, raw content streams, per-page text token multisets, annotations, page count, pixel-identical render) AND the reparsed sequence equals the approved one; anything else publishes no output. Never a conformance statement.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "engineVersion", "baseSha256", "outputSha256", "outputBytes", "checks", "appliedRoles", "error"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["applied", "unsupported", "failed"]},
+    "engineVersion": {"type": "string"},
+    "baseSha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "outputSha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "outputBytes": {"type": "integer", "minimum": 0},
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pageCountUnchanged", "contentStreamsUnchanged", "textTokensUnchanged", "annotationsUnchanged", "mcidInventoryUnchanged", "parentTreeUnchanged", "renderIdentical", "sequenceMatchesApproved", "nodeInventoryUnchanged"],
+      "properties": {
+        "pageCountUnchanged": {"type": ["boolean", "null"]},
+        "contentStreamsUnchanged": {"type": ["boolean", "null"]},
+        "textTokensUnchanged": {"type": ["boolean", "null"]},
+        "annotationsUnchanged": {"type": ["boolean", "null"]},
+        "mcidInventoryUnchanged": {"type": ["boolean", "null"]},
+        "parentTreeUnchanged": {"type": ["boolean", "null"]},
+        "renderIdentical": {"type": ["boolean", "null"]},
+        "sequenceMatchesApproved": {"type": ["boolean", "null"]},
+        "nodeInventoryUnchanged": {"type": ["boolean", "null"]}
+      }
+    },
+    "appliedRoles": {"type": "array", "items": {"type": "string"}, "description": "roles of the parent's kids in the new order (evidence for the report)"},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "ORDER_FIX_UNSUPPORTED", "INTEGRITY_REGRESSION", "UNSUPPORTED_SIGNED_MUTATION", "UNSUPPORTED_ENCRYPTED", "LIMIT_EXCEEDED", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}

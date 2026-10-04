@@ -17,7 +17,7 @@ import org.apache.pdfbox.pdmodel.common.PDMetadata;
 /**
  * {@code PDF_XMP_METADATA_FROM_INFO_V1}: writes a minimal XMP packet to a catalog without {@code /Metadata}: {@code dc:title},
  * {@code dc:language}, {@code xmp:CreatorTool}, {@code pdf:Producer} from Info and {@code /Lang}; never a title guess or {@code pdfuaid:part}.
- * {@code structure_fix}: untagged documents the basic rule tags; {@code fix}: tagged ones too, and an existing packet lacking
+ * Untagged documents the basic rule tags and tagged ones too, and an existing packet lacking
  * {@code dc:title}/{@code dc:language} gets them via {@link XmpPacketEditor} without changing any existing byte.
  */
 public final class XmpMetadataRule implements RemediationRule {
@@ -34,8 +34,7 @@ public final class XmpMetadataRule implements RemediationRule {
   }
 
   /**
-   * Only in {@code fix} and {@code structure_fix}; {@code safe_fix} results never list this rule.
-   * The generated-PDF case (tagged input) applies in {@code fix} only.
+   * Only in {@code fix}; {@code analyze} results never list this rule.
    */
   @Override
   public boolean participates(WorkerRequest request) {
@@ -61,7 +60,7 @@ public final class XmpMetadataRule implements RemediationRule {
     PDDocumentCatalog catalog = document.getDocumentCatalog();
     String before = catalog.getMetadata() != null ? "Metadata present" : null;
     if (!participates(request)) {
-      return RuleDecision.skip("an XMP packet is only written in fix and structure_fix modes", before, null);
+      return RuleDecision.skip("an XMP packet is only written in fix mode", before, null);
     }
     if (catalog.getMetadata() != null) {
       return request.isFix() ? inspectExistingPacket(catalog.getMetadata())
@@ -80,7 +79,7 @@ public final class XmpMetadataRule implements RemediationRule {
           describe(document));
     }
     if (catalog.getStructureTreeRoot() != null) {
-      return RuleDecision.skip("document is already tagged; the run behaves like safe_fix and leaves metadata as found", before, null);
+      return RuleDecision.skip("document is already tagged; this run adds no structure and leaves metadata as found", before, null);
     }
     if (!structureRule.applicable(document, request)) {
       return RuleDecision.skip("basic structure tagging does not apply to this document, so no metadata packet is written either", before, null);

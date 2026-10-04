@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_VISUAL_DIFF_RATIO, budgetFromSeconds, definedOnly, limitOf } from "../limits.js";
 import { createHash } from "node:crypto";
 import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -46,8 +47,8 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   let bytes: Buffer;
   try {
     const info = await stat(inputPath);
-    if (info.size > request.limits.maxBytes) {
-      return base("failed", "LIMIT_EXCEEDED", `source is ${info.size} bytes, above maxBytes=${request.limits.maxBytes}`);
+    if (info.size > limitOf(request.limits?.maxBytes)) {
+      return base("failed", "LIMIT_EXCEEDED", `source is ${info.size} bytes, above maxBytes=${request.limits?.maxBytes}`);
     }
     bytes = await readFile(inputPath);
   } catch {
@@ -56,7 +57,7 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   if (createHash("sha256").update(bytes).digest("hex") !== request.baseSha256) {
     return base("failed", "INVALID_INPUT", "the source does not match baseSha256; the approval is stale");
   }
-  const checked = preflight(bytes, { maxInlineImageBytes: request.limits.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits.maxTotalInlineImageBytes });
+  const checked = preflight(bytes, { ...definedOnly({ maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) });
   if (!checked.ok) {
     return base("unsupported", "UNSUPPORTED_CONTENT", "the source cannot be rendered as static HTML", { diagnostics: checked.diagnostics });
   }
@@ -111,7 +112,7 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   }
 
   // 2. Facts about the group as rendered (CSS order, focus) from the untouched source.
-  const before = await collectVetted(checked.html, { jobId: request.jobId, limits: { timeoutSeconds: request.limits.timeoutSeconds, maxBytes: request.limits.maxBytes, maxNodes: 20000, maxInlineImageBytes: request.limits.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits.maxTotalInlineImageBytes } }, request.baseSha256);
+  const before = await collectVetted(checked.html, { jobId: request.jobId, limits: { maxNodes: 20000, ...definedOnly({ timeoutSeconds: request.limits?.timeoutSeconds, maxBytes: request.limits?.maxBytes, maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) } }, request.baseSha256);
   engineVersion = before.engineVersion;
   if (before.status !== "completed") {
     return base("failed", before.error?.code ?? "RENDER_FAILED", before.error?.message ?? "the source could not be collected");
@@ -154,27 +155,28 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   }
   const corrected = serialize(document);
   const correctedBytes = Buffer.from(corrected, "utf8");
-  const correctedCheck = preflight(correctedBytes, { maxInlineImageBytes: request.limits.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits.maxTotalInlineImageBytes });
+  const correctedCheck = preflight(correctedBytes, { ...definedOnly({ maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) });
   if (!correctedCheck.ok) {
     return base("failed", "ORDER_FIX_REGRESSION", "the corrected copy no longer passes the content preflight", { diagnostics: correctedCheck.diagnostics });
   }
   const correctedSha256 = createHash("sha256").update(correctedBytes).digest("hex");
 
   // 4. Render both, compare screenshots, and verify the corrected copy independently.
-  const budgetMs = request.limits.timeoutSeconds * 1000;
-  const original = await renderVetted(checked.html, { jobId: request.jobId, outputDirectory: request.outputDirectory, limits: request.limits, page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: ".original.pdf", screenshot: true });
+  const maxVisualDiffRatio = request.limits?.maxVisualDiffRatio ?? DEFAULT_MAX_VISUAL_DIFF_RATIO;
+  const budgetMs = budgetFromSeconds(request.limits?.timeoutSeconds);
+  const original = await renderVetted(checked.html, { jobId: request.jobId, outputDirectory: request.outputDirectory, limits: definedOnly({ ...request.limits }), page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: ".original.pdf", screenshot: true });
   if (original.status !== "completed" || !original.screenshot) {
     return base("failed", original.error?.code ?? "RENDER_FAILED", "the original could not be rendered for comparison");
   }
   await safeUnlink(path.join(options.workRoot, "out", ".original.pdf"));
-  const rendered = await renderVetted(corrected, { jobId: request.jobId, outputDirectory: request.outputDirectory, limits: request.limits, page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: PDF_NAME, screenshot: true });
+  const rendered = await renderVetted(corrected, { jobId: request.jobId, outputDirectory: request.outputDirectory, limits: definedOnly({ ...request.limits }), page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: PDF_NAME, screenshot: true });
   engineVersion = rendered.engineVersion;
   if (rendered.status !== "completed" || !rendered.screenshot) {
     await safeUnlink(path.join(options.workRoot, "out", PDF_NAME));
     return base("failed", rendered.error?.code ?? "RENDER_FAILED", rendered.error?.message ?? "the corrected copy could not be rendered");
   }
   const diff = pixelDiffRatio(original.screenshot, rendered.screenshot);
-  const after = await collectVetted(corrected, { jobId: request.jobId, limits: { timeoutSeconds: request.limits.timeoutSeconds, maxBytes: request.limits.maxBytes, maxNodes: 20000, maxInlineImageBytes: request.limits.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits.maxTotalInlineImageBytes } }, correctedSha256);
+  const after = await collectVetted(corrected, { jobId: request.jobId, limits: { maxNodes: 20000, ...definedOnly({ timeoutSeconds: request.limits?.timeoutSeconds, maxBytes: request.limits?.maxBytes, maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) } }, correctedSha256);
   const afterGroup = children.map((_, i) => nodeAtPath(after, `${request.parentPath}/${i}`));
   const domMatches = after.status === "completed" && afterGroup.every((node, i) => node !== undefined && same(node, groupNodes[order[i]!]!));
   const focusIds = afterGroup.filter((n): n is SemanticNode => n !== undefined).flatMap((n) => descendantsOf(after, n).filter((d) => d.private.focusable).map((d) => d.nodeId));
@@ -182,7 +184,7 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   const observed = after.focusOrderNodeIds.filter((id) => focusIds.includes(id));
   const expected = focusIds.filter((id) => observed.includes(id));
   const focusFollows = measured ? observed.join(",") === expected.join(",") : null;
-  const withinTolerance = diff <= request.limits.maxVisualDiffRatio;
+  const withinTolerance = diff <= maxVisualDiffRatio;
   const result: HtmlReorderResult["checks"] = {
     domSequenceMatchesApproved: domMatches,
     focusOrderMeasured: measured,
@@ -196,7 +198,7 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
     await safeUnlink(path.join(options.workRoot, "out", PDF_NAME));
     const reasons: string[] = [];
     if (!domMatches) reasons.push("the corrected copy does not read in the approved sequence");
-    if (!withinTolerance) reasons.push(`the visual result changed (${(diff * 100).toFixed(2)} % of pixels differ, tolerance ${(request.limits.maxVisualDiffRatio * 100).toFixed(2)} %); edit the source manually`);
+    if (!withinTolerance) reasons.push(`the visual result changed (${(diff * 100).toFixed(2)} % of pixels differ, tolerance ${(maxVisualDiffRatio * 100).toFixed(2)} %); edit the source manually`);
     if (focusFollows === false) reasons.push("keyboard focus would not follow the approved order");
     return base("failed", "ORDER_FIX_REGRESSION", reasons.join("; "), { checks: result });
   }

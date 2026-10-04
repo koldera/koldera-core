@@ -24,7 +24,7 @@ class WorkerContractTest {
 
   /** The example shipped in the repository-level contracts directory must stay parseable. */
   private static final Path REPO_EXAMPLE =
-      Path.of("..", "contracts", "examples", "pdf-worker-request.safe-fix.json");
+      Path.of("..", "contracts", "examples", "pdf-worker-request.fix.json");
 
   private static final String VALID_ANALYZE_REQUEST =
       """
@@ -40,14 +40,14 @@ class WorkerContractTest {
       """;
 
   @Test
-  void parsesRepositoryExampleSafeFixRequest() throws IOException {
+  void parsesRepositoryExampleFixRequest() throws IOException {
     WorkerRequest request = WorkerRequestParser.parse(Files.readString(REPO_EXAMPLE));
 
     assertEquals("1.0", request.specVersion());
     assertEquals(UUID.fromString("123e4567-e89b-42d3-a456-426614174000"), request.jobId());
     assertEquals("/work/in/document.pdf", request.inputPath());
     assertEquals("/work/out", request.outputDirectory());
-    assertEquals(WorkerRequest.Mode.SAFE_FIX, request.mode());
+    assertEquals(WorkerRequest.Mode.FIX, request.mode());
     assertEquals("ua1", request.profile());
     assertEquals("en-US", request.explicitLanguage());
     assertEquals(10_485_760L, request.limits().maxBytes());
@@ -80,13 +80,14 @@ class WorkerContractTest {
   }
 
   @Test
-  void acceptsStructureFixMode() {
-    WorkerRequest request = WorkerRequestParser.parse(VALID_ANALYZE_REQUEST.replace("\"analyze\"", "\"structure_fix\""));
-
-    assertEquals(WorkerRequest.Mode.STRUCTURE_FIX, request.mode());
-    assertTrue(request.isStructureFix());
-    assertTrue(request.isMutating());
-    assertFalse(request.isSafeFix());
+  void theRemovedSafeFixAndStructureFixModesAreRejectedAndFixIsTheOnlyMutatingMode() {
+    for (String removed : new String[] {"safe_fix", "structure_fix"}) {
+      assertThrows(
+          RequestValidationException.class,
+          () -> WorkerRequestParser.parse(VALID_ANALYZE_REQUEST.replace("\"analyze\"", "\"" + removed + "\"")),
+          removed);
+    }
+    assertTrue(WorkerRequestParser.parse(VALID_ANALYZE_REQUEST.replace("\"analyze\"", "\"fix\"")).isMutating());
     assertFalse(WorkerRequestParser.parse(VALID_ANALYZE_REQUEST).isMutating());
   }
 
@@ -158,10 +159,10 @@ class WorkerContractTest {
   }
 
   @Test
-  void structureFixStillAddsStructureAndSafeFixDoesNot() {
-    assertTrue(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.STRUCTURE_FIX, null).addsStructure());
-    assertFalse(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.SAFE_FIX, null).addsStructure());
-    assertFalse(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.SAFE_FIX, null).isFix());
+  void fixAddsStructureAndAnalyzeDoesNot() {
+    assertTrue(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.FIX, null).addsStructure());
+    assertFalse(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.ANALYZE, null).addsStructure());
+    assertFalse(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.ANALYZE, null).isFix());
   }
 
   @Test
@@ -275,16 +276,6 @@ class WorkerContractTest {
   @Test
   void rejectsUnknownProperties() {
     String json = VALID_ANALYZE_REQUEST.replace("\"mode\"", "\"password\": \"x\", \"mode\"");
-
-    assertThrows(RequestValidationException.class, () -> WorkerRequestParser.parse(json));
-  }
-
-  @Test
-  void rejectsMissingLimits() {
-    String json =
-        VALID_ANALYZE_REQUEST.replace(
-            "\"limits\": { \"maxBytes\": 10485760, \"maxPages\": 20, \"timeoutSeconds\": 60 }",
-            "\"limits\": { \"maxBytes\": 10485760 }");
 
     assertThrows(RequestValidationException.class, () -> WorkerRequestParser.parse(json));
   }

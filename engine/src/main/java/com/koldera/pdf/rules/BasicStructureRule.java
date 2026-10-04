@@ -14,10 +14,10 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
 
 /**
- * {@code PDF_BASIC_STRUCTURE_FROM_CONTENT_V1}: in modes {@code fix} and {@code structure_fix}, gives a document without a
+ * {@code PDF_BASIC_STRUCTURE_FROM_CONTENT_V1}: in mode {@code fix}, gives a document without a
  * {@code StructTreeRoot} basic tags derived from content-stream order (paragraphs, figures without alternative text,
  * artifacts). Tagged documents are skipped. {@link #inspect} analyses read-only, so content the tagger cannot wrap without
- * guessing is a {@code skipped} decision. Mode {@code fix} also drops painting operators that have no path (verified by rendering).
+ * guessing is a {@code skipped} decision. It also drops painting operators that have no path (verified by rendering).
  */
 public final class BasicStructureRule implements RemediationRule {
 
@@ -40,7 +40,7 @@ public final class BasicStructureRule implements RemediationRule {
     return WorkerResult.RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1;
   }
 
-  /** Structure rules exist only in {@code fix} and {@code structure_fix}; {@code safe_fix} results never list them. */
+  /** Structure rules exist only in {@code fix}; {@code analyze} results never list them. */
   @Override
   public boolean participates(WorkerRequest request) {
     return request.addsStructure();
@@ -64,10 +64,10 @@ public final class BasicStructureRule implements RemediationRule {
     PDDocumentCatalog catalog = document.getDocumentCatalog();
     String before = catalog.getStructureTreeRoot() != null ? "StructTreeRoot present" : "untagged";
     if (!request.addsStructure()) {
-      return RuleDecision.skip("structure tags are only added in fix and structure_fix modes", before, null);
+      return RuleDecision.skip("structure tags are only added in fix mode", before, null);
     }
     if (catalog.getStructureTreeRoot() != null) {
-      return RuleDecision.skip("document is already tagged; existing structure is never replaced (use analyze or safe_fix)", before, null);
+      return RuleDecision.skip("document is already tagged; existing structure is never replaced (use analyze)", before, null);
     }
     boolean removeStray = request.isFix();
     if (removeStray != removeStrayPaints) {

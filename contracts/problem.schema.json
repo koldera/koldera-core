@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/problem.v1.json",
+  "title": "API Problem Details", "type": "object", "additionalProperties": true,
+  "required": ["type", "title", "status", "code"],
+  "properties": {
+    "type": {"type": "string", "format": "uri-reference"},
+    "title": {"type": "string"}, "status": {"type": "integer", "minimum": 400, "maximum": 599},
+    "detail": {"type": "string"}, "instance": {"type": "string"},
+    "code": {"type": "string", "enum": ["FREE_DAILY_LIMIT", "PAYMENT_REQUIRED", "RATE_LIMITED", "VALIDATION_ERROR", "UNSUPPORTED_INPUT", "ARTIFACT_EXPIRED", "IDEMPOTENCY_CONFLICT", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "INTERNAL_ERROR"]},
+    "resetAt": {"type": "string", "format": "date-time"},
+    "upgradeUrl": {"type": "string", "format": "uri-reference"}
+  }
+}

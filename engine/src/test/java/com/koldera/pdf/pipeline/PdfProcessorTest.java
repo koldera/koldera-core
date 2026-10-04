@@ -143,38 +143,11 @@ class PdfProcessorTest {
   // ---- safe_fix ---------------------------------------------------------------------------
 
   @Test
-  void safeFixWithTheProductionRuleListReportsExactlyTheTwoMetadataActions() throws IOException {
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").displayDocTitle(false)));
-    validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
-    validator.enqueue(failed(Map.of(STRUCT_RULE, 1)));
-    BasicStructureRule structure = new BasicStructureRule();
-    PdfProcessor production =
-        new PdfProcessor(
-            new PdfPreflight(),
-            validator,
-            List.of(new ExplicitLanguageRule(), new DisplayDocumentTitleRule(), structure, new XmpMetadataRule(structure)));
-
-    WorkerResult result = production.process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
-
-    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
-    assertEquals(
-        List.of(RuleId.PDF_LANG_FROM_EXPLICIT_INPUT_V1, RuleId.PDF_DISPLAY_TITLE_FROM_EXISTING_TITLE_V1),
-        result.actions().stream().map(WorkerResult.Action::ruleId).toList(),
-        "structure rules never appear in a safe_fix result");
-    assertTrue(result.actions().stream().allMatch(a -> a.outcome() == ActionOutcome.APPLIED));
-    try (PDDocument doc = Loader.loadPDF(Files.readAllBytes(workspace.outputFile("remediated.pdf")))) {
-      assertNull(doc.getDocumentCatalog().getStructureTreeRoot());
-      assertNull(doc.getDocumentCatalog().getMetadata());
-    }
-    assertSchemaValid(result);
-  }
-
-  @Test
-  void safeFixWithNoApplicableRuleReturnsNoApplicableFixAndDoesNotRevalidate() throws IOException {
+  void fixWithNoApplicableRuleReturnsNoApplicableFixAndDoesNotRevalidate() throws IOException {
     byte[] original = install(SyntheticPdfFactory.simpleUntagged());
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, null), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, null), workspace);
 
     assertEquals(Status.COMPLETED, result.status());
     assertEquals(RemediationStatus.NO_APPLICABLE_FIX, result.remediationStatus());
@@ -189,19 +162,19 @@ class PdfProcessorTest {
   }
 
   @Test
-  void safeFixAppliesBothRulesRevalidatesAndPublishesRemediatedCopy() throws IOException {
+  void fixAppliesBothRulesRevalidatesAndPublishesRemediatedCopy() throws IOException {
     byte[] original = install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").displayDocTitle(false)));
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
     assertEquals(
         List.of(RuleId.PDF_LANG_FROM_EXPLICIT_INPUT_V1, RuleId.PDF_DISPLAY_TITLE_FROM_EXISTING_TITLE_V1),
-        result.actions().stream().map(WorkerResult.Action::ruleId).toList());
-    assertTrue(result.actions().stream().allMatch(a -> a.outcome() == ActionOutcome.APPLIED));
+        result.actions().stream().map(WorkerResult.Action::ruleId).filter(id -> id != RuleId.PDF_UA_IDENTIFIER_V1).toList());
+    assertTrue(result.actions().stream().filter(a -> a.ruleId() != RuleId.PDF_UA_IDENTIFIER_V1).allMatch(a -> a.outcome() == ActionOutcome.APPLIED));
     assertNotNull(result.finalValidation());
     assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "still untagged: fewer failures, still failing");
     assertEquals("/work/out/final-report.json", result.finalValidation().rawReportPath());
@@ -234,13 +207,13 @@ class PdfProcessorTest {
   }
 
   @Test
-  void appliedSafeFixResolvesEachMachineCheckAgainstTheCopy() throws IOException {
+  void appliedFixResolvesEachMachineCheckAgainstTheCopy() throws IOException {
     // The language rule is fixed by the copy, the title rule too; the missing structure tree is not a safe_fix concern.
     install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").displayDocTitle(false)));
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus(), String.valueOf(result.error()));
     assertEquals(Resolution.FIXED_IN_COPY, finding(result, LANG_RULE).resolution());
@@ -262,7 +235,7 @@ class PdfProcessorTest {
 
     install(SyntheticPdfFactory.simpleUntagged());
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
-    WorkerResult skipped = processor().process(request(WorkerRequest.Mode.SAFE_FIX, null), workspace);
+    WorkerResult skipped = processor().process(request(WorkerRequest.Mode.FIX, null), workspace);
 
     assertEquals(RemediationStatus.NOT_REQUESTED, analyze.remediationStatus());
     assertEquals(RemediationStatus.NO_APPLICABLE_FIX, skipped.remediationStatus());
@@ -272,12 +245,12 @@ class PdfProcessorTest {
   }
 
   @Test
-  void rolledBackSafeFixCarriesNoResolution() throws IOException {
+  void rolledBackFixCarriesNoResolution() throws IOException {
     install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1, "ISO 14289-1:2014 9.9-9", 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(RemediationStatus.ROLLED_BACK, result.remediationStatus());
     assertTrue(result.findings().stream().allMatch(f -> f.resolution() == null), result.findings().toString());
@@ -285,7 +258,7 @@ class PdfProcessorTest {
   }
 
   @Test
-  void aSafeFixWhosePublishFailsRollsBackWithoutAResolution() throws IOException {
+  void aFixWhosePublishFailsRollsBackWithoutAResolution() throws IOException {
     // A non-empty directory where remediated.pdf must land makes the final move fail after the gate passed.
     install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").displayDocTitle(false)));
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
@@ -294,12 +267,12 @@ class PdfProcessorTest {
     Files.createDirectories(blocker);
     Files.writeString(blocker.resolve("occupied"), "x");
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(RemediationStatus.ROLLED_BACK, result.remediationStatus(), String.valueOf(result.error()));
     assertEquals(WorkerResult.ErrorCode.WORKER_ERROR, result.error().code());
     assertTrue(result.findings().stream().allMatch(f -> f.resolution() == null), result.findings().toString());
-    assertTrue(result.actions().stream().allMatch(a -> a.outcome() == WorkerResult.ActionOutcome.ROLLED_BACK), result.actions().toString());
+    assertTrue(result.actions().stream().filter(a -> a.ruleId() != RuleId.PDF_UA_IDENTIFIER_V1).allMatch(a -> a.outcome() == WorkerResult.ActionOutcome.ROLLED_BACK), result.actions().toString());
   }
 
   private static WorkerResult.Finding finding(WorkerResult result, String ruleId) {
@@ -311,7 +284,7 @@ class PdfProcessorTest {
     install(SyntheticPdfFactory.build(Options.plain().language("en-US").infoTitle("Report").displayDocTitle(true)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.COMPLETED, result.status());
     assertEquals(RemediationStatus.NO_APPLICABLE_FIX, result.remediationStatus());
@@ -327,7 +300,7 @@ class PdfProcessorTest {
     install(SyntheticPdfFactory.build(Options.plain().language("en-US").infoTitle("Report").displayDocTitle(true)));
     validator.enqueue(passed());
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.COMPLETED, result.status());
     assertEquals(ValidationStatus.PASSED, result.baseline().status());
@@ -344,7 +317,7 @@ class PdfProcessorTest {
     install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
     validator.enqueue(ValidationOutcome.error(ErrorCode.VALIDATOR_UNAVAILABLE, "no binary", null));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.VALIDATOR_UNAVAILABLE, result.error().code());
@@ -362,7 +335,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(ValidationOutcome.error(ErrorCode.VALIDATOR_ERROR, "timeout", null));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.VALIDATOR_ERROR, result.error().code());
@@ -383,7 +356,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1, "ISO 14289-1:2014 9.9-9", 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
@@ -405,7 +378,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(LANG_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 2)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
@@ -419,7 +392,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.COMPLETED, result.status());
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
@@ -448,7 +421,7 @@ class PdfProcessorTest {
           }
         };
 
-    WorkerResult result = new PdfProcessor(new PdfPreflight(), validator, List.of(pageAdder)).process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = new PdfProcessor(new PdfPreflight(), validator, List.of(pageAdder)).process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
@@ -492,7 +465,7 @@ class PdfProcessorTest {
           }
         };
 
-    WorkerResult result = new PdfProcessor(new PdfPreflight(), validator, List.of(tagsThenBreaksParentTree)).process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = new PdfProcessor(new PdfPreflight(), validator, List.of(tagsThenBreaksParentTree)).process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
@@ -528,7 +501,7 @@ class PdfProcessorTest {
           }
         };
 
-    WorkerResult result = new PdfProcessor(new PdfPreflight(), validator, List.of(broken)).process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = new PdfProcessor(new PdfPreflight(), validator, List.of(broken)).process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.WORKER_ERROR, result.error().code());
@@ -540,10 +513,10 @@ class PdfProcessorTest {
   // ---- preflight rejections ---------------------------------------------------------------
 
   @Test
-  void signedSafeFixIsRefusedBeforeAnyValidation() throws IOException {
+  void signedFixIsRefusedBeforeAnyValidation() throws IOException {
     byte[] original = install(SyntheticPdfFactory.signed());
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.UNSUPPORTED, result.status());
     assertEquals(ErrorCode.UNSUPPORTED_SIGNED_MUTATION, result.error().code());
@@ -562,7 +535,7 @@ class PdfProcessorTest {
     install(SyntheticPdfFactory.encrypted("pw"));
 
     WorkerResult analyze = processor().process(request(WorkerRequest.Mode.ANALYZE, null), workspace);
-    WorkerResult fix = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
+    WorkerResult fix = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.UNSUPPORTED, analyze.status());
     assertEquals(ErrorCode.UNSUPPORTED_ENCRYPTED, analyze.error().code());
@@ -606,7 +579,7 @@ class PdfProcessorTest {
     install(SyntheticPdfFactory.build(Options.plain().language("en").infoTitle("T").displayDocTitle(true).image().table()));
     validator.enqueue(passed());
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.SAFE_FIX, null), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, null), workspace);
 
     assertEquals(Status.COMPLETED, result.status());
     assertTrue(result.manualReviewRequired());
@@ -1599,27 +1572,6 @@ class PdfProcessorTest {
     assertEquals("validation regression: newly failing rule ISO 14289-1:2014 7.1-3 (1)", PdfProcessor.regression(Map.of(), Map.of(spec + "7.1-3", 1), true));
     assertEquals("validation regression: rule ISO 14289-1:2014 5-1 failures increased 1 -> 2",
         PdfProcessor.regression(Map.of(spec + "5-1", 1), Map.of(spec + "5-1", 2), true), "only a newly failing identifier check is exempt");
-  }
-
-  @Test
-  void aGeneratedPdfInSafeFixOrStructureFixBehavesExactlyAsAnUploadDid() throws IOException {
-    for (WorkerRequest.Mode mode : List.of(WorkerRequest.Mode.SAFE_FIX, WorkerRequest.Mode.STRUCTURE_FIX)) {
-      List<WorkerResult> results = new ArrayList<>();
-      for (WorkerRequest.Origin origin : List.of(WorkerRequest.Origin.UPLOAD, WorkerRequest.Origin.HTML_GENERATED)) {
-        install(generatedFixture("generated-lists.pdf"));
-        Files.deleteIfExists(workspace.outputFile("remediated.pdf"));
-        validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
-        validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
-        results.add(production().process(originRequest(mode, origin), workspace));
-      }
-      WorkerResult upload = results.get(0);
-      WorkerResult generated = results.get(1);
-      assertEquals(upload.actions(), generated.actions(), mode + ": same actions");
-      assertEquals(upload.status(), generated.status(), mode.toString());
-      assertEquals(upload.remediationStatus(), generated.remediationStatus(), mode.toString());
-      assertEquals(upload.error(), generated.error(), mode.toString());
-      assertTrue(generated.actions().stream().noneMatch(a -> a.ruleId() == RuleId.PDF_GENERATED_STRUCTURE_V1), mode.toString());
-    }
   }
 
   private PdfProcessor production() {

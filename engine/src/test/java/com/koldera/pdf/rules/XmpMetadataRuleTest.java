@@ -31,7 +31,7 @@ class XmpMetadataRuleTest {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.build(Options.plain().language("en").infoTitle("Quarterly R&D <statement>")))) {
       doc.getDocumentInformation().setCreator("Synthetic Creator");
       doc.getDocumentInformation().setProducer("Synthetic Producer 1.0");
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
       assertTrue(decision.applicable(), decision.reason());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -64,7 +64,7 @@ class XmpMetadataRuleTest {
   @Test
   void omitsTitleAndLanguageElementsWhenTheDocumentHasNone() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.simpleUntagged())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       String xmp = new String(doc.getDocumentCatalog().getMetadata().toByteArray(), StandardCharsets.UTF_8);
@@ -75,13 +75,11 @@ class XmpMetadataRuleTest {
   }
 
   @Test
-  void skippedOutsideStructureFixMode() throws IOException {
+  void skippedOutsideFixMode() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")))) {
       assertFalse(rule.inspect(doc, request(WorkerRequest.Mode.ANALYZE)).applicable());
-      RuleDecision safeFix = rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX));
-      assertFalse(safeFix.applicable());
-      assertTrue(safeFix.reason().contains("structure_fix"), safeFix.reason());
-      assertEquals(ActionOutcome.SKIPPED, rule.apply(doc, safeFix).outcome());
+      RuleDecision analyze = rule.inspect(doc, request(WorkerRequest.Mode.ANALYZE));
+      assertEquals(ActionOutcome.SKIPPED, rule.apply(doc, analyze).outcome());
       assertNull(doc.getDocumentCatalog().getMetadata());
     }
   }
@@ -91,23 +89,12 @@ class XmpMetadataRuleTest {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")))) {
       doc.getDocumentCatalog().setMetadata(new PDMetadata(doc, new ByteArrayInputStream("<x:xmpmeta/>".getBytes(StandardCharsets.UTF_8))));
 
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
 
       assertFalse(decision.applicable());
       assertTrue(decision.reason().contains("already"), decision.reason());
       rule.apply(doc, decision);
       assertEquals("<x:xmpmeta/>", new String(doc.getDocumentCatalog().getMetadata().toByteArray(), StandardCharsets.UTF_8), "existing metadata never overwritten");
-    }
-  }
-
-  @Test
-  void skippedWhenTheDocumentIsAlreadyTaggedSoTheRunMatchesSafeFix() throws IOException {
-    try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.tagged())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
-
-      assertFalse(decision.applicable());
-      assertTrue(decision.reason().contains("tagged"), decision.reason());
-      assertNull(doc.getDocumentCatalog().getMetadata());
     }
   }
 
@@ -152,16 +139,6 @@ class XmpMetadataRuleTest {
       assertTrue(xmp.contains("Tagged synthetic fixture"), xmp);
       assertTrue(xmp.contains("<rdf:li>en</rdf:li>"), xmp);
       assertFalse(xmp.contains("pdfuaid"), xmp);
-      assertFalse(rule.participates(request(WorkerRequest.Mode.SAFE_FIX)), "safe_fix uploads never list this rule");
-    }
-  }
-
-  @Test
-  void aTaggedUploadInStructureFixStillGetsNoPacket() throws IOException {
-    try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.tagged())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
-      assertFalse(decision.applicable());
-      assertTrue(decision.reason().contains("already tagged"), decision.reason());
     }
   }
 
@@ -171,16 +148,6 @@ class XmpMetadataRuleTest {
       RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX), java.util.EnumSet.of(RuleId.PDF_STRUCTURE_INFERRED_V1));
       assertFalse(decision.applicable());
       assertTrue(decision.reason().contains("already tagged"), decision.reason());
-    }
-  }
-
-  @Test
-  void aGeneratedPdfInADeprecatedModeKeepsTheOldBehaviour() throws IOException {
-    try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.tagged())) {
-      assertFalse(rule.participates(generated(WorkerRequest.Mode.SAFE_FIX)), "safe_fix never lists this rule");
-      RuleDecision structureFix = rule.inspect(doc, generated(WorkerRequest.Mode.STRUCTURE_FIX));
-      assertFalse(structureFix.applicable(), "structure_fix skips tagged input as before");
-      assertTrue(structureFix.reason().contains("already tagged"), structureFix.reason());
     }
   }
 

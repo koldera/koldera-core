@@ -4,7 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { scan } from "../src/scan/scanner.js";
-import { validateResult, type WebWorkerRequest } from "../src/contracts/types.js";
+import { validateRequest, validateResult, type WebWorkerRequest } from "../src/contracts/types.js";
 import { startFixtureServer } from "./fixtureServer.js";
 
 let fixtures: Awaited<ReturnType<typeof startFixtureServer>>;
@@ -178,5 +178,34 @@ describe("redirects to allowed destinations", () => {
     expect(result.finalUrl).toBe(`${fixtures.url}/labelled.html`);
     expect(result.findings.filter((f) => f.kind === "violation").map((f) => f.ruleId)).not.toContain("label");
     await rm(outDir, { recursive: true, force: true });
+  });
+});
+
+describe("limits are optional", () => {
+  async function runWithoutLimits(url: string, opts: { allowLoopbackForTests?: boolean; resolver?: { lookup(h: string): Promise<string[]> } } = { allowLoopbackForTests: true }) {
+    const { limits: _unused, ...withoutLimits } = request(url);
+    expect(validateRequest(withoutLimits)).toEqual([]);
+    outDir = await mkdtemp(path.join(tmpdir(), "koldera-scan-"));
+    const result = await scan(withoutLimits as WebWorkerRequest, { outputDirectory: outDir, ...opts });
+    expect(validateResult(result), JSON.stringify(result.error)).toEqual([]);
+    return result;
+  }
+
+  it("a scan request without limits completes against the local fixture server", async () => {
+    const result = await runWithoutLimits(`${fixtures.url}/missing-label.html`);
+
+    expect(result.status, JSON.stringify(result.error)).toBe("completed");
+    expect(result.findings.some((f) => f.ruleId === "label" && f.kind === "violation")).toBe(true);
+    await rm(outDir, { recursive: true, force: true });
+  });
+
+  it("the URL policy and the redirect guard still run without limits", async () => {
+    const blocked = await runWithoutLimits("http://10.0.0.1/", { allowLoopbackForTests: false, resolver: { lookup: async () => { throw new Error("must not resolve"); } } });
+    expect(blocked.status).toBe("unsupported");
+    expect(blocked.error?.code).toBe("BLOCKED_DESTINATION");
+
+    const redirected = await runWithoutLimits(`${fixtures.url}/redirect?to=${encodeURIComponent("http://127.0.0.2/")}`);
+    expect(redirected.status).toBe("unsupported");
+    expect(redirected.error?.code).toBe("BLOCKED_DESTINATION");
   });
 });

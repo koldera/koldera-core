@@ -63,7 +63,7 @@ class BasicStructureRuleTest {
   @Test
   void tagsParagraphsFigureAndArtifactInContentOrder() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedArticle())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
       assertTrue(decision.applicable(), decision.reason());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -171,7 +171,7 @@ class BasicStructureRuleTest {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithContentArray())) {
       assertTrue(doc.getPage(0).getCOSObject().getDictionaryObject(COSName.CONTENTS) instanceof COSArray, "fixture has a /Contents array");
 
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertFalse(doc.getPage(0).getCOSObject().getDictionaryObject(COSName.CONTENTS) instanceof COSArray, "one stream after the rewrite");
@@ -188,7 +188,7 @@ class BasicStructureRuleTest {
   @Test
   void inlineImageIsAFigureClippingIsNotWrappedAndStateInsideTextObjectSplitsRuns() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithInlineImageClipAndNestedState())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertTrue(action.reason().contains("tagged 1 paragraphs, 1 figures, 0 artifacts on 1 pages"), "the W n clip is no content item: " + action.reason());
@@ -220,7 +220,7 @@ class BasicStructureRuleTest {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithEmptyAndMissingContents())) {
       assertFalse(doc.getPage(1).hasContents());
 
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertTrue(action.reason().contains("tagged 1 paragraphs, 0 figures, 0 artifacts on 3 pages"), action.reason());
@@ -242,7 +242,7 @@ class BasicStructureRuleTest {
       assertTrue(textBefore.contains("Inside predictor form."), "fixture decodes before the rewrite: " + textBefore);
       int[] pixelsBefore = render(doc, 0);
 
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertTrue(action.reason().contains("tagged 2 paragraphs, 1 figures, 0 artifacts on 1 pages"), action.reason());
@@ -267,7 +267,7 @@ class BasicStructureRuleTest {
   @Test
   void danglingXObjectNameIsKeptAsAnArtifact() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithDanglingXObject())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       List<Marked> marks = markedContent(doc.getPage(0), doc.getPage(0));
@@ -280,7 +280,7 @@ class BasicStructureRuleTest {
   @Test
   void xObjectThatCannotBeLoadedMakesTheRuleSkipInsteadOfGuessing() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithUnknownXObjectSubtype())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
 
       assertFalse(decision.applicable());
       assertTrue(decision.reason().contains("XObject"), decision.reason());
@@ -294,7 +294,7 @@ class BasicStructureRuleTest {
   @Test
   void recursesIntoAFormDrawnOnceAndMarksARepeatedVectorFormAsArtifact() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithFormXObjects())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertTrue(action.reason().contains("tagged 2 paragraphs, 0 figures, 2 artifacts on 1 pages"), action.reason());
@@ -340,7 +340,7 @@ class BasicStructureRuleTest {
   @Test
   void strayMcidsAreAdoptedNeverNestedOrArtifactedAndNewMcidsNeverCollide() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithStrayMarkedContent())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       PDStructureTreeRoot root = doc.getDocumentCatalog().getStructureTreeRoot();
@@ -382,7 +382,7 @@ class BasicStructureRuleTest {
   @Test
   void strayMcidsInThePaginationBandOrOutsideTheCropBoxAreAdoptedNotArtifacted() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithStrayMarkedContentInArtifactBands())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertTrue(action.reason().contains("tagged 9 paragraphs, 0 figures, 0 artifacts on 3 pages"), action.reason());
@@ -412,7 +412,7 @@ class BasicStructureRuleTest {
   void strayMcidInsideAnArtifactOrMixedWithUnmarkedContentIsRefusedBeforeValidation() throws IOException {
     for (byte[] bytes : new byte[][] {SyntheticPdfFactory.untaggedWithStrayMcidInsideArtifact(), SyntheticPdfFactory.untaggedWithStrayMcidMixedWithUnmarkedText()}) {
       try (PDDocument doc = Loader.loadPDF(bytes)) {
-        RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+        RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
 
         assertFalse(decision.applicable(), decision.reason());
         assertTrue(decision.reason().contains("marked content") && decision.reason().contains("MCID"), decision.reason());
@@ -425,7 +425,7 @@ class BasicStructureRuleTest {
   @Test
   void repeatedHeaderTextBecomesAPaginationArtifactWhilePageNumbersStayParagraphs() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithRunningHeader(4))) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       assertTrue(action.reason().contains("tagged 8 paragraphs, 0 figures, 4 artifacts on 4 pages"), action.reason());
@@ -445,7 +445,7 @@ class BasicStructureRuleTest {
   @Test
   void unbalancedExistingMarkedContentIsSkippedNotGuessed() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedUnbalancedMarkedContent())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
 
       assertFalse(decision.applicable());
       assertTrue(decision.reason().contains("marked content"), decision.reason());
@@ -499,34 +499,6 @@ class BasicStructureRuleTest {
    * painting operators with no path are neither removed nor refused there. The expected streams are
    * what an earlier engine build wrote for these fixtures, byte for byte.
    */
-  @Test
-  void structureFixKeepsStrayPaintingOperatorsAndTagsExactlyAsBeforeTheirRemoval() throws IOException {
-    try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithStrayPaintOperatorsInPageAndForm())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
-
-      assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
-      assertEquals("tagged 3 paragraphs, 0 figures, 7 artifacts on 1 pages; headings, tables, alternative text and reading order need human review", action.reason());
-      PDPage page = doc.getPage(0);
-      PDFormXObject form = (PDFormXObject) page.getResources().getXObject(COSName.getPDFName("Fx1"));
-      assertEquals(PAINTS_PAGE_AT_0449F7B, new String(page.getContents().readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1));
-      assertEquals(PAINTS_FORM_AT_0449F7B, new String(form.getContents().readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1));
-    }
-  }
-
-  @Test
-  void structureFixTagsAPaintingOperatorWithOperandsAsBeforeInsteadOfRefusing() throws IOException {
-    try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithStrayPaintOperatorWithOperands())) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
-
-      assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
-      assertEquals("tagged 3 paragraphs, 0 figures, 2 artifacts on 1 pages; headings, tables, alternative text and reading order need human review", action.reason());
-      PDPage page = doc.getPage(0);
-      PDFormXObject form = (PDFormXObject) page.getResources().getXObject(COSName.getPDFName("Fx1"));
-      assertEquals(OPERANDS_PAGE_AT_0449F7B, new String(page.getContents().readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1));
-      assertEquals(OPERANDS_FORM_AT_0449F7B, new String(form.getContents().readAllBytes(), java.nio.charset.StandardCharsets.ISO_8859_1));
-    }
-  }
-
   private static final String PAINTS_PAGE_AT_0449F7B = "BT\n"
         + "/F1 12 Tf\n"
         + "72 720 Td\n"
@@ -673,7 +645,7 @@ class BasicStructureRuleTest {
   @Test
   void alreadyTaggedDocumentIsSkipped() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.tagged())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX));
 
       assertFalse(decision.applicable());
       assertTrue(decision.reason().contains("already tagged"), decision.reason());
@@ -683,11 +655,10 @@ class BasicStructureRuleTest {
   }
 
   @Test
-  void onlyStructureFixModeApplies() throws IOException {
+  void onlyFixModeApplies() throws IOException {
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedArticle())) {
       assertFalse(rule.inspect(doc, request(WorkerRequest.Mode.ANALYZE)).applicable());
-      assertFalse(rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX)).applicable());
-      assertTrue(rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)).applicable());
+      assertTrue(rule.inspect(doc, request(WorkerRequest.Mode.FIX)).applicable());
       assertNull(doc.getDocumentCatalog().getStructureTreeRoot(), "inspect never mutates");
       assertNull(doc.getDocumentCatalog().getMarkInfo());
     }
@@ -764,17 +735,6 @@ class BasicStructureRuleTest {
     }
   }
 
-  @Test
-  void structureFixStillRefusesASharedFormWithText() throws IOException {
-    try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedWithSharedTextFormOnEveryPage(3))) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
-
-      assertEquals(ActionOutcome.SKIPPED, action.outcome());
-      assertTrue(action.reason().contains("a form XObject drawn more than once contains text or images; its structure is not guessed"), action.reason());
-      assertNull(doc.getDocumentCatalog().getStructureTreeRoot());
-    }
-  }
-
   /** The page's tokens as one line: operators by name, names as /N, dictionaries as <</K v ...>>. */
   private static String tokenText(PDPage page) throws IOException {
     StringBuilder sb = new StringBuilder();
@@ -811,7 +771,7 @@ class BasicStructureRuleTest {
 
   private byte[] applyAndSave(byte[] original) throws IOException {
     try (PDDocument doc = Loader.loadPDF(original); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.STRUCTURE_FIX)));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, request(WorkerRequest.Mode.FIX)));
       assertEquals(ActionOutcome.APPLIED, action.outcome(), action.reason());
       doc.save(out);
       return out.toByteArray();

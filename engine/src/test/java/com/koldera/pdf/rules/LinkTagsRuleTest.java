@@ -31,8 +31,6 @@ public class LinkTagsRuleTest {
     assertEquals(RuleId.PDF_LINK_TAGS_V1, rule.id());
     assertTrue(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)), "generated links are tagged by Chromium and described by the generated rule");
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
   }
 

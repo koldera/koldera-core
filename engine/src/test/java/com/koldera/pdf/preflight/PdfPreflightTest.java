@@ -33,7 +33,7 @@ class PdfPreflightTest {
     byte[] bytes = SyntheticPdfFactory.simpleUntagged();
     Path input = SyntheticPdfFactory.write(tmp.resolve("in/document.pdf"), bytes);
 
-    PreflightOutcome outcome = preflight.inspect(input, request(WorkerRequest.Mode.SAFE_FIX, 10_485_760, 20));
+    PreflightOutcome outcome = preflight.inspect(input, request(WorkerRequest.Mode.FIX, 10_485_760, 20));
 
     assertTrue(outcome.accepted(), outcome.reason());
     assertNull(outcome.rejectCode());
@@ -148,7 +148,7 @@ class PdfPreflightTest {
     Path input = SyntheticPdfFactory.write(tmp.resolve("in/document.pdf"), bytes);
 
     PreflightOutcome analyze = preflight.inspect(input, request(WorkerRequest.Mode.ANALYZE, 10_485_760, 20));
-    PreflightOutcome fix = preflight.inspect(input, request(WorkerRequest.Mode.SAFE_FIX, 10_485_760, 20));
+    PreflightOutcome fix = preflight.inspect(input, request(WorkerRequest.Mode.FIX, 10_485_760, 20));
 
     assertEquals(ErrorCode.UNSUPPORTED_ENCRYPTED, analyze.rejectCode());
     assertEquals(ErrorCode.UNSUPPORTED_ENCRYPTED, fix.rejectCode());
@@ -158,11 +158,11 @@ class PdfPreflightTest {
   }
 
   @Test
-  void signedDocumentIsRefusedForSafeFixButInspectableForAnalyze() throws IOException {
+  void signedDocumentIsRefusedForFixButInspectableForAnalyze() throws IOException {
     byte[] bytes = SyntheticPdfFactory.signed();
     Path input = SyntheticPdfFactory.write(tmp.resolve("in/document.pdf"), bytes);
 
-    PreflightOutcome fix = preflight.inspect(input, request(WorkerRequest.Mode.SAFE_FIX, 10_485_760, 20));
+    PreflightOutcome fix = preflight.inspect(input, request(WorkerRequest.Mode.FIX, 10_485_760, 20));
     PreflightOutcome analyze = preflight.inspect(input, request(WorkerRequest.Mode.ANALYZE, 10_485_760, 20));
 
     assertFalse(fix.accepted());

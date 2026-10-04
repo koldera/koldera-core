@@ -59,13 +59,7 @@ public record WorkerRequest(
   public enum Mode {
     @JsonProperty("analyze")
     ANALYZE,
-    /** Deprecated: the two metadata rules only. */
-    @JsonProperty("safe_fix")
-    SAFE_FIX,
-    /** Deprecated: {@code safe_fix} plus basic paragraph/figure/artifact tags for untagged documents. */
-    @JsonProperty("structure_fix")
-    STRUCTURE_FIX,
-    /** Everything the engine applies safely on a copy: {@code structure_fix} plus the title rule. */
+    /** Everything the engine applies safely on a copy. */
     @JsonProperty("fix")
     FIX
   }
@@ -78,15 +72,8 @@ public record WorkerRequest(
     HTML_GENERATED
   }
 
+  /** Resolved limits: a limit the request left out is {@code Long.MAX_VALUE} / {@code Integer.MAX_VALUE} (not enforced). */
   public record Limits(long maxBytes, int maxPages, int timeoutSeconds) {}
-
-  public boolean isSafeFix() {
-    return mode == Mode.SAFE_FIX;
-  }
-
-  public boolean isStructureFix() {
-    return mode == Mode.STRUCTURE_FIX;
-  }
 
   public boolean isFix() {
     return mode == Mode.FIX;
@@ -94,12 +81,12 @@ public record WorkerRequest(
 
   /** Structure tags (and the XMP packet that goes with them) take part in this mode. */
   public boolean addsStructure() {
-    return mode == Mode.STRUCTURE_FIX || mode == Mode.FIX;
+    return mode == Mode.FIX;
   }
 
   /** Whether the mode may write a remediated copy at all (never the original). */
   public boolean isMutating() {
-    return mode == Mode.SAFE_FIX || mode == Mode.STRUCTURE_FIX || mode == Mode.FIX;
+    return mode == Mode.FIX;
   }
 
   /** Whether this PDF was generated from HTML, rather than uploaded by a caller. */

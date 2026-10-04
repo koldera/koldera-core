@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/pdf-inspect-result.v1.json",
+  "title": "PdfInspectResultV1",
+  "description": "Read-only structure probe of a PDF (`inspect` verb of the PDF engine). It reports what the file declares and contains; it is evidence for a platform decision, never a conformance verdict.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "status", "sha256", "bytes", "engineVersion", "structure", "error"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "status": {"enum": ["inspected", "failed"]},
+    "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "bytes": {"type": "integer", "minimum": 0},
+    "engineVersion": {"type": "string"},
+    "structure": {"oneOf": [{"$ref": "#/$defs/structure"}, {"type": "null"}]},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "structure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pages", "encrypted", "markInfoMarked", "structTreeRoot", "structureElements", "contentReferences", "usableTags", "roles", "language", "title"],
+      "properties": {
+        "pages": {"type": "integer", "minimum": 0},
+        "encrypted": {"type": "boolean"},
+        "markInfoMarked": {"type": "boolean", "description": "/MarkInfo << /Marked true >> in the catalog"},
+        "structTreeRoot": {"type": "boolean", "description": "the catalog references a /StructTreeRoot"},
+        "structureElements": {"type": "integer", "minimum": 0, "description": "structure elements reachable from the root through /K"},
+        "contentReferences": {"type": "integer", "minimum": 0, "description": "marked-content (MCID) and object references attached to structure elements"},
+        "usableTags": {"type": "boolean", "description": "markInfoMarked && structTreeRoot && structureElements > 0 && contentReferences > 0; the minimum for the output to be treated as tagged at all"},
+        "roles": {"type": "array", "maxItems": 100, "items": {"type": "object", "additionalProperties": false, "required": ["role", "count"], "properties": {"role": {"type": "string", "minLength": 1, "maxLength": 64}, "count": {"type": "integer", "minimum": 1}}}},
+        "language": {"type": ["string", "null"], "maxLength": 64},
+        "title": {"type": ["string", "null"], "maxLength": 256}
+      }
+    },
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "UNSUPPORTED_ENCRYPTED", "LIMIT_EXCEEDED", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}
