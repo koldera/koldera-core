@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/html-reorder-result.v1.json",
+  "title": "HtmlReorderResultV1",
+  "description": "Outcome of an approved source-HTML sibling reorder. `applied` means the corrected copy was re-rendered, its DOM sequence is the approved one, keyboard traversal was measured, and the screenshot differs from the original within the declared tolerance. Otherwise nothing is published and the reason is typed.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "engineVersion", "baseSha256", "checks", "artifacts", "diagnostics", "manualReviewRequired", "error"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["applied", "unsupported", "failed"]},
+    "engineVersion": {"type": "string"},
+    "baseSha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["domSequenceMatchesApproved", "focusOrderMeasured", "focusSequenceFollowsDom", "inlineOrderDeclarationsRemoved", "visualDiffRatio", "visualWithinTolerance", "pages"],
+      "properties": {
+        "domSequenceMatchesApproved": {"type": ["boolean", "null"]},
+        "focusOrderMeasured": {"type": ["boolean", "null"]},
+        "focusSequenceFollowsDom": {"type": ["boolean", "null"]},
+        "inlineOrderDeclarationsRemoved": {"type": "integer", "minimum": 0},
+        "visualDiffRatio": {"type": ["number", "null"]},
+        "visualWithinTolerance": {"type": ["boolean", "null"]},
+        "pages": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "artifacts": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "sha256", "bytes"], "properties": {"kind": {"enum": ["source_html", "generated_pdf"]}, "path": {"type": "string", "pattern": "^/work/out/[A-Za-z0-9._-]+$"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "bytes": {"type": "integer", "minimum": 1}}}},
+    "diagnostics": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["code", "message", "blocking", "line", "element"], "properties": {"code": {"type": "string"}, "message": {"type": "string", "maxLength": 500}, "blocking": {"type": "boolean"}, "line": {"type": ["integer", "null"]}, "element": {"type": ["string", "null"]}}}},
+    "manualReviewRequired": {"const": true},
+    "error": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "ORDER_FIX_UNSUPPORTED", "ORDER_FIX_REGRESSION", "UNSUPPORTED_CONTENT", "EXTERNAL_RESOURCE_BLOCKED", "CONTENT_NOT_FOUND", "TIMEOUT", "LIMIT_EXCEEDED", "RENDER_FAILED", "WORKER_ERROR"]}, "message": {"type": "string"}}}, {"type": "null"}]}
+  }
+}

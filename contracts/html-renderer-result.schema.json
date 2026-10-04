@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/html-renderer-result.v1.json",
+  "title": "HtmlRendererResultV1",
+  "description": "Outcome of one isolated render. `taggedRequested` records only what was asked of Chromium; whether the PDF really carries usable structure is established independently by the PDF engine's `inspect` probe and veraPDF, never here.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "sourceSha256", "engineVersion", "taggedRequested", "pages", "blockedRequests", "diagnostics", "artifacts", "manualReviewRequired", "error"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["completed", "unsupported", "failed"]},
+    "sourceSha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "engineVersion": {"type": "string"},
+    "taggedRequested": {"const": true},
+    "pages": {"type": ["integer", "null"], "minimum": 1},
+    "blockedRequests": {"type": "integer", "minimum": 0, "description": "network requests the page attempted; any value above zero makes the render unsupported"},
+    "diagnostics": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/diagnostic"}},
+    "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "manualReviewRequired": {"const": true},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message", "blocking", "line", "element"],
+      "properties": {
+        "code": {"enum": [
+          "HTML_ENCODING_INVALID", "HTML_NOT_A_DOCUMENT", "HTML_SCRIPT_REMOVED", "HTML_ELEMENT_REMOVED",
+          "HTML_ATTRIBUTE_REMOVED", "HTML_EVENT_HANDLER_REMOVED", "HTML_URL_REMOVED", "HTML_EXTERNAL_RESOURCE", "HTML_EXTERNAL_REQUESTS_BLOCKED",
+          "HTML_INLINE_IMAGE_INVALID", "HTML_INLINE_IMAGE_TOO_LARGE", "HTML_INLINE_IMAGES_TOO_LARGE",
+          "CSS_IMPORT_IGNORED", "CSS_EXTERNAL_RESOURCE", "CSS_UNSAFE_CONSTRUCT",
+          "HTML_LANG_MISSING", "HTML_TITLE_MISSING", "HTML_IMAGE_ALT_MISSING",
+          "HTML_CONTENT_SELECTED", "HTML_RELATIVE_LINK_REMOVED", "HTML_IMAGE_NOT_LOADED", "HTML_SVG_NAME_MISSING"
+        ]},
+        "message": {"type": "string", "maxLength": 500},
+        "blocking": {"type": "boolean", "description": "true: the document is refused (encoding, not a document, inline-resource budget); false: advisory — removed or unfetched content and semantic gaps, carried into the findings"},
+        "line": {"type": ["integer", "null"], "minimum": 1},
+        "element": {"type": ["string", "null"], "maxLength": 64}
+      }
+    },
+    "artifact": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "sha256", "bytes"], "properties": {"kind": {"enum": ["generated_pdf"]}, "path": {"type": "string", "pattern": "^/work/out/[A-Za-z0-9._-]+$"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "bytes": {"type": "integer", "minimum": 1}}},
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "UNSUPPORTED_CONTENT", "EXTERNAL_RESOURCE_BLOCKED", "CONTENT_NOT_FOUND", "TIMEOUT", "LIMIT_EXCEEDED", "RENDER_FAILED", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}

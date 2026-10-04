@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/web-worker-request.v1.json",
+  "title": "WebWorkerRequestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "jobId", "url", "outputDirectory", "limits", "policy"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "url": {"type": "string", "format": "uri", "maxLength": 2048},
+    "outputDirectory": {"const": "/work/out"},
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["timeoutSeconds", "maxResponseBytes", "maxRequests"],
+      "properties": {
+        "timeoutSeconds": {"type": "integer", "minimum": 5, "maximum": 120},
+        "maxResponseBytes": {"type": "integer", "minimum": 65536, "maximum": 52428800},
+        "maxRequests": {"type": "integer", "minimum": 1, "maximum": 500}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allowHttp"],
+      "properties": {
+        "allowHttp": {"type": "boolean"},
+        "proxyServer": {"type": ["string", "null"], "description": "Egress proxy URL enforced at connection time; app-layer checks alone are insufficient."}
+      }
+    }
+  }
+}

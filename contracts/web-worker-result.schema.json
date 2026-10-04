@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/web-worker-result.v1.json",
+  "title": "WebWorkerResultV1",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "requestedUrl", "finalUrl", "engineVersion", "summary", "findings", "artifacts", "manualReviewRequired"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["completed", "unsupported", "failed"]},
+    "requestedUrl": {"type": "string"},
+    "finalUrl": {"type": ["string", "null"]},
+    "engineVersion": {"type": "string"},
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["violations", "incomplete", "passes", "inapplicable", "blockedRequests"],
+      "properties": {
+        "violations": {"type": "integer", "minimum": 0},
+        "incomplete": {"type": "integer", "minimum": 0},
+        "passes": {"type": "integer", "minimum": 0},
+        "inapplicable": {"type": "integer", "minimum": 0},
+        "blockedRequests": {"type": "integer", "minimum": 0}
+      }
+    },
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "manualReviewRequired": {"const": true},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ruleId", "kind", "impact", "message", "selector", "wcagTags", "needsHumanReview"],
+      "properties": {
+        "ruleId": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["violation", "incomplete"]},
+        "impact": {"enum": ["minor", "moderate", "serious", "critical", "unknown"]},
+        "message": {"type": "string", "maxLength": 1000},
+        "selector": {"type": "string", "maxLength": 1024},
+        "snippet": {"type": ["string", "null"], "maxLength": 400},
+        "wcagTags": {"type": "array", "items": {"type": "string"}},
+        "helpUrl": {"type": ["string", "null"]},
+        "needsHumanReview": {"type": "boolean"}
+      }
+    },
+    "artifact": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "sha256", "bytes"], "properties": {"kind": {"enum": ["web_report"]}, "path": {"type": "string", "pattern": "^/work/out/[A-Za-z0-9._-]+$"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "bytes": {"type": "integer", "minimum": 1}}},
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "BLOCKED_DESTINATION", "NAVIGATION_FAILED", "TIMEOUT", "LIMIT_EXCEEDED", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}
