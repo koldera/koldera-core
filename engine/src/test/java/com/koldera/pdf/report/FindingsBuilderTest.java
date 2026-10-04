@@ -107,7 +107,7 @@ class FindingsBuilderTest {
         byId(findings, FindingsBuilder.BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW).message());
     assertEquals(FindingsBuilder.BASIC_STRUCTURE_REVIEW_MESSAGE_FIX, byId(findings, FindingsBuilder.BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW).message());
     assertEquals(FindingsBuilder.BASIC_STRUCTURE_REVIEW_MESSAGE, byId(new FindingsBuilder().basicStructureAdded().build(), FindingsBuilder.BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW).message(),
-        "the structure_fix message stays verbatim");
+        "the basic-structure message stays verbatim");
   }
 
   @Test

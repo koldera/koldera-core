@@ -39,7 +39,7 @@ import org.apache.pdfbox.util.Matrix;
 final class ContentWalker {
 
   /**
-   * What the walk may do beyond the deprecated {@code structure_fix} behaviour ({@code (false,
+   * What the walk may do beyond the conservative walk ({@code (false,
    * false)}): drop painting operators with no path, and wrap each draw of a shared form with text or
    * images instead of refusing the document. Mode {@code fix} uses {@code (true, true)}.
    */
@@ -433,7 +433,7 @@ final class ContentWalker {
   private final PDRectangle cropBox;
   private final List<Item> pageOrder;
   private final List<StreamPlan> streams;
-  /** Mode {@code fix} only: painting operators with no path are dropped (or refused); {@code structure_fix} tags them as before. */
+  /** Mode {@code fix} only: painting operators with no path are dropped (or refused); the conservative walk tags them. */
   private final boolean removeStrayPaints;
   /** Mode {@code fix} only: a shared form with text or images is wrapped per draw instead of refusing the document. */
   private final boolean wrapSharedForms;

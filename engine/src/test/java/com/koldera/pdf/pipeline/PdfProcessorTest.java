@@ -140,7 +140,7 @@ class PdfProcessorTest {
     assertSchemaValid(result);
   }
 
-  // ---- safe_fix ---------------------------------------------------------------------------
+  // ---- fix with the metadata rules ---------------------------------------------------------------------------
 
   @Test
   void fixWithNoApplicableRuleReturnsNoApplicableFixAndDoesNotRevalidate() throws IOException {
@@ -208,7 +208,7 @@ class PdfProcessorTest {
 
   @Test
   void appliedFixResolvesEachMachineCheckAgainstTheCopy() throws IOException {
-    // The language rule is fixed by the copy, the title rule too; the missing structure tree is not a safe_fix concern.
+    // The language rule is fixed by the copy, the title rule too; the missing structure tree is not a concern of the two metadata rules.
     install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").displayDocTitle(false)));
     validator.enqueue(failed(Map.of(LANG_RULE, 1, TITLE_RULE, 1, STRUCT_RULE, 1)));
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1)));

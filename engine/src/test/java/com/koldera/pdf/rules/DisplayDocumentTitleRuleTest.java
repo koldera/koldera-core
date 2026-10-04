@@ -142,7 +142,7 @@ class DisplayDocumentTitleRuleTest {
   }
 
   @Test
-  void inSafeFixModeATitleIsStillNeverInvented() throws IOException {
+  void inFixModeATitleIsStillNeverInvented() throws IOException {
     try (PDDocument doc = load(Options.plain())) {
       RuleDecision decision = rule.inspect(doc, fixRequest);
       assertFalse(decision.applicable());
