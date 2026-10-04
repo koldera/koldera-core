@@ -31,7 +31,8 @@ export function findViolations(file, text) {
   const comment = commentPattern(base);
   let run = 0;
   text.split("\n").forEach((line, i) => {
-    for (const [rule, re, only] of RULES) if ((!only || only.test(base)) && re.test(line)) out.push({ file, line: i + 1, rule });
+    const allowClaim = line.includes("hygiene-allow: claim-word");
+    for (const [rule, re, only] of RULES) if (!(allowClaim && rule === "claim-word") && (!only || only.test(base)) && re.test(line)) out.push({ file, line: i + 1, rule });
     run = comment && comment.test(line) ? run + 1 : 0;
     if (run === 7) out.push({ file, line: i + 1, rule: "long-comment" });
   });

@@ -27,7 +27,7 @@ public final class VeraPdfCliValidator implements PdfValidator {
   public static final String COMMAND_ENV = "VERAPDF_CMD";
 
   /** veraPDF's own name for the pass flag of a validation result. */
-  public static final String PASS_FLAG_FIELD = "compl" + "iant";
+  public static final String PASS_FLAG_FIELD = "compliant"; // veraPDF's JSON field name; hygiene-allow: claim-word
 
   private static final String EXPECTED_PROFILE_MARKER = "PDF/UA-1";
   private static final ObjectMapper MAPPER = JsonMapper.builder().build();

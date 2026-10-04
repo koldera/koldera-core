@@ -70,14 +70,14 @@ written. Artifacts (original, reports, remediated copy) are listed with SHA-256 
 
 `inspect` is a read-only probe of what a PDF declares and contains: marked content flag, structure
 tree presence, element and content-reference counts, roles, `/Lang`, Info title
-(`contracts/pdf-inspect-result.schema.json`).
+(`src/main/resources/contracts/pdf-inspect-result.schema.json`).
 
 `structure` is read-only too: it walks the structure tree in its stored order (never re-sorted by
 geometry), resolves marked content to bounded text previews and bounding boxes, and records per-page
-invariants (`contracts/pdf-structure-result.schema.json`).
+invariants (`src/main/resources/contracts/pdf-structure-result.schema.json`).
 
 `reorder` permutes the structure-element kids of one parent, as approved in the request, on a copy
-(`contracts/pdf-reorder-{request,result}.schema.json`). The copy is published only if page count,
+(`src/main/resources/contracts/pdf-reorder-{request,result}.schema.json`). The copy is published only if page count,
 content streams, text multisets, annotations, marked-content inventory, parent tree and a pixel
 render are unchanged and the reparsed sequence is the approved one. Untagged, signed and encrypted
 files, mixed or annotated parents, cross-page siblings, table rows and cells, and incomplete or
