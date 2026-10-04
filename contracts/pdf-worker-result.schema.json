@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/pdf-worker-result.v1.json",
+  "title": "PdfWorkerResultV1",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "originalSha256", "baseline", "finalValidation", "remediationStatus", "actions", "findings", "artifacts", "manualReviewRequired"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["completed", "unsupported", "failed"]},
+    "originalSha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "engineVersion": {"type": "string"},
+    "baseline": {"$ref": "#/$defs/validation"},
+    "finalValidation": {"oneOf": [{"$ref": "#/$defs/validation"}, {"type": "null"}]},
+    "remediationStatus": {"enum": ["not_requested", "no_applicable_fix", "applied", "skipped", "rolled_back"]},
+    "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "manualReviewRequired": {"const": true},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "validation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "status", "failedRules"],
+      "properties": {
+        "profile": {"const": "ua1"},
+        "status": {"enum": ["passed", "failed", "error", "not_run"]},
+        "failedRules": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["ruleId", "count"], "properties": {"ruleId": {"type": "string", "minLength": 1}, "count": {"type": "integer", "minimum": 1}}}},
+        "rawReportPath": {"type": ["string", "null"]}
+      }
+    },
+    "action": {"type": "object", "additionalProperties": false, "required": ["ruleId", "outcome", "reason"], "properties": {"ruleId": {"enum": ["PDF_LANG_FROM_EXPLICIT_INPUT_V1", "PDF_DISPLAY_TITLE_FROM_EXISTING_TITLE_V1", "PDF_BASIC_STRUCTURE_FROM_CONTENT_V1", "PDF_XMP_METADATA_FROM_INFO_V1", "PDF_TITLE_V1", "PDF_GENERATED_STRUCTURE_V1", "PDF_UA_IDENTIFIER_V1", "PDF_ROLE_MAP_V1", "PDF_TAB_ORDER_V1", "PDF_LANG_CORRECTED_FROM_TEXT_V1", "PDF_LINK_TAGS_V1", "PDF_STRUCTURE_INFERRED_V1", "PDF_UNTAGGED_CONTENT_V1", "PDF_FIGURES_WITHOUT_ALT_V1", "PDF_TAGGED_STRUCTURE_REPAIR_V1", "PDF_FONT_TOUNICODE_V1", "PDF_FONT_DICTIONARY_V1", "PDF_FONT_INVISIBLE_TEXT_V1", "PDF_FONT_EMBEDDING_V1"]}, "outcome": {"enum": ["applied", "skipped", "failed", "rolled_back"]}, "reason": {"type": "string"}, "before": {"type": ["string", "null"]}, "after": {"type": ["string", "null"]}}},
+    "finding": {"type": "object", "additionalProperties": false, "required": ["ruleId", "message", "needsHumanReview"], "properties": {"ruleId": {"type": "string"}, "message": {"type": "string"}, "pageNumber": {"type": ["integer", "null"], "minimum": 1}, "needsHumanReview": {"type": "boolean"}, "resolution": {"type": ["string", "null"], "enum": ["fixed_in_copy", "still_failing", null], "description": "Set only on machine-check findings of a job whose remediation was applied: whether the rule reports zero failures in the copy's final validation. Null for analyze runs, rolled-back runs and non-machine findings."}}},
+    "artifact": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "sha256", "bytes"], "properties": {"kind": {"enum": ["original", "remediated", "baseline_report", "final_report"]}, "path": {"type": "string", "pattern": "^/work/(in|out)/[A-Za-z0-9._-]+$"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "bytes": {"type": "integer", "minimum": 1}}},
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "UNSUPPORTED_ENCRYPTED", "UNSUPPORTED_SIGNED_MUTATION", "LIMIT_EXCEEDED", "VALIDATOR_UNAVAILABLE", "VALIDATOR_ERROR", "INTEGRITY_REGRESSION", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}
