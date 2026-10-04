@@ -135,16 +135,36 @@ public sealed class DataStore
 
     public CoreJob? GetJob(Guid id) => ReadJson<CoreJob>(Path.Combine(JobsDir, id.ToString("N"), "job.json"));
 
-    public IEnumerable<CoreJob> AllJobs()
+    /// <param name="onUnreadable">Called with the file name and the exception for a record that cannot be read; the record is skipped.</param>
+    public IEnumerable<CoreJob> AllJobs(Action<string, Exception>? onUnreadable = null)
     {
         foreach (var dir in Directory.EnumerateDirectories(JobsDir))
-            if (ReadJson<CoreJob>(Path.Combine(dir, "job.json")) is { } job) yield return job;
+        {
+            var path = Path.Combine(dir, "job.json");
+            CoreJob? job;
+            try { job = ReadJson<CoreJob>(path); }
+            catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+            {
+                onUnreadable?.Invoke(Path.GetRelativePath(_root, path), e);
+                continue;
+            }
+            if (job is not null) yield return job;
+        }
     }
 
-    public IEnumerable<UploadRecord> AllUploads()
+    public IEnumerable<UploadRecord> AllUploads(Action<string, Exception>? onUnreadable = null)
     {
         foreach (var file in Directory.EnumerateFiles(UploadsDir, "*.json"))
-            if (ReadJson<UploadRecord>(file) is { } record) yield return record;
+        {
+            UploadRecord? record;
+            try { record = ReadJson<UploadRecord>(file); }
+            catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+            {
+                onUnreadable?.Invoke(Path.GetRelativePath(_root, file), e);
+                continue;
+            }
+            if (record is not null) yield return record;
+        }
     }
 
     /// <summary>Removes the upload's record, content and any partial file. Missing parts are fine.</summary>

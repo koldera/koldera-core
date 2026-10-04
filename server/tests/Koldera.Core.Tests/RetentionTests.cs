@@ -63,6 +63,39 @@ public sealed class RetentionTests : IDisposable
     }
 
     [Fact]
+    public async Task Uploads_needed_by_queued_or_running_jobs_are_kept()
+    {
+        var forQueued = Upload(TimeSpan.FromHours(30));
+        var forRunning = Upload(TimeSpan.FromHours(30));
+        var forDone = Upload(TimeSpan.FromHours(30));
+        foreach (var (state, upload) in new[] { (CoreJobState.Queued, forQueued), (CoreJobState.Running, forRunning), (CoreJobState.Completed, forDone) })
+            await _store.SaveJobAsync(new CoreJob { Id = Guid.NewGuid(), State = state, Owner = "server", InputUploadId = upload, CreatedAt = Now - TimeSpan.FromHours(30) });
+
+        await new RetentionService(_store, 24).SweepAsync(Now);
+
+        Assert.NotNull(_store.GetUpload(forQueued));
+        Assert.NotNull(_store.GetUpload(forRunning));
+        Assert.Null(_store.GetUpload(forDone));
+    }
+
+    [Fact]
+    public async Task A_corrupt_record_is_skipped_and_logged_by_type_and_file_name_only()
+    {
+        var log = new Support.ListLogger();
+        var bad = Guid.NewGuid();
+        Directory.CreateDirectory(JobPath(bad));
+        File.WriteAllText(Path.Combine(JobPath(bad), "job.json"), "{ SECRET-CONTENT not json");
+        var old = await Job(CoreJobState.Completed, TimeSpan.FromHours(30));
+
+        await new RetentionService(_store, 24, log).SweepAsync(Now);
+
+        Assert.Null(_store.GetJob(old));
+        Assert.True(File.Exists(Path.Combine(JobPath(bad), "job.json")));
+        Assert.Contains(log.Lines, l => l.Contains("job.json") && l.Contains("JsonException"));
+        Assert.DoesNotContain(log.Lines, l => l.Contains("SECRET-CONTENT"));
+    }
+
+    [Fact]
     public async Task The_background_worker_sweeps_every_fifteen_minutes_on_the_injected_clock()
     {
         var clock = new FakeTimeProvider(Now);

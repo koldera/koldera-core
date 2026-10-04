@@ -225,4 +225,65 @@ public sealed class JobRunnerTests : IDisposable
         Assert.True(await runner.WaitForCompletionAsync(id, TimeSpan.Zero, CancellationToken.None));
         Assert.False(await runner.WaitForCompletionAsync(Guid.NewGuid(), TimeSpan.FromSeconds(5), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Two_waiters_both_wake_when_the_job_completes()
+    {
+        for (var i = 0; i < 25; i++)
+        {
+            var gate = new TaskCompletionSource();
+            var (runner, queue) = Runner(new LambdaExecutor("pdf", async (_, _, _, _) => { await gate.Task; return Done(); }));
+            var id = await QueueJob(queue);
+            await runner.StartAsync(CancellationToken.None);
+            _started.Add(runner);
+            var w1 = Task.Run(() => runner.WaitForCompletionAsync(id, TimeSpan.FromSeconds(20), CancellationToken.None));
+            var w2 = Task.Run(() => runner.WaitForCompletionAsync(id, TimeSpan.FromSeconds(20), CancellationToken.None));
+            var w3 = Task.Run(async () => { gate.SetResult(); return await runner.WaitForCompletionAsync(id, TimeSpan.FromSeconds(20), CancellationToken.None); });
+            Assert.All(await Task.WhenAll(w1, w2, w3), Assert.True);
+            await runner.StopAsync(CancellationToken.None);
+            _started.Remove(runner);
+        }
+    }
+
+    [Fact]
+    public async Task The_same_id_enqueued_twice_runs_once_and_waiters_do_not_return_early()
+    {
+        var gate = new TaskCompletionSource();
+        var calls = 0;
+        var (runner, queue) = Runner(new LambdaExecutor("pdf", async (_, _, _, _) => { Interlocked.Increment(ref calls); await gate.Task; return Done(); }), concurrency: 2);
+        var id = await QueueJob(queue);
+        Assert.True(queue.TryEnqueue(id));
+        await runner.StartAsync(CancellationToken.None);
+        _started.Add(runner);
+
+        await Task.Delay(300);
+        Assert.False(await runner.WaitForCompletionAsync(id, TimeSpan.FromMilliseconds(100), CancellationToken.None));
+        gate.SetResult();
+        await runner.WaitIdleAsync();
+
+        Assert.Equal(1, calls);
+        Assert.Equal("completed", _store.GetJob(id)!.State);
+    }
+
+    [Fact]
+    public async Task Concurrency_two_never_runs_more_than_two_jobs_at_once()
+    {
+        int running = 0, max = 0;
+        var (runner, queue) = Runner(new LambdaExecutor("pdf", async (_, _, _, _) =>
+        {
+            var now = Interlocked.Increment(ref running);
+            int seen;
+            while ((seen = Volatile.Read(ref max)) < now && Interlocked.CompareExchange(ref max, now, seen) != seen) { }
+            await Task.Delay(200);
+            Interlocked.Decrement(ref running);
+            return Done();
+        }), concurrency: 2);
+        var ids = new[] { await QueueJob(queue), await QueueJob(queue), await QueueJob(queue) };
+        await runner.StartAsync(CancellationToken.None);
+        _started.Add(runner);
+        await runner.WaitIdleAsync();
+
+        Assert.Equal(2, max);
+        Assert.All(ids, id => Assert.Equal("completed", _store.GetJob(id)!.State));
+    }
 }
