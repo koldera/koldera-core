@@ -32,7 +32,15 @@ public static class ArtifactFiles
             throw new WorkerContractException($"worker artifact {kind} does not match its declared size/hash");
         Directory.CreateDirectory(jobOutDir);
         var name = Path.GetFileName(localPath);
-        File.Move(localPath, Path.Combine(jobOutDir, name), overwrite: false);
+        var target = Path.Combine(jobOutDir, name);
+        try
+        {
+            File.Move(localPath, target, overwrite: false);
+        }
+        catch (IOException) when (File.Exists(target))
+        {
+            throw new WorkerContractException("artifact already exists");
+        }
         return new CoreArtifact(Guid.NewGuid(), kind, name, declaredSha256.ToLowerInvariant(), declaredBytes, now, expiresAt);
     }
 }

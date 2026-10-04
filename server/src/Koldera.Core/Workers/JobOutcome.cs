@@ -20,5 +20,10 @@ public sealed record JobOutcome(
 public interface IJobExecutor
 {
     string Kind { get; }
-    Task<JobOutcome> ExecuteAsync(CoreJob job, string scratch, CancellationToken ct);
+
+    /// <param name="timeout">
+    /// The configured job time limit, or <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> when none is configured.
+    /// Executors pass it unchanged to <see cref="IWorkerProcess.RunAsync"/> and throw <see cref="TimeoutException"/> when the worker timed out.
+    /// </param>
+    Task<JobOutcome> ExecuteAsync(CoreJob job, string scratch, TimeSpan timeout, CancellationToken ct);
 }

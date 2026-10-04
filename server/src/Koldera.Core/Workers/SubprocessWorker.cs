@@ -27,6 +27,9 @@ public interface IWorkerProcess
 public sealed class SubprocessWorker(string[] command, IReadOnlyDictionary<string, string> workerEnvironment, WorkerArgumentStyle style = WorkerArgumentStyle.RequestResult) : IWorkerProcess
 {
     private const int StderrTailLimit = 4096;
+    /// <summary>The only parent environment variables a worker child inherits.</summary>
+    public static IReadOnlyList<string> PassThroughNames => PassThrough;
+
     private static readonly string[] PassThrough = ["PATH", "JAVA_HOME", "JAVA_TOOL_OPTIONS", "LANG", "LC_ALL", "TEMP", "TMP", "HOME", "USERPROFILE", "SystemRoot", "windir", "ComSpec", "PATHEXT", "OS", "NODE_OPTIONS", "PLAYWRIGHT_BROWSERS_PATH", "LOCALAPPDATA"];
 
     /// <summary>A request/result verb that needs VERAPDF_CMD (the PDF <c>process</c> verb).</summary>
