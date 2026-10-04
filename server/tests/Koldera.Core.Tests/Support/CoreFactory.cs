@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Koldera.Core.Tests.Support;
 
@@ -19,6 +21,11 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     private readonly string? _tempDir;
 
     public ConcurrentQueue<string> Logs { get; } = new();
+
+    /// <summary>The clock the server runs on; tests may advance it.</summary>
+    public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
+
+    public DataStore Store => Services.GetRequiredService<DataStore>();
 
     private CoreFactory(Dictionary<string, string?> env, string? tempDir)
     {
@@ -54,6 +61,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(_env));
+        builder.ConfigureServices(s => s.AddSingleton<TimeProvider>(Clock));
         builder.ConfigureLogging(l => l.AddProvider(new CapturingProvider(Logs)));
     }
 

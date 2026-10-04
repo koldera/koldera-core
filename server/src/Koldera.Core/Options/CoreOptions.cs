@@ -75,8 +75,14 @@ public sealed record CoreOptions(
         if (auth is not (null or "none"))
             throw new InvalidOperationException("KOLDERA_AUTH: only \"none\" is accepted (leave it unset for token authentication)");
 
+        var token = Text("TOKEN");
+        if (token is not null && token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length == 0)
+            throw new InvalidOperationException("KOLDERA_TOKEN: no token left after splitting on commas (unset it to generate one)");
+        var signingKey = Text("SIGNING_KEY");
+        if (signingKey is not null) SigningKeys.Decode(signingKey);
+
         return new CoreOptions(
-            Token: Text("TOKEN"),
+            Token: token,
             Auth: auth ?? "token",
             DataDir: Text("DATA_DIR") ?? "/data",
             PublicUrl: Text("PUBLIC_URL"),
@@ -85,7 +91,7 @@ public sealed record CoreOptions(
             QueueCapacity: Int("QUEUE_CAPACITY", 100),
             Features: new HashSet<string>(features),
             CorsOrigins: (Text("CORS_ORIGINS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            SigningKey: Text("SIGNING_KEY"),
+            SigningKey: signingKey,
             WebProxy: Text("WEB_PROXY"),
             WebAllowHttp: allowHttp is not null && bool.Parse(allowHttp),
             Limits: new Limits(
@@ -96,6 +102,14 @@ public sealed record CoreOptions(
                 Long("WEB_MAX_RESPONSE_BYTES"),
                 OptionalInt("WEB_MAX_REQUESTS")));
     }
+
+    // Secrets never appear in the printed form (logs, exception messages, test output).
+    public override string ToString() =>
+        $"CoreOptions {{ Token = {(Token is null ? "null" : "***")}, Auth = {Auth}, DataDir = {DataDir}, PublicUrl = {PublicUrl}, " +
+        $"RetentionHours = {RetentionHours}, Concurrency = {Concurrency}, QueueCapacity = {QueueCapacity}, " +
+        $"Features = [{string.Join(", ", Features.Order())}], CorsOrigins = [{string.Join(", ", CorsOrigins)}], " +
+        $"SigningKey = {(SigningKey is null ? "null" : "***")}, WebProxy = {(WebProxy is null ? "null" : "***")}, " +
+        $"WebAllowHttp = {WebAllowHttp}, Limits = {Limits} }}";
 
     public void EnsureDataDirWritable()
     {

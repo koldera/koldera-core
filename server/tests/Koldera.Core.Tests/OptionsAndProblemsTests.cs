@@ -110,3 +110,69 @@ public class OptionsAndProblemsTests
         Assert.False(json.RootElement.TryGetProperty("detail", out _));
     }
 }
+
+public class OptionsSecretsTests
+{
+    [Fact]
+    public void ToString_never_prints_the_token_or_the_signing_key()
+    {
+        var key = Convert.ToBase64String(Enumerable.Range(7, 32).Select(i => (byte)i).ToArray());
+        var o = CoreOptions.FromEnvironment(new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "super-secret-token", ["KOLDERA_SIGNING_KEY"] = key });
+        var text = o.ToString();
+        Assert.DoesNotContain("super-secret-token", text);
+        Assert.DoesNotContain(key, text);
+        Assert.Contains("Token = ***", text);
+    }
+
+    [Theory]
+    [InlineData(",")]
+    [InlineData(" , ")]
+    public void A_token_that_is_blank_after_splitting_is_a_startup_error(string value)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => CoreOptions.FromEnvironment(new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = value }));
+        Assert.Contains("KOLDERA_TOKEN", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void An_unset_or_empty_token_still_means_generate(string value)
+    {
+        Assert.Null(CoreOptions.FromEnvironment(new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = value }).Token);
+    }
+
+    [Theory]
+    [InlineData("not base64!!")]
+    [InlineData("AAAA")]
+    public void A_bad_or_short_signing_key_names_its_variable(string value)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => CoreOptions.FromEnvironment(new Dictionary<string, string?> { ["KOLDERA_SIGNING_KEY"] = value }));
+        Assert.Contains("KOLDERA_SIGNING_KEY", ex.Message);
+    }
+
+    [Fact]
+    public void Generated_signing_key_is_persisted_and_reused()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "koldera-key-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var o = CoreOptions.FromEnvironment(new Dictionary<string, string?> { ["KOLDERA_DATA_DIR"] = dir });
+            var first = SigningKeys.Resolve(o);
+            Assert.Equal(32, first.Length);
+            Assert.Equal(first, SigningKeys.Resolve(o));
+            var path = Path.Combine(dir, ".signing-key");
+            Assert.True(File.Exists(path));
+            if (!OperatingSystem.IsWindows())
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Configured_signing_key_is_used_as_is()
+    {
+        var raw = Enumerable.Range(0, 40).Select(i => (byte)i).ToArray();
+        var o = CoreOptions.FromEnvironment(new Dictionary<string, string?> { ["KOLDERA_SIGNING_KEY"] = Convert.ToBase64String(raw) });
+        Assert.Equal(raw, SigningKeys.Resolve(o));
+    }
+}
