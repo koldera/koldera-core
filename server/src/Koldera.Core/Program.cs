@@ -18,6 +18,12 @@ builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp => new DataStore(sp.GetRequiredService<CoreOptions>().DataDir, sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new UrlSigner(SigningKeys.Resolve(sp.GetRequiredService<CoreOptions>()), sp.GetRequiredService<TimeProvider>()));
 
+builder.Services.AddSingleton(sp => new JobQueue(sp.GetRequiredService<CoreOptions>().QueueCapacity));
+builder.Services.AddSingleton<JobRunner>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<JobRunner>());
+builder.Services.AddSingleton(sp => new RetentionService(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<CoreOptions>().RetentionHours));
+builder.Services.AddHostedService<RetentionWorker>();
+
 var app = builder.Build();
 app.Services.GetRequiredService<CoreOptions>().EnsureDataDirWritable();
 app.Services.GetRequiredService<UrlSigner>(); // fails fast on a bad signing key

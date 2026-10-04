@@ -53,6 +53,23 @@ public sealed class ArtifactFilesTests : IDisposable
     }
 
     [Fact]
+    public async Task A_pre_existing_target_in_the_output_directory_is_a_contract_violation()
+    {
+        var bytes = "%PDF-1.7 fixed"u8.ToArray();
+        var local = Write("fixed.pdf", bytes);
+        var outDir = Path.Combine(_root, "out");
+        Directory.CreateDirectory(outDir);
+        File.WriteAllText(Path.Combine(outDir, "fixed.pdf"), "already here");
+        var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+        var e = await Assert.ThrowsAsync<WorkerContractException>(() =>
+            ArtifactFiles.VerifyAndKeepAsync(local, "fixed_pdf", sha, bytes.Length, outDir, Now, Now.AddHours(1), CancellationToken.None));
+
+        Assert.Equal("artifact already exists", e.Message);
+        Assert.Equal("already here", File.ReadAllText(Path.Combine(outDir, "fixed.pdf")));
+    }
+
+    [Fact]
     public async Task A_size_mismatch_or_missing_file_is_a_contract_violation()
     {
         var bytes = "abc"u8.ToArray();

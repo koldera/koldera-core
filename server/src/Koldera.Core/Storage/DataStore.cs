@@ -141,6 +141,37 @@ public sealed class DataStore
             if (ReadJson<CoreJob>(Path.Combine(dir, "job.json")) is { } job) yield return job;
     }
 
+    public IEnumerable<UploadRecord> AllUploads()
+    {
+        foreach (var file in Directory.EnumerateFiles(UploadsDir, "*.json"))
+            if (ReadJson<UploadRecord>(file) is { } record) yield return record;
+    }
+
+    /// <summary>Removes the upload's record, content and any partial file. Missing parts are fine.</summary>
+    public void DeleteUpload(Guid id)
+    {
+        foreach (var path in new[] { UploadPath(id), UploadPath(id) + ".part", RecordPath(id), RecordPath(id) + ".tmp" })
+            TryDeleteFile(path);
+        _locks.TryRemove(id, out _);
+    }
+
+    /// <summary>Removes the job's directory (record and artifacts) without recreating it.</summary>
+    public void DeleteJob(Guid id)
+    {
+        try
+        {
+            var dir = Path.Combine(JobsDir, id.ToString("N"));
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
     private static void WriteJson<T>(string path, T value)
     {
         var tmp = path + ".tmp";

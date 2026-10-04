@@ -22,6 +22,8 @@ public sealed class SubprocessWorkerTests : IDisposable
     public async Task The_child_sees_only_os_plumbing_and_the_explicit_variables()
     {
         Environment.SetEnvironmentVariable("KOLDERA_TOKEN", "server-secret");
+        Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", "aws-canary");
+        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "dotnet-canary");
         try
         {
             var env = new Dictionary<string, string> { ["VERAPDF_CMD"] = "verapdf" };
@@ -35,11 +37,19 @@ public sealed class SubprocessWorkerTests : IDisposable
             var names = doc.RootElement.GetProperty("env").EnumerateObject().Select(p => p.Name).ToList();
             Assert.DoesNotContain(names, n => n.StartsWith("KOLDERA_", StringComparison.OrdinalIgnoreCase));
             Assert.Equal("verapdf", doc.RootElement.GetProperty("env").GetProperty("VERAPDF_CMD").GetString());
-            Assert.DoesNotContain("server-secret", doc.RootElement.GetRawText());
+            var raw = doc.RootElement.GetRawText();
+            Assert.DoesNotContain("server-secret", raw);
+            Assert.DoesNotContain("aws-canary", raw);
+            Assert.DoesNotContain("dotnet-canary", raw);
+            // Nothing beyond the pass-through allow-list and the explicitly passed variables reaches the child.
+            var allowed = SubprocessWorker.PassThroughNames.Concat(env.Keys).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            Assert.All(names, n => Assert.Contains(n, allowed));
         }
         finally
         {
             Environment.SetEnvironmentVariable("KOLDERA_TOKEN", null);
+            Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", null);
+            Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", null);
         }
     }
 
