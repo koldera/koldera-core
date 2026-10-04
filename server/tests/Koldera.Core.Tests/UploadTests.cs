@@ -158,10 +158,11 @@ public class UploadTests
         try
         {
             var store = new DataStore(root);
-            var job = new CoreJob(Guid.NewGuid(), "server", "queued", DateTimeOffset.Parse("2026-10-05T00:00:00Z"));
+            var job = new CoreJob { Id = Guid.NewGuid(), Owner = "server", CreatedAt = DateTimeOffset.Parse("2026-10-05T00:00:00Z") };
             await store.SaveJobAsync(job);
-            await store.SaveJobAsync(job with { Status = "done" });
-            Assert.Equal("done", store.GetJob(job.Id)!.Status);
+            job.State = CoreJobState.Completed;
+            await store.SaveJobAsync(job);
+            Assert.Equal(CoreJobState.Completed, store.GetJob(job.Id)!.State);
             Assert.Single(store.AllJobs());
             Assert.True(Directory.Exists(store.JobDir(job.Id)));
             Assert.Null(store.GetJob(Guid.NewGuid()));

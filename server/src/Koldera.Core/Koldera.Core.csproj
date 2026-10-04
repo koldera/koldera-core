@@ -2,5 +2,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Koldera.Core.Tests" />
     <None Update="engine-version.properties" CopyToOutputDirectory="PreserveNewest" Condition="Exists('engine-version.properties')" />
+    <None Include="../../../contracts/*.json" Link="contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
