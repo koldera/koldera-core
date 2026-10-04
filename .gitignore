@@ -1,0 +1,9 @@
+node_modules/
+target/
+bin/
+obj/
+dist/
+.env
+*.local
+/data/
+TestResults/
