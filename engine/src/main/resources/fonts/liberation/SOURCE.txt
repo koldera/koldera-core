@@ -1,0 +1,18 @@
+Liberation Fonts 2.1.5 (TrueType release), SIL Open Font License 1.1, Reserved Font Name "Liberation".
+
+Release page:  https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5
+Archive URL:   https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz
+Archive SHA-256 (computed on download; upstream publishes no checksum for the archive):
+               7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0  liberation-fonts-ttf-2.1.5.tar.gz
+Download date: 2026-09-29
+
+Files taken from the archive directory liberation-fonts-ttf-2.1.5/, bytes unchanged (no subsetting, no renaming):
+  LiberationSans-Regular.ttf, LiberationSans-Bold.ttf, LiberationSans-Italic.ttf, LiberationSans-BoldItalic.ttf,
+  LiberationSerif-Regular.ttf, LiberationSerif-Bold.ttf, LiberationSerif-Italic.ttf, LiberationSerif-BoldItalic.ttf,
+  LICENSE (the licence text shipped in the release, verbatim).
+The Liberation Mono files of the release are not bundled. Per-file SHA-256: SHA256SUMS (checked by FontLibraryTest).
+Cross-check: LiberationSans-Regular.ttf is byte-identical to the copy PDFBox 3.0.8 ships
+(org/apache/pdfbox/resources/ttf/LiberationSans-Regular.ttf, same SHA-256).
+
+Use: subsets are embedded into customer PDF copies by PDF_FONT_EMBEDDING_V1 as metric-compatible substitutes for
+non-embedded Times/Helvetica/Times New Roman/Arial fonts. The fonts are never sold on their own.

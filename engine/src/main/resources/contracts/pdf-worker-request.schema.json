@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/pdf-worker-request.v1.json",
+  "title": "PdfWorkerRequestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "jobId", "inputPath", "outputDirectory", "mode", "profile", "limits"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "inputPath": {"const": "/work/in/document.pdf"},
+    "outputDirectory": {"const": "/work/out"},
+    "mode": {"enum": ["analyze", "safe_fix", "structure_fix", "fix"]},
+    "profile": {"const": "ua1"},
+    "explicitLanguage": {"type": ["string", "null"], "minLength": 2, "maxLength": 35, "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"},
+    "explicitTitle": {"type": ["string", "null"], "minLength": 1, "maxLength": 500},
+    "sourceFileName": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+    "origin": {"enum": ["upload", "html_generated"]},
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maxBytes", "maxPages", "timeoutSeconds"],
+      "properties": {
+        "maxBytes": {"type": "integer", "minimum": 1, "maximum": 104857600},
+        "maxPages": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 300}
+      }
+    }
+  }
+}
