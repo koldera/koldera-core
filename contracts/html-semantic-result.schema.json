@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/html-semantic-result.v1.json",
+  "title": "HtmlSemanticResultV1",
+  "description": "DOM (reading) order, rendered geometry, keyboard focus order and deterministic candidate findings for a static HTML source. Geometry is evidence; the visual candidate is never a verdict. The `private` block never leaves the platform.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "sourceSha256", "engineVersion", "nodes", "focusOrderNodeIds", "focusOrderMeasured", "visualOrderCandidateNodeIds", "findings", "error"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["completed", "unsupported", "failed"]},
+    "sourceSha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "engineVersion": {"type": "string"},
+    "nodes": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/node"}},
+    "focusOrderNodeIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "focusOrderMeasured": {"type": "boolean"},
+    "visualOrderCandidateNodeIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "node": {
+      "type": "object", "additionalProperties": false,
+      "required": ["nodeId", "parentId", "role", "logicalIndex", "textPreview", "boundingBox", "private"],
+      "properties": {
+        "nodeId": {"type": "string", "minLength": 1, "maxLength": 32},
+        "parentId": {"type": ["string", "null"], "maxLength": 32},
+        "role": {"type": "string", "minLength": 1, "maxLength": 64},
+        "logicalIndex": {"type": "integer", "minimum": 0},
+        "textPreview": {"type": ["string", "null"], "maxLength": 160},
+        "boundingBox": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"], "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "width": {"type": "number"}, "height": {"type": "number"}}}, {"type": "null"}]},
+        "private": {
+          "type": "object", "additionalProperties": false,
+          "required": ["domPath", "tag", "elementChildren", "focusable", "tabindex", "cssOrder", "inlineOrder", "parentDisplay", "parentFlexReversed"],
+          "properties": {
+            "domPath": {"type": "string", "description": "element-child indexes from <html>, e.g. 1/0/2"},
+            "tag": {"type": "string"},
+            "elementChildren": {"type": "integer", "minimum": 0},
+            "focusable": {"type": "boolean"},
+            "tabindex": {"type": ["integer", "null"]},
+            "cssOrder": {"type": "integer"},
+            "inlineOrder": {"type": "boolean", "description": "true when the computed order comes from the element's own style attribute"},
+            "parentDisplay": {"type": "string"},
+            "parentFlexReversed": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "finding": {"type": "object", "additionalProperties": false, "required": ["code", "category", "message", "nodeIds", "evidence"], "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 64}, "category": {"enum": ["confirmed_machine_failure", "suspected_semantic_mismatch", "manual_review"]}, "message": {"type": "string", "maxLength": 500}, "nodeIds": {"type": "array", "items": {"type": "string"}}, "evidence": {"type": ["string", "null"], "maxLength": 500}}},
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "UNSUPPORTED_CONTENT", "EXTERNAL_RESOURCE_BLOCKED", "TIMEOUT", "LIMIT_EXCEEDED", "RENDER_FAILED", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}

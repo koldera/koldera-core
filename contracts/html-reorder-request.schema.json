@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.accessibility-platform.example/html-reorder-request.v1.json",
+  "title": "HtmlReorderRequestV1",
+  "description": "One explicitly approved permutation of the element children of ONE parent in a static HTML source (docs/13, source HTML fix). The platform resolves the reviewer's opaque node ids to parentPath / orderedChildIndexes. The renderer reorders the DOM siblings on a copy, removes only the siblings' own inline `order` declarations when they merely encoded the approved visual order, re-renders, and refuses anything ambiguous.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "inputPath", "outputDirectory", "baseSha256", "parentPath", "orderedChildIndexes", "limits", "page"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "inputPath": {"const": "/work/in/source.html"},
+    "outputDirectory": {"const": "/work/out"},
+    "baseSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "parentPath": {"type": "string", "description": "element-child indexes from <html>, e.g. 1/0"},
+    "orderedChildIndexes": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+    "limits": {"type": "object", "additionalProperties": false, "required": ["timeoutSeconds", "maxBytes", "maxPages", "maxInlineImageBytes", "maxTotalInlineImageBytes", "maxVisualDiffRatio"], "properties": {"timeoutSeconds": {"type": "integer", "minimum": 5, "maximum": 120}, "maxBytes": {"type": "integer", "minimum": 1}, "maxPages": {"type": "integer", "minimum": 1}, "maxInlineImageBytes": {"type": "integer", "minimum": 1}, "maxTotalInlineImageBytes": {"type": "integer", "minimum": 1}, "maxVisualDiffRatio": {"type": "number", "minimum": 0, "maximum": 1, "description": "fraction of differing pixels, among the non-background pixels of the screenshots of the original and the corrected source, that is still accepted (0.02 = 2 percent of the content pixels)"}}},
+    "page": {"type": "object", "additionalProperties": false, "required": ["format"], "properties": {"format": {"enum": ["A4", "Letter"]}, "printBackground": {"type": "boolean"}}},
+    "content": {"type": "object", "additionalProperties": false, "required": ["selector"], "description": "The job's content selection (see html-renderer-request); applied to both renders so the visual comparison covers the printed content only. The source copy is still mutated in full.", "properties": {"selector": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\u0000-\u001f\u007f]+$"}}}
+  }
+}
