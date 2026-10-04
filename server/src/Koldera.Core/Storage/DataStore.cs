@@ -8,9 +8,6 @@ public sealed record UploadRecord(
     Guid Id, string FileName, long SizeBytes, string Sha256, string ContentType, string Owner,
     DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, bool Completed);
 
-/// <summary>Minimal persisted job; later tasks extend it.</summary>
-public sealed record CoreJob(Guid Id, string Owner, string Status, DateTimeOffset CreatedAt);
-
 public sealed class UploadException(string code) : Exception(code)
 {
     public string Code { get; } = code;
