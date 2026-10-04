@@ -3,6 +3,7 @@ package com.koldera.pdf.contracts;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.util.Set;
@@ -38,6 +39,17 @@ public final class WorkerRequestParser {
     if (!violations.isEmpty()) {
       throw new RequestValidationException(
           "request violates schema: " + String.join("; ", violations));
+    }
+    // `limits` and every limit in it are optional; an absent limit is not enforced.
+    ObjectNode limits = ((ObjectNode) node).has("limits") ? (ObjectNode) node.get("limits") : ((ObjectNode) node).putObject("limits");
+    if (!limits.has("maxBytes")) {
+      limits.put("maxBytes", Long.MAX_VALUE);
+    }
+    if (!limits.has("maxPages")) {
+      limits.put("maxPages", Integer.MAX_VALUE);
+    }
+    if (!limits.has("timeoutSeconds")) {
+      limits.put("timeoutSeconds", Integer.MAX_VALUE);
     }
     WorkerRequest request;
     try {

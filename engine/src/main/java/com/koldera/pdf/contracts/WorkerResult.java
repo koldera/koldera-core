@@ -66,9 +66,9 @@ public record WorkerResult(
   }
 
   /**
-   * The rule identifiers permitted to mutate a document, per mode: metadata rules ({@code safe_fix}), basic structure
-   * and XMP rules ({@code structure_fix}), and in {@code fix} the title, generated-structure, upload-repair,
-   * structure-strategy, figure, font and PDF/UA identifier steps.
+   * The rule identifiers permitted to mutate a document, in {@code fix}: the language, display-title and title
+   * rules, the basic structure and XMP rules, and the generated-structure, upload-repair, structure-strategy, figure, font
+   * and PDF/UA identifier steps. Nothing mutates a document in {@code analyze}.
    */
   public enum RuleId {
     PDF_LANG_FROM_EXPLICIT_INPUT_V1,

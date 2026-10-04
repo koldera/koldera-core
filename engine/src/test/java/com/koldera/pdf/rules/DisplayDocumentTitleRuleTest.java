@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class DisplayDocumentTitleRuleTest {
 
   private final DisplayDocumentTitleRule rule = new DisplayDocumentTitleRule();
-  private final WorkerRequest safeFix = ExplicitLanguageRuleTest.request(WorkerRequest.Mode.SAFE_FIX, null);
+  private final WorkerRequest fixRequest = ExplicitLanguageRuleTest.request(WorkerRequest.Mode.FIX, null);
 
   @Test
   void idIsTheContractRuleId() {
@@ -30,7 +30,7 @@ class DisplayDocumentTitleRuleTest {
   @Test
   void existingTitleWithDisplayDocTitleFalseIsApplied() throws IOException {
     try (PDDocument doc = load(Options.plain().infoTitle("Quarterly Report").displayDocTitle(false))) {
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
       assertTrue(decision.applicable(), decision.reason());
       assertEquals("false", decision.before());
       assertEquals("true", decision.after());
@@ -48,7 +48,7 @@ class DisplayDocumentTitleRuleTest {
   void existingTitleWithoutViewerPreferencesCreatesMinimalDictionary() throws IOException {
     try (PDDocument doc = load(Options.plain().infoTitle("Quarterly Report"))) {
       assertNull(doc.getDocumentCatalog().getViewerPreferences());
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
       assertTrue(decision.applicable(), decision.reason());
       assertNull(decision.before());
 
@@ -64,7 +64,7 @@ class DisplayDocumentTitleRuleTest {
   @Test
   void unrelatedViewerPreferencesArePreserved() throws IOException {
     try (PDDocument doc = load(Options.plain().infoTitle("T").displayDocTitle(false).hideToolbar(true))) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, safeFix));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, fixRequest));
 
       assertEquals(ActionOutcome.APPLIED, action.outcome());
       PDViewerPreferences prefs = doc.getDocumentCatalog().getViewerPreferences();
@@ -77,7 +77,7 @@ class DisplayDocumentTitleRuleTest {
   @Test
   void alreadyTrueIsIdempotentlySkipped() throws IOException {
     try (PDDocument doc = load(Options.plain().infoTitle("T").displayDocTitle(true))) {
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
       assertFalse(decision.applicable());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -90,7 +90,7 @@ class DisplayDocumentTitleRuleTest {
   @Test
   void missingTitleIsSkippedAndNoTitleIsInvented() throws IOException {
     try (PDDocument doc = load(Options.plain().displayDocTitle(false))) {
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
       assertFalse(decision.applicable());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -105,7 +105,7 @@ class DisplayDocumentTitleRuleTest {
   @Test
   void blankTitleIsSkipped() throws IOException {
     try (PDDocument doc = load(Options.plain().infoTitle("   ").displayDocTitle(false))) {
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
 
       assertFalse(decision.applicable());
       assertFalse(doc.getDocumentCatalog().getViewerPreferences().displayDocTitle());
@@ -127,7 +127,7 @@ class DisplayDocumentTitleRuleTest {
   void nonBooleanDisplayDocTitleValueIsSkippedNotSilentlyReplaced() throws IOException {
     try (PDDocument doc = load(Options.plain().infoTitle("T").displayDocTitle(false))) {
       doc.getDocumentCatalog().getViewerPreferences().getCOSObject().setName(COSName.DISPLAY_DOC_TITLE, "yes");
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
 
       assertFalse(decision.applicable(), decision.reason());
     }
@@ -144,7 +144,7 @@ class DisplayDocumentTitleRuleTest {
   @Test
   void inSafeFixModeATitleIsStillNeverInvented() throws IOException {
     try (PDDocument doc = load(Options.plain())) {
-      RuleDecision decision = rule.inspect(doc, safeFix);
+      RuleDecision decision = rule.inspect(doc, fixRequest);
       assertFalse(decision.applicable());
     }
   }

@@ -1,3 +1,4 @@
+import { budgetFromSeconds, definedOnly, limitOf } from "../limits.js";
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -36,15 +37,15 @@ export async function collectSemantic(request: HtmlSemanticRequest, options: Sem
   let bytes: Buffer;
   try {
     const info = await stat(inputPath);
-    if (info.size > request.limits.maxBytes) {
-      return base("failed", { code: "LIMIT_EXCEEDED", message: `source is ${info.size} bytes, above maxBytes=${request.limits.maxBytes}` });
+    if (info.size > limitOf(request.limits?.maxBytes)) {
+      return base("failed", { code: "LIMIT_EXCEEDED", message: `source is ${info.size} bytes, above maxBytes=${request.limits?.maxBytes}` });
     }
     bytes = await readFile(inputPath);
   } catch {
     return base("failed", { code: "INVALID_INPUT", message: "source document is missing or unreadable" });
   }
   const sourceSha256 = createHash("sha256").update(bytes).digest("hex");
-  const checked = preflight(bytes, { maxInlineImageBytes: request.limits.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits.maxTotalInlineImageBytes });
+  const checked = preflight(bytes, { ...definedOnly({ maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) });
   if (!checked.ok) {
     return base("unsupported", { code: "UNSUPPORTED_CONTENT", message: "the source cannot be rendered as static HTML" }, { sourceSha256 });
   }
@@ -53,7 +54,7 @@ export async function collectSemantic(request: HtmlSemanticRequest, options: Sem
 
 /** Collects from already vetted HTML (shared with the source-order fix, which re-checks its corrected copy). */
 export async function collectVetted(html: string, request: Pick<HtmlSemanticRequest, "jobId" | "limits">, sourceSha256: string): Promise<HtmlSemanticResult> {
-  const budgetMs = request.limits.timeoutSeconds * 1000;
+  const budgetMs = budgetFromSeconds(request.limits?.timeoutSeconds);
   const deadline = Date.now() + budgetMs;
   const remaining = () => Math.max(1, deadline - Date.now());
   let session: IsolatedSession | undefined;
@@ -77,9 +78,9 @@ export async function collectVetted(html: string, request: Pick<HtmlSemanticRequ
       session = await openIsolated(html, remaining());
       engineVersion = session.engineVersion;
       // Requests the page attempts are aborted by the deny-all route; the DOM is collected as rendered without them.
-      const { elements, truncated } = await collectElements(session.page, request.limits.maxNodes);
+      const { elements, truncated } = await collectElements(session.page, Math.min(limitOf(request.limits?.maxNodes), Number.MAX_SAFE_INTEGER));
       if (truncated) {
-        return finish("failed", "LIMIT_EXCEEDED", `the document has more than maxNodes=${request.limits.maxNodes} elements`);
+        return finish("failed", "LIMIT_EXCEEDED", `the document has more than maxNodes=${request.limits?.maxNodes} elements`);
       }
       const nodes = toNodes(elements, sourceSha256);
       const focus = await measureFocusOrder(session.page, nodes);
@@ -88,7 +89,7 @@ export async function collectVetted(html: string, request: Pick<HtmlSemanticRequ
       return finish("completed", null, "", { nodes, focusOrderNodeIds: focus.order, focusOrderMeasured: focus.measured, visualOrderCandidateNodeIds: visual, findings });
     })();
     work.catch(() => undefined);
-    return await Promise.race([work, timeout(remaining())]);
+    return await Promise.race(Number.isFinite(budgetMs) ? [work, timeout(remaining())] : [work]);
   } catch (e) {
     if (e instanceof RenderTimeout || (e instanceof Error && /Timeout \d+ms exceeded/.test(e.message))) {
       return finish("failed", "TIMEOUT", `the collector exceeded its budget of ${budgetMs} ms`);

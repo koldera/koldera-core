@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/html-renderer-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/html-renderer-result.v1.json",
   "title": "HtmlRendererResultV1",
   "description": "Outcome of one isolated render. `taggedRequested` records only what was asked of Chromium; whether the PDF really carries usable structure is established independently by the PDF engine's `inspect` probe and veraPDF, never here.",
   "type": "object", "additionalProperties": false,

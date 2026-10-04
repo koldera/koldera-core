@@ -17,8 +17,7 @@ public interface RemediationRule {
   /**
    * Whether the rule takes part in this request at all. A rule that does not participate is neither
    * inspected nor listed in the result, so a mode's action list is exactly the rules that belong to
-   * it (the two metadata rules in {@code safe_fix}; those plus the structure rules in {@code
-   * structure_fix}). Nothing participates in {@code analyze}.
+   * it (in {@code fix}, the metadata, structure, repair, font and identifier rules). Nothing participates in {@code analyze}.
    */
   default boolean participates(WorkerRequest request) {
     return request.isMutating();

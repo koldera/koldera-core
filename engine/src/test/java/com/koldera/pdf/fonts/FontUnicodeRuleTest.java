@@ -235,8 +235,6 @@ class FontUnicodeRuleTest {
   @Test
   void theRuleDoesNotParticipateOutsideFixUploads() {
     assertTrue(rule.participates(FIX_UPLOAD));
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)));
     assertEquals(WorkerResult.RuleId.PDF_FONT_TOUNICODE_V1, rule.id());

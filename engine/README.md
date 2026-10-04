@@ -40,13 +40,12 @@ text or host paths.
 
 ### `process`
 
-The request validates against `contracts/pdf-worker-request.schema.json`: `mode` (`analyze` or `fix`;
-`safe_fix` and `structure_fix` are accepted and deprecated), optional `explicitTitle`,
+The request validates against `contracts/pdf-worker-request.schema.json`: `mode` (`analyze` or `fix`), optional `explicitTitle`,
 `explicitLanguage` and `sourceFileName`, `origin` (`upload`, or `html_generated` for PDFs produced by
-an HTML renderer) and `limits` (`maxBytes`, `maxPages`, `timeoutSeconds`). The input is
+an HTML renderer) and `limits` (all optional: `maxBytes`, `maxPages`, `timeoutSeconds`; an absent limit is not enforced). The input is
 `/work/in/document.pdf` and output goes to `/work/out`; `--work-root` maps these canonical paths to a
 real directory (`<root>/in`, `<root>/out`, private `<root>/scratch`), default `/work`. The result
-(`contracts/pdf-worker-result.schema.json`) always reports canonical paths.
+(`contracts/pdf-worker-result.schema.json`) always reports canonical paths. The engine reads byte-identical classpath copies of its six schemas from `src/main/resources/contracts/` (`SchemaCopiesTest` enforces equality with the root `contracts/`).
 
 Mode `analyze` only validates. Mode `fix` applies, where they apply: a document title (from the
 caller, the document's own metadata or the file name, labelled for review), language and metadata
@@ -70,14 +69,14 @@ written. Artifacts (original, reports, remediated copy) are listed with SHA-256 
 
 `inspect` is a read-only probe of what a PDF declares and contains: marked content flag, structure
 tree presence, element and content-reference counts, roles, `/Lang`, Info title
-(`src/main/resources/contracts/pdf-inspect-result.schema.json`).
+(`contracts/pdf-inspect-result.schema.json`).
 
 `structure` is read-only too: it walks the structure tree in its stored order (never re-sorted by
 geometry), resolves marked content to bounded text previews and bounding boxes, and records per-page
-invariants (`src/main/resources/contracts/pdf-structure-result.schema.json`).
+invariants (`contracts/pdf-structure-result.schema.json`).
 
 `reorder` permutes the structure-element kids of one parent, as approved in the request, on a copy
-(`src/main/resources/contracts/pdf-reorder-{request,result}.schema.json`). The copy is published only if page count,
+(`contracts/pdf-reorder-{request,result}.schema.json`). The copy is published only if page count,
 content streams, text multisets, annotations, marked-content inventory, parent tree and a pixel
 render are unchanged and the reparsed sequence is the approved one. Untagged, signed and encrypted
 files, mixed or annotated parents, cross-page siblings, table rows and cells, and incomplete or

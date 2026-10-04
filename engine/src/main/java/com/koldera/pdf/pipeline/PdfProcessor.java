@@ -916,7 +916,7 @@ public final class PdfProcessor implements Main.JobRunner {
     return recounted;
   }
 
-  /** Test seam: how often a glyph inventory was computed (safe_fix must never compute one). */
+  /** Test seam: how often a glyph inventory was computed (runs without structure steps must never compute one). */
   static final AtomicInteger glyphInventoriesComputedForTests = new AtomicInteger();
 
   /** The candidate as saved on disk, i.e. what the validator saw; {@code null} (strict gate) when it cannot be read. */

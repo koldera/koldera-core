@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/pdf-structure-result.v1.json",
+  "title": "PdfStructureResultV1",
+  "description": "Read-only structure snapshot of a PDF (`structure` verb): the logical structure tree in its stored order with verified marked-content references, per-page invariants used by the order-repair gate, and the annotation (focus) sequence. Evidence, never a verdict. The `private` block of each node is for the platform's own mapping and is never published to clients.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "status", "sha256", "bytes", "engineVersion", "document", "nodes", "focusOrderNodeIds", "focusOrderMeasured", "findings", "error"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "status": {"enum": ["inspected", "failed"]},
+    "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "bytes": {"type": "integer", "minimum": 0},
+    "engineVersion": {"type": "string"},
+    "document": {"oneOf": [{"$ref": "#/$defs/document"}, {"type": "null"}]},
+    "nodes": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/node"}},
+    "focusOrderNodeIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "focusOrderMeasured": {"type": "boolean"},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "error": {"oneOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "document": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pages", "usableTags", "signed", "encrypted", "hasAcroForm", "annotations", "pageDigests"],
+      "properties": {
+        "pages": {"type": "integer", "minimum": 0},
+        "usableTags": {"type": "boolean"},
+        "signed": {"type": "boolean"},
+        "encrypted": {"type": "boolean"},
+        "hasAcroForm": {"type": "boolean"},
+        "annotations": {"type": "integer", "minimum": 0},
+        "pageDigests": {"type": "array", "items": {"$ref": "#/$defs/pageDigest"}}
+      }
+    },
+    "pageDigest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["page", "contentStreamSha256", "textTokenMultisetSha256", "annotationCount", "mcidCount"],
+      "properties": {
+        "page": {"type": "integer", "minimum": 1},
+        "contentStreamSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "textTokenMultisetSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "annotationCount": {"type": "integer", "minimum": 0},
+        "mcidCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "node": {
+      "type": "object", "additionalProperties": false,
+      "required": ["nodeId", "parentId", "role", "logicalIndex", "pageNumber", "textPreview", "boundingBox", "private"],
+      "properties": {
+        "nodeId": {"type": "string", "minLength": 1, "maxLength": 32},
+        "parentId": {"type": ["string", "null"], "maxLength": 32},
+        "role": {"type": "string", "minLength": 1, "maxLength": 64},
+        "logicalIndex": {"type": "integer", "minimum": 0},
+        "pageNumber": {"type": ["integer", "null"], "minimum": 1},
+        "textPreview": {"type": ["string", "null"], "maxLength": 160},
+        "boundingBox": {"oneOf": [{"$ref": "#/$defs/box"}, {"type": "null"}]},
+        "private": {"$ref": "#/$defs/privateMapping"}
+      }
+    },
+    "box": {"type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"], "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "width": {"type": "number"}, "height": {"type": "number"}}},
+    "privateMapping": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "objectRef", "kidKinds", "pages", "contentRefs", "objectRefs", "elementKids"],
+      "properties": {
+        "path": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "kid indexes from the structure tree root through /K arrays"},
+        "objectRef": {"type": ["string", "null"], "description": "'<num> <gen>' when the element is an indirect object"},
+        "kidKinds": {"enum": ["none", "elements", "content", "mixed"]},
+        "pages": {"type": "array", "items": {"type": "integer", "minimum": 1}, "description": "distinct pages of every content reference in the subtree"},
+        "contentRefs": {"type": "integer", "minimum": 0, "description": "MCID references in the subtree"},
+        "objectRefs": {"type": "integer", "minimum": 0, "description": "OBJR (annotation/form) references in the subtree"},
+        "elementKids": {"type": "integer", "minimum": 0}
+      }
+    },
+    "finding": {"type": "object", "additionalProperties": false, "required": ["code", "message", "nodeIds"], "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 64}, "message": {"type": "string", "maxLength": 500}, "nodeIds": {"type": "array", "items": {"type": "string"}}}},
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"enum": ["INVALID_INPUT", "UNSUPPORTED_ENCRYPTED", "LIMIT_EXCEEDED", "WORKER_ERROR"]}, "message": {"type": "string"}}}
+  }
+}

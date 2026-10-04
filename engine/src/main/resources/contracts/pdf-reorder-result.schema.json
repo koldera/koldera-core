@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/pdf-reorder-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/pdf-reorder-result.v1.json",
   "title": "PdfReorderResultV1",
   "description": "Outcome of an approved sibling-order change. `applied` means every invariant held on the reparsed copy (ParentTree, MCID inventory, raw content streams, per-page text token multisets, annotations, page count, pixel-identical render) AND the reparsed sequence equals the approved one; anything else publishes no output. Never a conformance statement.",
   "type": "object", "additionalProperties": false,

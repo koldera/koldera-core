@@ -61,7 +61,8 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
     throw e;
   }
 
-  const timeoutMs = request.limits.timeoutSeconds * 1000;
+  // Limits are optional: an absent limit is not enforced (no timeout of our own, Playwright gets 0).
+  const timeoutMs = request.limits?.timeoutSeconds === undefined ? Infinity : request.limits.timeoutSeconds * 1000;
   const deadline = Date.now() + timeoutMs;
   const remaining = () => Math.max(1000, deadline - Date.now());
 
@@ -74,7 +75,7 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
   const proxy = request.policy.proxyServer ? { server: request.policy.proxyServer } : undefined;
 
   let browser: Browser | undefined;
-  const guard = new RequestGuard({ policy, resolver, maxRequests: request.limits.maxRequests, maxResponseBytes: request.limits.maxResponseBytes });
+  const guard = new RequestGuard({ policy, resolver, maxRequests: request.limits?.maxRequests ?? Infinity, maxResponseBytes: request.limits?.maxResponseBytes ?? Infinity });
   try {
     browser = await chromium.launch({ headless: true, args, ...(proxy ? { proxy } : {}) });
     const version = engineVersion(browser.version());
@@ -91,7 +92,7 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
 
     let response;
     try {
-      response = await page.goto(request.url, { timeout: remaining(), waitUntil: "load" });
+      response = await page.goto(request.url, { timeout: Number.isFinite(timeoutMs) ? remaining() : 0, waitUntil: "load" });
     } catch (e) {
       return finish(base, version, guard, e);
     }
@@ -228,6 +229,9 @@ function redactReport(results: AxeResults, finalUrl: string, httpStatus: number)
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  if (!Number.isFinite(ms)) {
+    return promise;
+  }
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), ms);
     promise.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });

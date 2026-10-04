@@ -23,7 +23,7 @@ public final class FindingsBuilder {
   public static final String DOCUMENT_SIGNED = "DOCUMENT_SIGNED";
   public static final String BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW = "BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW";
 
-  /** The manual-review sentence for {@code structure_fix}; never "accessible", never "PDF/UA". */
+  /** The manual-review sentence for basic structure tagging; never "accessible", never "PDF/UA". */
   public static final String BASIC_STRUCTURE_REVIEW_MESSAGE =
       "Basic tags were added from the page content in content-stream order: paragraphs, figures without alternative text,"
           + " decorative artifacts. Headings, tables, alternative text and the reading order were not inferred and must be reviewed.";

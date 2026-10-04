@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/html-semantic-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/html-semantic-result.v1.json",
   "title": "HtmlSemanticResultV1",
   "description": "DOM (reading) order, rendered geometry, keyboard focus order and deterministic candidate findings for a static HTML source. Geometry is evidence; the visual candidate is never a verdict. The `private` block never leaves the platform.",
   "type": "object", "additionalProperties": false,

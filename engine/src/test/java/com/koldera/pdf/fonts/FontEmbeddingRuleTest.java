@@ -334,18 +334,16 @@ class FontEmbeddingRuleTest {
   @Test
   void theRuleDoesNotParticipateOutsideFixUploads() throws IOException {
     assertTrue(rule.participates(FIX_UPLOAD));
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)));
     assertEquals(WorkerResult.RuleId.PDF_FONT_EMBEDDING_V1, rule.id());
-    WorkerRequest safeFix = request(Mode.SAFE_FIX, Origin.UPLOAD);
+    WorkerRequest analyze = request(Mode.ANALYZE, Origin.UPLOAD);
     byte[] before;
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedNonEmbedded("Helvetica", false, 0))) {
       before = save(doc);
     }
     try (PDDocument doc = Loader.loadPDF(SyntheticPdfFactory.untaggedNonEmbedded("Helvetica", false, 0))) {
-      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, safeFix));
+      WorkerResult.Action action = rule.apply(doc, rule.inspect(doc, analyze));
       assertEquals(ActionOutcome.SKIPPED, action.outcome());
       assertArrayEquals(before, save(doc));
     }

@@ -35,8 +35,6 @@ class RoleMapRuleTest {
     assertEquals(RuleId.PDF_ROLE_MAP_V1, rule.id());
     assertTrue(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
     assertTrue(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)));
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)), "deprecated modes keep their behaviour");
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)), "deprecated modes keep their behaviour");
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
   }
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/web-worker-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/web-worker-result.v1.json",
   "title": "WebWorkerResultV1",
   "type": "object", "additionalProperties": false,
   "required": ["specVersion", "jobId", "status", "requestedUrl", "finalUrl", "engineVersion", "summary", "findings", "artifacts", "manualReviewRequired"],

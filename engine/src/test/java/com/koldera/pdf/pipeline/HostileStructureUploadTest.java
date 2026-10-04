@@ -69,8 +69,8 @@ class HostileStructureUploadTest {
   }
 
   @Test
-  void theOtherModesAlsoWriteAResult() throws IOException {
-    for (String mode : new String[] {"analyze", "safe_fix", "structure_fix"}) {
+  void theAnalyzeModeAlsoWritesAResult() throws IOException {
+    for (String mode : new String[] {"analyze", "fix"}) {
       WorkerResult result = run(SyntheticPdfFactory.taggedWithSelfReferencingKArray(true), mode);
       assertEquals(Status.COMPLETED, result.status(), mode + ": " + result.error());
     }

@@ -166,7 +166,7 @@ public final class SiblingReorder {
       }
       // The move is the index window from the first to the last position that changes; every kid in
       // it (moved or not) must sit on the one page, so nothing on another page is spoken elsewhere
-      // than before. A flat parent (structure_fix hangs every page's P under Document) may span many
+      // than before. A flat parent (basic structure tagging hangs every page's P under Document) may span many
       // pages as long as that window stays on one.
       int first = -1;
       int last = -1;

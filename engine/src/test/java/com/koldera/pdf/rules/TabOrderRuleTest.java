@@ -31,8 +31,6 @@ class TabOrderRuleTest {
     assertEquals(RuleId.PDF_TAB_ORDER_V1, rule.id());
     assertTrue(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)), "Chromium writes the tab order of generated PDFs");
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)), "deprecated modes keep their behaviour");
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)), "deprecated modes keep their behaviour");
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
   }
 

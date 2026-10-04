@@ -20,7 +20,8 @@ export interface HtmlRendererRequest {
   jobId: string;
   inputPath: "/work/in/source.html";
   outputDirectory: "/work/out";
-  limits: { timeoutSeconds: number; maxBytes: number; maxPages: number; maxInlineImageBytes: number; maxTotalInlineImageBytes: number };
+  /** Every limit is optional; an absent limit is not enforced. */
+  limits?: { timeoutSeconds?: number; maxBytes?: number; maxPages?: number; maxInlineImageBytes?: number; maxTotalInlineImageBytes?: number };
   page: { format: "A4" | "Letter"; printBackground?: boolean };
   /** Only the outermost elements matching this CSS selector are printed (see the contract's description). */
   content?: ContentSelection;
@@ -92,7 +93,8 @@ export interface HtmlSemanticRequest {
   specVersion: "1.0";
   jobId: string;
   inputPath: "/work/in/source.html";
-  limits: { timeoutSeconds: number; maxBytes: number; maxNodes: number; maxInlineImageBytes: number; maxTotalInlineImageBytes: number };
+  /** Every limit is optional; an absent limit is not enforced. */
+  limits?: { timeoutSeconds?: number; maxBytes?: number; maxNodes?: number; maxInlineImageBytes?: number; maxTotalInlineImageBytes?: number };
 }
 
 export interface SemanticNodePrivate {
@@ -149,7 +151,8 @@ export interface HtmlReorderRequest {
   baseSha256: string;
   parentPath: string;
   orderedChildIndexes: number[];
-  limits: { timeoutSeconds: number; maxBytes: number; maxPages: number; maxInlineImageBytes: number; maxTotalInlineImageBytes: number; maxVisualDiffRatio: number };
+  /** Every limit is optional; an absent size/time/page limit is not enforced, an absent maxVisualDiffRatio is 0.02. */
+  limits?: { timeoutSeconds?: number; maxBytes?: number; maxPages?: number; maxInlineImageBytes?: number; maxTotalInlineImageBytes?: number; maxVisualDiffRatio?: number };
   page: { format: "A4" | "Letter"; printBackground?: boolean };
   content?: ContentSelection;
 }

@@ -52,8 +52,6 @@ class TaggedStructureRepairRuleTest {
     assertEquals(RuleId.PDF_TAGGED_STRUCTURE_REPAIR_V1, rule.id());
     assertTrue(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
     assertTrue(PdfProcessor.STRUCTURE_STEPS.contains(RuleId.PDF_TAGGED_STRUCTURE_REPAIR_V1));
   }

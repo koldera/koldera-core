@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/html-reorder-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/html-reorder-result.v1.json",
   "title": "HtmlReorderResultV1",
   "description": "Outcome of an approved source-HTML sibling reorder. `applied` means the corrected copy was re-rendered, its DOM sequence is the approved one, keyboard traversal was measured, and the screenshot differs from the original within the declared tolerance. Otherwise nothing is published and the reason is typed.",
   "type": "object", "additionalProperties": false,

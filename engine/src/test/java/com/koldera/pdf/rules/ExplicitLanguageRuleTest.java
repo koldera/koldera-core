@@ -27,7 +27,7 @@ public class ExplicitLanguageRuleTest {
   @Test
   void missingLangWithExplicitLanguageIsApplied() throws IOException {
     try (PDDocument doc = load(SyntheticPdfFactory.simpleUntagged())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX, "en-US"));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX, "en-US"));
       assertTrue(decision.applicable(), decision.reason());
       assertNull(decision.before());
       assertEquals("en-US", decision.after());
@@ -46,7 +46,7 @@ public class ExplicitLanguageRuleTest {
   @Test
   void missingLangWithoutExplicitLanguageIsSkippedAndNothingIsGuessed() throws IOException {
     try (PDDocument doc = load(SyntheticPdfFactory.simpleUntagged())) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX, null));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX, null));
       assertFalse(decision.applicable());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -61,7 +61,7 @@ public class ExplicitLanguageRuleTest {
   void existingConflictingLanguageIsPreservedAndConflictExplained() throws IOException {
     byte[] bytes = SyntheticPdfFactory.build(SyntheticPdfFactory.Options.plain().language("pl-PL"));
     try (PDDocument doc = load(bytes)) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX, "en-US"));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX, "en-US"));
       assertFalse(decision.applicable());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -77,7 +77,7 @@ public class ExplicitLanguageRuleTest {
   void alreadyFixedDocumentIsIdempotentlySkipped() throws IOException {
     byte[] bytes = SyntheticPdfFactory.build(SyntheticPdfFactory.Options.plain().language("en-US"));
     try (PDDocument doc = load(bytes)) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX, "en-US"));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX, "en-US"));
       assertFalse(decision.applicable());
 
       WorkerResult.Action action = rule.apply(doc, decision);
@@ -103,7 +103,7 @@ public class ExplicitLanguageRuleTest {
   void blankExistingLangIsNotOverwritten() throws IOException {
     byte[] bytes = SyntheticPdfFactory.build(SyntheticPdfFactory.Options.plain().language(""));
     try (PDDocument doc = load(bytes)) {
-      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.SAFE_FIX, "en-US"));
+      RuleDecision decision = rule.inspect(doc, request(WorkerRequest.Mode.FIX, "en-US"));
 
       assertFalse(decision.applicable(), "an existing (even blank) /Lang is a conflict for humans to resolve");
       assertEquals("", doc.getDocumentCatalog().getLanguage());

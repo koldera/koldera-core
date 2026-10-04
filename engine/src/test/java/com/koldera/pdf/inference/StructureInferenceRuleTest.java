@@ -610,8 +610,6 @@ class StructureInferenceRuleTest {
   @Test
   void theRuleDoesNotParticipateOutsideFixUploads() {
     assertTrue(rule.participates(request(Mode.FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.SAFE_FIX, Origin.UPLOAD)));
-    assertFalse(rule.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.ANALYZE, Origin.UPLOAD)));
     assertFalse(rule.participates(request(Mode.FIX, Origin.HTML_GENERATED)));
   }
@@ -621,9 +619,7 @@ class StructureInferenceRuleTest {
     BasicStructureRule basic = new BasicStructureRule();
     assertFalse(basic.participates(request(Mode.FIX, Origin.UPLOAD), java.util.Set.of()));
     assertTrue(basic.participates(request(Mode.FIX, Origin.UPLOAD), java.util.EnumSet.of(RuleId.PDF_STRUCTURE_INFERRED_V1)));
-    assertTrue(basic.participates(request(Mode.STRUCTURE_FIX, Origin.UPLOAD), java.util.Set.of()));
     assertTrue(basic.participates(request(Mode.FIX, Origin.HTML_GENERATED), java.util.Set.of()));
-    assertFalse(basic.participates(request(Mode.SAFE_FIX, Origin.UPLOAD), java.util.Set.of()));
   }
 
   /** Element types in document order, depth first. */

@@ -184,14 +184,6 @@ class FixModeProcessorTest {
   }
 
   @Test
-  void safeFixAndStructureFixActionListsAreUnchanged() throws Exception {
-    assertEquals(List.of(RuleId.PDF_LANG_FROM_EXPLICIT_INPUT_V1, RuleId.PDF_DISPLAY_TITLE_FROM_EXISTING_TITLE_V1),
-        run(SyntheticPdfFactory.simpleUntagged(), ExplicitLanguageRuleTest.request(Mode.SAFE_FIX, "en")).actions().stream().map(WorkerResult.Action::ruleId).toList());
-    assertFalse(run(SyntheticPdfFactory.simpleUntagged(), ExplicitLanguageRuleTest.request(Mode.STRUCTURE_FIX, "en"))
-        .actions().stream().anyMatch(a -> a.ruleId() == RuleId.PDF_TITLE_V1));
-  }
-
-  @Test
   void aWrongDeclaredLanguageIsCorrectedAndAPersonIsAskedToCheckIt() throws Exception {
     WorkerResult result = run(LanguageCorrectionRuleTest.cyrillicPdf("en-US"), TitleResolverTest.fix("Звіт", "zvit.pdf"));
 

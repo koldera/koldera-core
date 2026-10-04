@@ -1,10 +1,11 @@
+import { limitOf } from "../limits.js";
 import { parse, serialize, type DefaultTreeAdapterTypes as T } from "parse5";
 import type { Diagnostic, DiagnosticCode } from "../contracts/types.js";
 import { contentLanguageTag } from "../render/language.js";
 
 export interface PreflightLimits {
-  maxInlineImageBytes: number;
-  maxTotalInlineImageBytes: number;
+  maxInlineImageBytes?: number;
+  maxTotalInlineImageBytes?: number;
 }
 
 export interface PreflightOutcome {
@@ -64,7 +65,7 @@ export function preflight(bytes: Uint8Array, limits: PreflightLimits): Preflight
     add("HTML_LANG_MISSING", message, false, 1, "html");
   }
   if (!state.title) add("HTML_TITLE_MISSING", "the document has no non-empty <title>; the PDF will have no title to display", false, null, "title");
-  if (budget.used > limits.maxTotalInlineImageBytes) {
+  if (budget.used > limitOf(limits.maxTotalInlineImageBytes)) {
     add("HTML_INLINE_IMAGES_TOO_LARGE", `inline images total ${budget.used} bytes, above the limit of ${limits.maxTotalInlineImageBytes}`, true);
   }
   const ok = !diagnostics.some((d) => d.blocking);
@@ -189,7 +190,7 @@ function checkImageSource(value: string, line: number | null, element: string, a
     return;
   }
   const bytes = base64Bytes(match[2]!);
-  if (bytes > limits.maxInlineImageBytes) {
+  if (bytes > limitOf(limits.maxInlineImageBytes)) {
     add("HTML_INLINE_IMAGE_TOO_LARGE", `an inline image is ${bytes} bytes, above the limit of ${limits.maxInlineImageBytes}`, true, line, element);
   }
   budget.used += bytes;
@@ -216,7 +217,7 @@ function checkCss(css: string, line: number | null, add: Add, limits: PreflightL
       continue;
     }
     const bytes = base64Bytes(image[2]!);
-    if (bytes > limits.maxInlineImageBytes) {
+    if (bytes > limitOf(limits.maxInlineImageBytes)) {
       add("HTML_INLINE_IMAGE_TOO_LARGE", `an inline image is ${bytes} bytes, above the limit of ${limits.maxInlineImageBytes}`, true, line, "style");
     }
     budget.used += bytes;

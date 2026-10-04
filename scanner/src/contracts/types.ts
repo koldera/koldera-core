@@ -20,7 +20,8 @@ export interface WebWorkerRequest {
   jobId: string;
   url: string;
   outputDirectory: "/work/out";
-  limits: { timeoutSeconds: number; maxResponseBytes: number; maxRequests: number };
+  /** Every limit is optional; an absent limit is not enforced. */
+  limits?: { timeoutSeconds?: number; maxResponseBytes?: number; maxRequests?: number };
   policy: { allowHttp: boolean; proxyServer?: string | null };
 }
 

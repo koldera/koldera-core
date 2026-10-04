@@ -23,8 +23,6 @@ class TitleRuleTest {
   void idAndParticipation() {
     assertEquals(WorkerResult.RuleId.PDF_TITLE_V1, rule.id());
     assertTrue(rule.participates(TitleResolverTest.fix(null, null)));
-    assertFalse(rule.participates(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.STRUCTURE_FIX, null)));
-    assertFalse(rule.participates(ExplicitLanguageRuleTest.request(WorkerRequest.Mode.SAFE_FIX, null)));
   }
 
   @Test

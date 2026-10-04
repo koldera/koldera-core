@@ -124,180 +124,9 @@ class StructureFixProcessorTest {
     assertTrue(newFontRule != null && newFontRule.contains("7.21.4.1-1"), "a font check that did not fail before is still new: " + newFontRule);
   }
 
-  @Test
-  void fontCheckRecountAfterTaggingIsPublishedWithAnExplanatoryFinding() throws IOException {
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 3)));
-
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-
-    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
-    assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
-    WorkerResult.Finding recount = result.findings().stream().filter(f -> f.ruleId().equals(FindingsBuilder.FONT_CHECKS_RECOUNTED)).findFirst().orElseThrow();
-    assertTrue(recount.message().contains("7.21.4.1-1 1 -> 3"), recount.message());
-    assertTrue(recount.message().contains("unchanged"), recount.message());
-    assertSchemaValid(result);
-  }
-
-  @Test
-  void fontCheckGrowthWithAChangedGlyphInventoryRollsBackWithoutARecountFinding() throws IOException {
-    // A rule after the structure rule swaps the page font's program (BaseFont) without changing the
-    // extracted text: the glyph inventory differs, so a 7.21 increase is a regression, not a recount.
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 3)));
-    RemediationRule fontSwap =
-        new RemediationRule() {
-          @Override
-          public WorkerResult.RuleId id() {
-            return RuleId.PDF_XMP_METADATA_FROM_INFO_V1;
-          }
-
-          @Override
-          public RuleDecision inspect(PDDocument document, WorkerRequest request) {
-            return RuleDecision.apply("test: swap the font program", null, null);
-          }
-
-          @Override
-          public WorkerResult.Action apply(PDDocument document, RuleDecision decision) {
-            var resources = document.getPage(0).getResources();
-            for (COSName name : resources.getFontNames()) {
-              COSDictionary font = (COSDictionary) resources.getCOSObject().getCOSDictionary(COSName.FONT).getDictionaryObject(name);
-              font.setName(COSName.BASE_FONT, "Courier");
-            }
-            return new WorkerResult.Action(id(), ActionOutcome.APPLIED, "test: swapped the font program", null, null);
-          }
-        };
-    BasicStructureRule structure = new BasicStructureRule();
-    PdfProcessor processor =
-        new PdfProcessor(new PdfPreflight(), validator, List.of(new ExplicitLanguageRule(), new DisplayDocumentTitleRule(), structure, new XmpMetadataRule(structure), fontSwap));
-
-    WorkerResult result = processor.process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-
-    assertEquals(Status.FAILED, result.status(), String.valueOf(result.error()));
-    assertEquals(RemediationStatus.ROLLED_BACK, result.remediationStatus());
-    assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
-    assertTrue(result.error().message().contains("7.21.4.1-1 failures increased 1 -> 3"), result.error().message());
-    assertTrue(result.error().message().contains("glyph inventory differs"), result.error().message());
-    assertTrue(result.findings().stream().noneMatch(f -> f.ruleId().equals(FindingsBuilder.FONT_CHECKS_RECOUNTED)), result.findings().toString());
-    assertNoOutputPdf();
-    assertScratchClean();
-    assertSchemaValid(result);
-  }
-
-  @Test
-  void safeFixDoesNotComputeAGlyphInventory() throws IOException {
-    // The inventory is a structure_fix concern; safe_fix must not parse every content stream for it.
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
-    validator.enqueue(failed(Map.of(LANG_RULE, 1, FONT_RULE, 1)));
-    validator.enqueue(failed(Map.of(FONT_RULE, 1)));
-    PdfProcessor processor = processor();
-
-    WorkerResult result = processor.process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
-
-    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
-    assertEquals(0, PdfProcessor.glyphInventoriesComputedForTests.get() - glyphInventoriesBefore, "safe_fix never computes the glyph inventory");
-  }
-
   private int glyphInventoriesBefore;
 
-  @Test
-  void safeFixGateIsUnchanged() {
-    assertNotNull(PdfProcessor.regression(Map.of(STRUCT_RULE, 1), Map.of(STRUCT_RULE, 1, SPEC + "7.3-1", 1)), "safe_fix tolerates no new failure, allow-listed or not");
-    assertNull(PdfProcessor.regression(Map.of(STRUCT_RULE, 1), Map.of()));
-  }
-
   // ---- pipeline -----------------------------------------------------------------------------
-
-  @Test
-  void structureFixTagsUntaggedDocumentWritesMetadataAndPublishesWithStructureGate() throws IOException {
-    byte[] original = install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").image()));
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "7.3-1", 1, SPEC + "5-1", 1)));
-
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-
-    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
-    assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
-    assertEquals(
-        List.of(
-            RuleId.PDF_LANG_FROM_EXPLICIT_INPUT_V1,
-            RuleId.PDF_DISPLAY_TITLE_FROM_EXISTING_TITLE_V1,
-            RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1,
-            RuleId.PDF_XMP_METADATA_FROM_INFO_V1),
-        result.actions().stream().map(WorkerResult.Action::ruleId).toList());
-    assertTrue(result.actions().stream().allMatch(a -> a.outcome() == ActionOutcome.APPLIED), result.actions().toString());
-    assertEquals(2, validator.calls.size());
-    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "allow-listed findings remain real findings");
-    assertEquals(List.of(ArtifactKind.ORIGINAL, ArtifactKind.BASELINE_REPORT, ArtifactKind.REMEDIATED, ArtifactKind.FINAL_REPORT), kinds(result));
-    byte[] out = Files.readAllBytes(workspace.outputFile("remediated.pdf"));
-    try (PDDocument doc = Loader.loadPDF(out)) {
-      assertNotNull(doc.getDocumentCatalog().getStructureTreeRoot());
-      assertTrue(doc.getDocumentCatalog().getMarkInfo().isMarked());
-      assertNotNull(doc.getDocumentCatalog().getMetadata());
-      String xmp = new String(doc.getDocumentCatalog().getMetadata().toByteArray(), StandardCharsets.UTF_8);
-      assertTrue(xmp.contains("Report"), xmp);
-      assertTrue(xmp.contains("en-US"), "dc:language reflects the language applied earlier in the same run: " + xmp);
-      assertFalse(xmp.contains("pdfuaid"), xmp);
-      assertEquals("en-US", doc.getDocumentCatalog().getLanguage());
-      assertEquals(1, doc.getNumberOfPages());
-    }
-    assertArrayEquals(original, Files.readAllBytes(workspace.inputFile()), "original immutable");
-    WorkerResult.Finding review =
-        result.findings().stream().filter(f -> f.ruleId().equals(FindingsBuilder.BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW)).findFirst().orElseThrow();
-    assertEquals(
-        "Basic tags were added from the page content in content-stream order: paragraphs, figures without alternative text,"
-            + " decorative artifacts. Headings, tables, alternative text and the reading order were not inferred and must be reviewed.",
-        review.message());
-    assertTrue(review.needsHumanReview());
-    assertTrue(result.findings().stream().anyMatch(f -> f.ruleId().equals(FindingsBuilder.IMAGES_REQUIRE_HUMAN_REVIEW)));
-    assertTrue(result.findings().stream().noneMatch(f -> f.message().toLowerCase().contains("accessible")), result.findings().toString());
-    assertTrue(result.manualReviewRequired());
-    assertScratchClean();
-    assertSchemaValid(result);
-  }
-
-  @Test
-  void structureFixResolvesBaselineChecksAndListsTheAllowListedNewFailuresAsStillFailing() throws IOException {
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report").image()));
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "7.3-1", 1, SPEC + "5-1", 1)));
-
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-
-    assertEquals(RemediationStatus.APPLIED, result.remediationStatus(), String.valueOf(result.error()));
-    for (String fixed : List.of(CONTENT_RULE, STRUCT_RULE, MARKINFO_RULE, METADATA_RULE, LANG_RULE, TITLE_RULE)) {
-      assertEquals(Resolution.FIXED_IN_COPY, finding(result, fixed).resolution(), fixed);
-    }
-    assertEquals(Resolution.STILL_FAILING, finding(result, FONT_RULE).resolution());
-    WorkerResult.Finding figure = finding(result, SPEC + "7.3-1");
-    assertEquals(Resolution.STILL_FAILING, figure.resolution(), "a rule that first fails in the copy is listed like the after-fix report");
-    assertFalse(figure.needsHumanReview());
-    assertEquals(Resolution.STILL_FAILING, finding(result, SPEC + "5-1").resolution());
-    List<String> ids = result.findings().stream().map(WorkerResult.Finding::ruleId).toList();
-    assertTrue(ids.indexOf(SPEC + "7.3-1") < ids.indexOf(FindingsBuilder.IMAGES_REQUIRE_HUMAN_REVIEW), "machine checks stay grouped before review items: " + ids);
-    assertNull(finding(result, FindingsBuilder.IMAGES_REQUIRE_HUMAN_REVIEW).resolution());
-    assertNull(finding(result, FindingsBuilder.BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW).resolution());
-    assertNull(finding(result, FindingsBuilder.MANUAL_REVIEW_REQUIRED).resolution());
-    assertSchemaValid(result);
-  }
-
-  @Test
-  void fontRecountNoteCarriesNoResolutionWhileTheRecountedRuleStaysAMachineCheck() throws IOException {
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 3)));
-
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-
-    assertEquals(RemediationStatus.APPLIED, result.remediationStatus(), String.valueOf(result.error()));
-    WorkerResult.Finding note = finding(result, FindingsBuilder.FONT_CHECKS_RECOUNTED);
-    assertFalse(note.needsHumanReview());
-    assertNull(note.resolution(), "an informational note is neither fixed nor failing");
-    assertEquals(Resolution.STILL_FAILING, finding(result, FONT_RULE).resolution());
-    assertEquals(Resolution.FIXED_IN_COPY, finding(result, CONTENT_RULE).resolution());
-  }
 
   @Test
   void rolledBackStructureFixCarriesNoResolutionAnywhere() throws IOException {
@@ -305,7 +134,7 @@ class StructureFixProcessorTest {
     validator.enqueue(failed(UNTAGGED_BASELINE));
     validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "7.20-2", 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(RemediationStatus.ROLLED_BACK, result.remediationStatus());
     assertTrue(result.findings().stream().allMatch(f -> f.resolution() == null), result.findings().toString());
@@ -322,7 +151,7 @@ class StructureFixProcessorTest {
     validator.enqueue(failed(UNTAGGED_BASELINE));
     validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "7.20-2", 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
@@ -335,59 +164,12 @@ class StructureFixProcessorTest {
   }
 
   @Test
-  void structureRuleThatLeavesUntaggedContentIsRolledBack() throws IOException {
-    install(SyntheticPdfFactory.build(Options.plain().infoTitle("Report")));
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 1, CONTENT_RULE, 1)));
-
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-
-    assertEquals(Status.FAILED, result.status());
-    assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
-    assertTrue(result.error().message().contains("7.1-3"), result.error().message());
-    assertNoOutputPdf();
-  }
-
-  @Test
-  void structureFixOnTaggedDocumentSkipsStructureRulesAndBehavesExactlyLikeSafeFix() throws IOException {
-    byte[] tagged = SyntheticPdfFactory.tagged();
-    Map<String, Integer> baseline = Map.of(TITLE_RULE, 1, METADATA_RULE, 1, FONT_RULE, 1);
-    Map<String, Integer> after = Map.of(METADATA_RULE, 1, FONT_RULE, 1);
-
-    install(tagged);
-    validator.enqueue(failed(baseline));
-    validator.enqueue(failed(after));
-    WorkerResult structure = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
-    byte[] structureOut = Files.readAllBytes(workspace.outputFile("remediated.pdf"));
-
-    install(tagged);
-    validator.enqueue(failed(baseline));
-    validator.enqueue(failed(after));
-    WorkerResult safe = processor().process(request(WorkerRequest.Mode.SAFE_FIX, "en-US"), workspace);
-    byte[] safeOut = Files.readAllBytes(workspace.outputFile("remediated.pdf"));
-
-    assertEquals(Status.COMPLETED, structure.status(), String.valueOf(structure.error()));
-    assertEquals(RemediationStatus.APPLIED, structure.remediationStatus());
-    Map<RuleId, ActionOutcome> outcomes = new java.util.EnumMap<>(RuleId.class);
-    structure.actions().forEach(a -> outcomes.put(a.ruleId(), a.outcome()));
-    assertEquals(ActionOutcome.SKIPPED, outcomes.get(RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1));
-    assertEquals(ActionOutcome.SKIPPED, outcomes.get(RuleId.PDF_XMP_METADATA_FROM_INFO_V1));
-    assertTrue(structure.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1).findFirst().orElseThrow().reason().contains("already tagged"));
-    assertEquals(2, safe.actions().size(), "safe_fix lists exactly the two metadata rules; structure rules do not participate");
-    assertEquals(safe.actions(), structure.actions().subList(0, 2));
-    assertArrayEquals(safeOut, structureOut, "same remediated bytes as safe_fix");
-    assertEquals(safe.findings(), structure.findings());
-    assertTrue(structure.findings().stream().noneMatch(f -> f.ruleId().equals(FindingsBuilder.BASIC_STRUCTURE_REQUIRES_HUMAN_REVIEW)));
-    assertSchemaValid(structure);
-  }
-
-  @Test
   void structureFixOnTaggedDocumentKeepsTheStrictGate() throws IOException {
     install(SyntheticPdfFactory.tagged());
     validator.enqueue(failed(Map.of(TITLE_RULE, 1, FONT_RULE, 1)));
     validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "7.3-1", 1)));
 
-    WorkerResult result = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
+    WorkerResult result = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
 
     assertEquals(Status.FAILED, result.status());
     assertEquals(ErrorCode.INTEGRITY_REGRESSION, result.error().code());
@@ -397,13 +179,13 @@ class StructureFixProcessorTest {
   @Test
   void signedAndEncryptedInputsKeepTheirRefusalCodes() throws IOException {
     install(SyntheticPdfFactory.signed());
-    WorkerResult signed = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
+    WorkerResult signed = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
     assertEquals(Status.UNSUPPORTED, signed.status());
     assertEquals(ErrorCode.UNSUPPORTED_SIGNED_MUTATION, signed.error().code());
     assertEquals(RemediationStatus.SKIPPED, signed.remediationStatus());
 
     install(SyntheticPdfFactory.encrypted("pw"));
-    WorkerResult encrypted = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en-US"), workspace);
+    WorkerResult encrypted = processor().process(request(WorkerRequest.Mode.FIX, "en-US"), workspace);
     assertEquals(Status.UNSUPPORTED, encrypted.status());
     assertEquals(ErrorCode.UNSUPPORTED_ENCRYPTED, encrypted.error().code());
 
@@ -411,34 +193,6 @@ class StructureFixProcessorTest {
     assertNoOutputPdf();
     assertSchemaValid(signed);
     assertSchemaValid(encrypted);
-  }
-
-  @Test
-  void outputIsByteDeterministicEvenWhenTheInputHasNoTrailerId() throws IOException {
-    byte[] original = SyntheticPdfFactory.untaggedWithoutTrailerId();
-    try (PDDocument doc = Loader.loadPDF(original)) {
-      assertNull(doc.getDocument().getTrailer().getItem(org.apache.pdfbox.cos.COSName.ID), "fixture really lacks /ID");
-    }
-
-    install(original);
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "5-1", 1, SPEC + "7.1-9", 1)));
-    WorkerResult first = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en"), workspace);
-    byte[] firstOut = Files.readAllBytes(workspace.outputFile("remediated.pdf"));
-
-    install(original);
-    validator.enqueue(failed(UNTAGGED_BASELINE));
-    validator.enqueue(failed(Map.of(FONT_RULE, 1, SPEC + "5-1", 1, SPEC + "7.1-9", 1)));
-    WorkerResult second = processor().process(request(WorkerRequest.Mode.STRUCTURE_FIX, "en"), workspace);
-    byte[] secondOut = Files.readAllBytes(workspace.outputFile("remediated.pdf"));
-
-    assertEquals(Status.COMPLETED, first.status(), String.valueOf(first.error()));
-    assertEquals(Status.COMPLETED, second.status(), String.valueOf(second.error()));
-    assertArrayEquals(firstOut, secondOut, "structure_fix output is reproducible");
-    try (PDDocument doc = Loader.loadPDF(firstOut)) {
-      assertNotNull(doc.getDocumentCatalog().getStructureTreeRoot());
-      assertNull(doc.getDocumentInformation().getModificationDate(), "input had no Info dates; none are invented");
-    }
   }
 
   // ---- helpers ----------------------------------------------------------------------------

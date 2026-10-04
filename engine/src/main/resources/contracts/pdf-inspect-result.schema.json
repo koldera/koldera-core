@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.accessibility-platform.example/pdf-inspect-result.v1.json",
+  "$id": "https://schemas.koldera-core.invalid/pdf-inspect-result.v1.json",
   "title": "PdfInspectResultV1",
   "description": "Read-only structure probe of a PDF (`inspect` verb of the PDF engine). It reports what the file declares and contains; it is evidence for a platform decision, never a conformance verdict.",
   "type": "object", "additionalProperties": false,
