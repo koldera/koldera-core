@@ -25,9 +25,22 @@ public static class SigningKeys
         var tmp = path + ".tmp";
         var fso = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write, Share = FileShare.None };
         if (!OperatingSystem.IsWindows()) fso.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        using (var fs = new FileStream(tmp, fso)) fs.Write(key);
-        File.Move(tmp, path, overwrite: true);
-        return key;
+        using (var fs = new FileStream(tmp, fso))
+        {
+            fs.Write(key);
+            fs.Flush(true);
+        }
+        try
+        {
+            File.Move(tmp, path, overwrite: false);
+            return key;
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            // Another process created the key first: use theirs.
+            try { File.Delete(tmp); } catch (IOException) { }
+            return File.ReadAllBytes(path);
+        }
     }
 
     /// <summary>Validates and decodes a configured key; throws naming KOLDERA_SIGNING_KEY.</summary>

@@ -11,6 +11,10 @@ public sealed record Limits(
     long? WebMaxResponseBytes,
     int? WebMaxRequests);
 
+/// <param name="PublicUrl">
+/// KOLDERA_PUBLIC_URL: the externally visible base URL used in signed upload/download URLs. Behind a TLS-terminating proxy
+/// it must be set, otherwise the URLs are built from the request scheme the server sees (http).
+/// </param>
 public sealed record CoreOptions(
     string? Token,
     string Auth,
