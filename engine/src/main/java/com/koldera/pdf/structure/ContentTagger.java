@@ -197,7 +197,7 @@ public final class ContentTagger {
   }
 
   /**
-   * As {@link #analyze(PDDocument)}; with {@code removeStrayPaints} false (deprecated {@code structure_fix}) a painting operator
+   * As {@link #analyze(PDDocument)}; with {@code removeStrayPaints} false (the conservative walk used by tests) a painting operator
    * with no path is tagged like any other path and a form drawn more than once with text or images refuses the document. With
    * {@code true} (mode {@code fix}) each draw of such a form is wrapped from the invoking stream: a {@code Pagination} artifact
    * when drawn at the same place on two pages, else a {@code P} or {@code Figure}; a shared form with marked content is refused.

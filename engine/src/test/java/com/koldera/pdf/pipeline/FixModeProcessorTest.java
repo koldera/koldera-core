@@ -152,14 +152,14 @@ class FixModeProcessorTest {
   }
 
   @Test
-  void fixOnATaggedPdfSkipsStructureLikeStructureFixDoes() throws Exception {
+  void fixOnATaggedPdfSkipsInferredStructure() throws Exception {
     WorkerResult result = run(SyntheticPdfFactory.tagged(), TitleResolverTest.fix("Report", null));
     var structure = result.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_STRUCTURE_INFERRED_V1).findFirst().orElseThrow();
     assertEquals(ActionOutcome.SKIPPED, structure.outcome());
   }
 
   @Test
-  void fixComputesTheGlyphInventoryLikeStructureFix() throws Exception {
+  void fixComputesTheGlyphInventory() throws Exception {
     int before = PdfProcessor.glyphInventoriesComputedForTests.get();
     WorkerResult result = run(SyntheticPdfFactory.simpleUntagged(), TitleResolverTest.fix(null, "report.pdf"));
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
@@ -463,7 +463,7 @@ class FixModeProcessorTest {
     return new ValidationOutcome(ValidationStatus.FAILED, rules, Map.of(), null, null, null, "fake");
   }
 
-  /** Returns queued outcomes in order, records calls and writes a stand-in raw report file (copied from StructureFixProcessorTest). */
+  /** Returns queued outcomes in order, records calls and writes a stand-in raw report file (copied from the former StructureFixProcessorTest). */
   private static final class ScriptedValidator implements PdfValidator {
     record Call(Path pdf, Path report, Duration timeout) {}
 

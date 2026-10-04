@@ -72,7 +72,7 @@ public record WorkerRequest(
     HTML_GENERATED
   }
 
-  /** Resolved limits: a limit the request left out is {@code Long.MAX_VALUE} / {@code Integer.MAX_VALUE} (not enforced). */
+  /** Resolved limits: a limit the request left out is {@code Long.MAX_VALUE} / {@code Integer.MAX_VALUE} (effectively unlimited). */
   public record Limits(long maxBytes, int maxPages, int timeoutSeconds) {}
 
   public boolean isFix() {

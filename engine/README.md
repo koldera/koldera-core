@@ -42,7 +42,7 @@ text or host paths.
 
 The request validates against `contracts/pdf-worker-request.schema.json`: `mode` (`analyze` or `fix`), optional `explicitTitle`,
 `explicitLanguage` and `sourceFileName`, `origin` (`upload`, or `html_generated` for PDFs produced by
-an HTML renderer) and `limits` (all optional: `maxBytes`, `maxPages`, `timeoutSeconds`; an absent limit is not enforced). The input is
+an HTML renderer) and `limits` (all optional: `maxBytes`, `maxPages`, `timeoutSeconds`; an absent limit is filled with the type maximum, so a missing `timeoutSeconds` means Integer.MAX_VALUE seconds, effectively unlimited). The input is
 `/work/in/document.pdf` and output goes to `/work/out`; `--work-root` maps these canonical paths to a
 real directory (`<root>/in`, `<root>/out`, private `<root>/scratch`), default `/work`. The result
 (`contracts/pdf-worker-result.schema.json`) always reports canonical paths. The engine reads byte-identical classpath copies of its six schemas from `src/main/resources/contracts/` (`SchemaCopiesTest` enforces equality with the root `contracts/`).

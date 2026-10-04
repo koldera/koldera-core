@@ -495,7 +495,7 @@ class BasicStructureRuleTest {
   }
 
   /**
-   * {@code structure_fix} is deprecated and keeps its pre-branch tagging:
+   * the conservative walk keeps the pre-branch tagging:
    * painting operators with no path are neither removed nor refused there. The expected streams are
    * what an earlier engine build wrote for these fixtures, byte for byte.
    */

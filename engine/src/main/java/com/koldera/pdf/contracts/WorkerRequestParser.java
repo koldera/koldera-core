@@ -40,7 +40,7 @@ public final class WorkerRequestParser {
       throw new RequestValidationException(
           "request violates schema: " + String.join("; ", violations));
     }
-    // `limits` and every limit in it are optional; an absent limit is not enforced.
+    // `limits` and every limit in it are optional; an absent limit becomes the type maximum (effectively unlimited).
     ObjectNode limits = ((ObjectNode) node).has("limits") ? (ObjectNode) node.get("limits") : ((ObjectNode) node).putObject("limits");
     if (!limits.has("maxBytes")) {
       limits.put("maxBytes", Long.MAX_VALUE);

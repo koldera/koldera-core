@@ -89,7 +89,7 @@ class SiblingReorderTest {
 
   @Test
   void samePageMoveUnderAFlatMultiPageParentIsAppliedAndACrossPageMoveIsRefused() throws IOException {
-    // structure_fix hangs every P of every page directly under Document; a reviewer swaps two neighbours on page 2.
+    // basic structure tagging hangs every P of every page directly under Document; a reviewer swaps two neighbours on page 2.
     byte[] flat = SyntheticPdfFactory.taggedBlocks(TaggedOptions.of(Block.of("P", "One"), Block.of("P", "Two"), new Block("P", "Three", 2), new Block("P", "Four", 2), new Block("P", "Five", 3)));
 
     ReorderResult swapped = reorder.apply(request(flat, List.of(0), List.of(0, 1, 3, 2, 4)), tmp);

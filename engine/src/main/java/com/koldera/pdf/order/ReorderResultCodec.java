@@ -26,7 +26,7 @@ public final class ReorderResultCodec {
 
   public static ReorderRequest requestFromJson(String json) {
     try {
-      // `limits` and every limit in it are optional; an absent limit is not enforced.
+      // `limits` and every limit in it are optional; an absent limit becomes the type maximum (effectively unlimited).
       JsonNode tree = MAPPER.readTree(json);
       if (tree instanceof ObjectNode root) {
         ObjectNode limits = root.has("limits") && root.get("limits") instanceof ObjectNode o ? o : root.putObject("limits");
