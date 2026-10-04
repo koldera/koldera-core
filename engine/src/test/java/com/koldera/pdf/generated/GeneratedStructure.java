@@ -33,7 +33,7 @@ final class GeneratedStructure {
 
   static PDDocument fixture(String name) throws IOException {
     try (InputStream in = GeneratedStructure.class.getResourceAsStream("/generated/" + name)) {
-      assertNotNull(in, "fixture " + name + " (node services/html-renderer/scripts/make-generated-fixtures.mjs)");
+      assertNotNull(in, "fixture " + name + " (a static, committed PDF under src/test/resources/generated/)");
       return Loader.loadPDF(in.readAllBytes());
     }
   }

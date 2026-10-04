@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Java parameter list of the test signer (PrivateKey, X509Certificate), not a credential"
+regexTarget = "line"
+regexes = ['''private TestSigner\(PrivateKey key, X509Certificate certificate\)''']
