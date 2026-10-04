@@ -12,10 +12,19 @@ builder.Services.AddSingleton(sp =>
     return CoreOptions.From(name => config[name]);
 });
 
+builder.Services.AddCoreAuthentication();
+
 var app = builder.Build();
 app.Services.GetRequiredService<CoreOptions>().EnsureDataDirWritable();
+app.Services.GetRequiredService<ServerTokens>(); // resolves (and, if needed, generates and logs) the tokens at startup
 
-app.MapInfoEndpoints();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapGet("/healthz", () => Results.Json(new { status = "ok" }));
+// Every /v1 route requires authorization by default.
+var v1 = app.MapGroup("/v1").RequireAuthorization();
+v1.MapInfoEndpoints();
 app.Run();
 
 public partial class Program;

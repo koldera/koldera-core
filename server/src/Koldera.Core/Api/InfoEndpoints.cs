@@ -4,10 +4,8 @@ namespace Koldera.Core;
 
 public static class InfoEndpoints
 {
-    public static void MapInfoEndpoints(this IEndpointRouteBuilder app)
+    public static void MapInfoEndpoints(this RouteGroupBuilder v1)
     {
-        app.MapGet("/healthz", () => Results.Json(new { status = "ok" }));
-        var v1 = app.MapGroup("/v1");
         v1.MapGet("/info", (CoreOptions options) => Results.Json(new
         {
             version = typeof(InfoEndpoints).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0],

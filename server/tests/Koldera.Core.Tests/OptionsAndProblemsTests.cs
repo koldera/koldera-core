@@ -88,7 +88,7 @@ public class OptionsAndProblemsTests
         try
         {
             using var f = CoreFactory.Create(new() { ["KOLDERA_TOKEN"] = "t1" });
-            var json = await f.CreateClient().GetFromJsonAsync<JsonElement>("/v1/info");
+            var json = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>("/v1/info");
             Assert.Equal(4, json.GetProperty("features").GetArrayLength());
         }
         finally { Environment.SetEnvironmentVariable("KOLDERA_FEATURES", null); }
