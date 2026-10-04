@@ -17,6 +17,7 @@ public sealed class JobRunner : BackgroundService
     private readonly TimeProvider _clock;
     private readonly ILogger<JobRunner> _logger;
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _completions = new();
+    private readonly ConcurrentDictionary<Guid, byte> _claimed = new();
 
     public JobRunner(DataStore store, JobQueue queue, IEnumerable<IJobExecutor> executors, CoreOptions options, TimeProvider clock, ILogger<JobRunner> logger)
     {
@@ -77,12 +78,14 @@ public sealed class JobRunner : BackgroundService
         }
         if (IsTerminal(job))
         {
+            // Other waiters share this source: wake them before dropping it, or the runner's signal finds nothing.
+            tcs.TrySetResult();
             _completions.TryRemove(id, out _);
             return true;
         }
         try
         {
-            await tcs.Task.WaitAsync(max, ct);
+            await tcs.Task.WaitAsync(max, _clock, ct);
             return true;
         }
         catch (TimeoutException)
@@ -133,12 +136,22 @@ public sealed class JobRunner : BackgroundService
 
     private async Task RunOneAsync(Guid id, CancellationToken stop)
     {
-        var job = _store.GetJob(id);
-        if (job is null || job.State != CoreJobState.Queued)
+        // One run per id: a duplicate queue entry is skipped while the first is claimed or after it finished.
+        if (!_claimed.TryAdd(id, 0)) return;
+        try
         {
-            Signal(id);
-            return;
+            await RunClaimedAsync(id, stop);
         }
+        finally
+        {
+            _claimed.TryRemove(id, out _);
+        }
+    }
+
+    private async Task RunClaimedAsync(Guid id, CancellationToken stop)
+    {
+        var job = _store.GetJob(id);
+        if (job is null || job.State != CoreJobState.Queued) return;
 
         job.State = CoreJobState.Running;
         job.StartedAt = _clock.GetUtcNow();
@@ -177,8 +190,14 @@ public sealed class JobRunner : BackgroundService
         }
 
         job.FinishedAt = _clock.GetUtcNow();
-        await _store.SaveJobAsync(job);
-        Signal(id);
+        try
+        {
+            await _store.SaveJobAsync(job);
+        }
+        finally
+        {
+            Signal(id);
+        }
     }
 
     private static void Fail(CoreJob job, string code, string message)
