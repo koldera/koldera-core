@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security;
 
 namespace Koldera.Core;
 
@@ -30,27 +31,38 @@ public sealed record CoreOptions(
     public static CoreOptions FromEnvironment(IDictionary<string, string?> env) =>
         From(name => env.TryGetValue(name, out var v) ? v : null);
 
+    public static CoreOptions FromProcessEnvironment() =>
+        From(Environment.GetEnvironmentVariable);
+
     public static CoreOptions From(Func<string, string?> get)
     {
         string? Text(string key) => string.IsNullOrWhiteSpace(get("KOLDERA_" + key)) ? null : get("KOLDERA_" + key)!.Trim();
 
-        long? Number(string key)
+        InvalidOperationException BadNumber(string key) => new($"KOLDERA_{key}: expected a positive integer");
+
+        long? Long(string key)
         {
             var raw = Text(key);
             if (raw is null) return null;
-            if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var n) || n <= 0)
-                throw new InvalidOperationException($"KOLDERA_{key}: expected a positive integer");
+            if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var n) || n <= 0) throw BadNumber(key);
             return n;
         }
 
-        int Whole(string key, int fallback) => checked((int)(Number(key) ?? fallback));
+        int? OptionalInt(string key)
+        {
+            var raw = Text(key);
+            if (raw is null) return null;
+            if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var n) || n <= 0) throw BadNumber(key);
+            return n;
+        }
 
-        int? OptionalWhole(string key) => Number(key) is { } n ? checked((int)n) : null;
+        int Int(string key, int fallback) => OptionalInt(key) ?? fallback;
 
         var features = (Text("FEATURES") ?? string.Join(',', KnownFeatures))
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(f => f.ToLowerInvariant())
             .ToList();
+        if (features.Count == 0) throw new InvalidOperationException("KOLDERA_FEATURES: at least one feature is required");
         foreach (var f in features)
             if (!KnownFeatures.Contains(f))
                 throw new InvalidOperationException($"KOLDERA_FEATURES: unknown feature {f}");
@@ -59,26 +71,30 @@ public sealed record CoreOptions(
         if (allowHttp is not null && !bool.TryParse(allowHttp, out _))
             throw new InvalidOperationException("KOLDERA_WEB_ALLOW_HTTP: expected true or false");
 
+        var auth = Text("AUTH")?.ToLowerInvariant();
+        if (auth is not (null or "none"))
+            throw new InvalidOperationException("KOLDERA_AUTH: only \"none\" is accepted (leave it unset for token authentication)");
+
         return new CoreOptions(
             Token: Text("TOKEN"),
-            Auth: (Text("AUTH") ?? "token").ToLowerInvariant(),
+            Auth: auth ?? "token",
             DataDir: Text("DATA_DIR") ?? "/data",
             PublicUrl: Text("PUBLIC_URL"),
-            RetentionHours: Whole("RETENTION_HOURS", 24),
-            Concurrency: Whole("CONCURRENCY", Math.Max(1, Environment.ProcessorCount / 2)),
-            QueueCapacity: Whole("QUEUE_CAPACITY", 100),
+            RetentionHours: Int("RETENTION_HOURS", 24),
+            Concurrency: Int("CONCURRENCY", Math.Max(1, Environment.ProcessorCount / 2)),
+            QueueCapacity: Int("QUEUE_CAPACITY", 100),
             Features: new HashSet<string>(features),
             CorsOrigins: (Text("CORS_ORIGINS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             SigningKey: Text("SIGNING_KEY"),
             WebProxy: Text("WEB_PROXY"),
             WebAllowHttp: allowHttp is not null && bool.Parse(allowHttp),
             Limits: new Limits(
-                Number("PDF_MAX_BYTES"),
-                OptionalWhole("PDF_MAX_PAGES"),
-                Number("HTML_MAX_BYTES"),
-                OptionalWhole("JOB_TIMEOUT_SECONDS"),
-                Number("WEB_MAX_RESPONSE_BYTES"),
-                OptionalWhole("WEB_MAX_REQUESTS")));
+                Long("PDF_MAX_BYTES"),
+                OptionalInt("PDF_MAX_PAGES"),
+                Long("HTML_MAX_BYTES"),
+                OptionalInt("JOB_TIMEOUT_SECONDS"),
+                Long("WEB_MAX_RESPONSE_BYTES"),
+                OptionalInt("WEB_MAX_REQUESTS")));
     }
 
     public void EnsureDataDirWritable()
@@ -90,7 +106,7 @@ public sealed record CoreOptions(
             File.WriteAllText(probe, "");
             File.Delete(probe);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or SecurityException)
         {
             throw new InvalidOperationException($"KOLDERA_DATA_DIR {DataDir} is not writable: {e.Message}");
         }
