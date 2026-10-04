@@ -58,11 +58,21 @@ public sealed class DataStore
     {
         var gate = _locks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct);
+        var terminal = false;
         try
         {
-            var rec = GetUpload(id) ?? throw new UploadException("UPLOAD_NOT_FOUND");
-            if (rec.Completed) throw new UploadException("UPLOAD_ALREADY_COMPLETED");
-            if (_clock.GetUtcNow() > rec.ExpiresAt) throw new UploadException("UPLOAD_EXPIRED");
+            UploadRecord rec;
+            try
+            {
+                rec = GetUpload(id) ?? throw new UploadException("UPLOAD_NOT_FOUND");
+                if (rec.Completed) throw new UploadException("UPLOAD_ALREADY_COMPLETED");
+                if (_clock.GetUtcNow() > rec.ExpiresAt) throw new UploadException("UPLOAD_EXPIRED");
+            }
+            catch (UploadException)
+            {
+                terminal = true;
+                throw;
+            }
 
             var part = UploadPath(id) + ".part";
             try
@@ -85,16 +95,37 @@ public sealed class DataStore
                 if (total != rec.SizeBytes) throw new UploadException("SIZE_MISMATCH");
                 if (!string.Equals(Convert.ToHexString(hash.GetHashAndReset()), rec.Sha256, StringComparison.OrdinalIgnoreCase))
                     throw new UploadException("CHECKSUM_MISMATCH");
-                File.Move(part, UploadPath(id), overwrite: true);
+                try
+                {
+                    File.Move(part, UploadPath(id), overwrite: false);
+                }
+                catch (IOException) when (File.Exists(UploadPath(id)))
+                {
+                    // A previous attempt moved the file but did not record it. Accept only if it is exactly the declared content.
+                    if (!MatchesRecord(UploadPath(id), rec)) throw new UploadException("UPLOAD_CONFLICT");
+                }
             }
             catch
             {
-                try { File.Delete(part); } catch (IOException) { }
+                try { File.Delete(part); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
                 throw;
             }
             WriteJson(RecordPath(id), rec with { Completed = true });
+            terminal = true;
         }
-        finally { gate.Release(); }
+        finally
+        {
+            gate.Release();
+            // Completed (or unknown/expired) is terminal; later callers read the record and never need this gate.
+            if (terminal) _locks.TryRemove(id, out _);
+        }
+    }
+
+    private static bool MatchesRecord(string path, UploadRecord rec)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (fs.Length != rec.SizeBytes) return false;
+        return string.Equals(Convert.ToHexString(SHA256.HashData(fs)), rec.Sha256, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task SaveJobAsync(CoreJob job)
@@ -120,6 +151,25 @@ public sealed class DataStore
         File.Move(tmp, path, overwrite: true);
     }
 
-    private static T? ReadJson<T>(string path) where T : class =>
-        File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllBytes(path), Json) : null;
+    private static T? ReadJson<T>(string path) where T : class
+    {
+        // Windows can briefly refuse a read while the record is being replaced; retry once.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                if (!File.Exists(path)) return null;
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                return JsonSerializer.Deserialize<T>(fs, Json);
+            }
+            catch (IOException) when (attempt == 0)
+            {
+                Thread.Sleep(20);
+            }
+            catch (FileNotFoundException)
+            {
+                return null;
+            }
+        }
+    }
 }

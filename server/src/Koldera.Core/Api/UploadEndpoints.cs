@@ -5,7 +5,9 @@ namespace Koldera.Core;
 
 public static partial class UploadEndpoints
 {
-    private static readonly TimeSpan Ttl = TimeSpan.FromHours(1);
+    // The upload record lives for an hour; the signed URL only for ten minutes.
+    private static readonly TimeSpan RecordTtl = TimeSpan.FromHours(1);
+    private static readonly TimeSpan SignatureTtl = TimeSpan.FromMinutes(10);
     private static readonly string[] ContentTypes = ["application/pdf", "text/html"];
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
@@ -31,14 +33,14 @@ public static partial class UploadEndpoints
             var now = clock.GetUtcNow();
             var id = Guid.NewGuid();
             var record = store.CreateUpload(new UploadRecord(
-                id, name, req.SizeBytes.Value, req.Sha256, req.ContentType, Owner(http), now, now.Add(Ttl), false));
+                id, name, req.SizeBytes.Value, req.Sha256, req.ContentType, Owner(http), now, now.Add(RecordTtl), false));
             var baseUrl = (options.PublicUrl ?? $"{http.Request.Scheme}://{http.Request.Host}").TrimEnd('/');
             return Results.Json(new
             {
                 uploadId = id,
                 method = "PUT",
-                uploadUrl = baseUrl + signer.Sign($"/v1/uploads/{id}/content", Ttl),
-                expiresAt = record.ExpiresAt,
+                uploadUrl = baseUrl + signer.Sign($"/v1/uploads/{id}/content", SignatureTtl),
+                expiresAt = now.Add(SignatureTtl),
                 maxBytes,
             }, statusCode: 201);
         });
@@ -48,8 +50,6 @@ public static partial class UploadEndpoints
         {
             if (!signer.Verify(http.Request.Path.Value ?? "", exp, sig))
                 return Problems.Result(403, "SIGNATURE_INVALID", "Invalid or expired signature");
-            if (store.GetUpload(id) is null)
-                return Problems.Result(404, "UPLOAD_NOT_FOUND", "Upload not found");
             // The declared size bounds the stream, so the server default body limit does not apply.
             var limit = http.Features.Get<IHttpMaxRequestBodySizeFeature>();
             if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = null;
@@ -63,6 +63,7 @@ public static partial class UploadEndpoints
                 return e.Code switch
                 {
                     "UPLOAD_ALREADY_COMPLETED" => Problems.Result(409, e.Code, "Upload already completed"),
+                    "UPLOAD_CONFLICT" => Problems.Result(409, e.Code, "A different file already exists for this upload"),
                     "UPLOAD_EXPIRED" => Problems.Result(410, e.Code, "Upload expired"),
                     "UPLOAD_NOT_FOUND" => Problems.Result(404, e.Code, "Upload not found"),
                     "SIZE_MISMATCH" => Problems.Result(422, e.Code, "Body size differs from the declared size"),
