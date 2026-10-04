@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Koldera.Core/Koldera.Core.csproj" />
+  <Project Path="tests/Koldera.Core.Tests/Koldera.Core.Tests.csproj" />
+</Solution>
