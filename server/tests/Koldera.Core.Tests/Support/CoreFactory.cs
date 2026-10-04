@@ -40,6 +40,17 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
         return new CoreFactory(values, temp);
     }
 
+    /// <summary>Client carrying the first configured KOLDERA_TOKEN as bearer (no header when none is set).</summary>
+    public HttpClient AuthorizedClient()
+    {
+        var client = CreateClient();
+        var first = (_env.GetValueOrDefault("KOLDERA_TOKEN") ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+        if (first is not null) client.DefaultRequestHeaders.Authorization = new("Bearer", first);
+        return client;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(_env));
