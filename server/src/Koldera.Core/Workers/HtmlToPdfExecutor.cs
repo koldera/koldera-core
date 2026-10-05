@@ -40,7 +40,7 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         if (render.TimedOut) throw new TimeoutException("renderer exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"renderer exited with code {render.ExitCode} without writing a result");
-        var rendered = HtmlWorkerContracts.ParseRendererResult(await File.ReadAllTextAsync(resultPath, ct), job.Id);
+        var rendered = HtmlWorkerContracts.ParseRendererResult(await WorkerOutput.ReadResultAsync(resultPath, ct), job.Id);
         if (rendered.SourceSha256 is not null && rendered.SourceSha256 != expectedSource)
             throw new WorkerContractException("renderer reported a different source SHA-256");
 
@@ -95,7 +95,7 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         var inspectPath = Path.Combine(scratch, "inspect.json");
         // The probe is a gate only when it ran: if the tool is missing or writes nothing the engine alone judges the file.
         var inspect = await Snapshots.RunOptionalAsync(html.Inspect, "inspect probe", log, scratch, probePath, inspectPath, timeout, ct)
-            ? HtmlWorkerContracts.ParseInspectResult(await File.ReadAllTextAsync(inspectPath, ct))
+            ? HtmlWorkerContracts.ParseInspectResult(await WorkerOutput.ReadResultAsync(inspectPath, ct))
             : null;
         if (inspect?.Sha256 is not null && inspect.Sha256 != generated.Sha256)
             throw new WorkerContractException("structure probe reported a different SHA-256");

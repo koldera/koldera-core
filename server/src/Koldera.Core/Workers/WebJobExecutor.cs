@@ -35,7 +35,7 @@ public sealed class WebJobExecutor(DataStore store, WebWorkers web, CoreOptions 
         if (run.TimedOut) throw new TimeoutException("scanner exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"scanner exited with code {run.ExitCode} without writing a result");
-        var result = WebWorkerContracts.ParseResult(await File.ReadAllTextAsync(resultPath, ct), job.Id);
+        var result = WebWorkerContracts.ParseResult(await WorkerOutput.ReadResultAsync(resultPath, ct), job.Id);
 
         var now = clock.GetUtcNow();
         var retention = now.AddHours(options.RetentionHours);

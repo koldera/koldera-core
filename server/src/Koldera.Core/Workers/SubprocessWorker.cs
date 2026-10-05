@@ -93,8 +93,9 @@ public sealed class SubprocessWorker(string[] command, IReadOnlyDictionary<strin
         process.Start();
         process.StandardInput.Close();
         // Not tied to the caller's token: a cancelled read would abandon the pipes while the child still runs.
-        var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-        var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        // Both pipes are drained to the end (a full pipe would block the child), but only the last 4 KiB of stderr is kept.
+        var stdout = DrainTailAsync(process.StandardOutput, 0);
+        var stderr = DrainTailAsync(process.StandardError, StderrTailLimit);
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         if (timeout != Timeout.InfiniteTimeSpan) timeoutCts.CancelAfter(timeout);
         var timedOut = false;
@@ -111,7 +112,22 @@ public sealed class SubprocessWorker(string[] command, IReadOnlyDictionary<strin
         }
         await stdout;
         var err = await stderr;
-        return new WorkerRun(timedOut ? -1 : process.ExitCode, timedOut, err.Length > StderrTailLimit ? err[^StderrTailLimit..] : err);
+        return new WorkerRun(timedOut ? -1 : process.ExitCode, timedOut, err);
+    }
+
+    /// <summary>Reads <paramref name="reader"/> to its end and returns only its last <paramref name="keep"/> characters.</summary>
+    public static async Task<string> DrainTailAsync(TextReader reader, int keep)
+    {
+        var buffer = new char[8192];
+        var tail = new System.Text.StringBuilder(keep * 2);
+        int read;
+        while ((read = await reader.ReadAsync(buffer, CancellationToken.None)) > 0)
+        {
+            if (keep == 0) continue;
+            tail.Append(buffer, 0, read);
+            if (tail.Length > keep * 2) tail.Remove(0, tail.Length - keep);
+        }
+        return tail.Length > keep ? tail.ToString(tail.Length - keep, keep) : tail.ToString();
     }
 
     private static void KillTree(Process process)

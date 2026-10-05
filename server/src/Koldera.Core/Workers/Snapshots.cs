@@ -96,7 +96,7 @@ public static class Snapshots
         if (run.TimedOut) throw new TimeoutException("structure probe exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"structure probe exited with code {run.ExitCode} without writing a result");
-        return OrderWorkerContracts.ParseStructure(await File.ReadAllTextAsync(resultPath, ct));
+        return OrderWorkerContracts.ParseStructure(await WorkerOutput.ReadResultAsync(resultPath, ct));
     }
 
     /// <summary>
@@ -126,7 +126,7 @@ public static class Snapshots
     {
         var resultPath = Path.Combine(scratch, "structure.json");
         return await RunOptionalAsync(probe, "structure probe", log, scratch, pdfPath, resultPath, timeout, ct)
-            ? OrderWorkerContracts.ParseStructure(await File.ReadAllTextAsync(resultPath, ct))
+            ? OrderWorkerContracts.ParseStructure(await WorkerOutput.ReadResultAsync(resultPath, ct))
             : null;
     }
 
@@ -137,7 +137,7 @@ public static class Snapshots
         var resultPath = Path.Combine(scratch, "semantic-result.json");
         await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeSemanticRequest(new SemanticRequest(OrderWorkerContracts.SpecVersion, jobId, SemanticRequest.CanonicalInputPath, limits, policy)), ct);
         return await RunOptionalAsync(probe, "semantic collector", log, scratch, requestPath, resultPath, timeout, ct)
-            ? OrderWorkerContracts.ParseSemantic(await File.ReadAllTextAsync(resultPath, ct), jobId)
+            ? OrderWorkerContracts.ParseSemantic(await WorkerOutput.ReadResultAsync(resultPath, ct), jobId)
             : null;
     }
 
@@ -151,7 +151,7 @@ public static class Snapshots
         if (run.TimedOut) throw new TimeoutException("semantic collector exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"semantic collector exited with code {run.ExitCode} without writing a result");
-        return OrderWorkerContracts.ParseSemantic(await File.ReadAllTextAsync(resultPath, ct), jobId);
+        return OrderWorkerContracts.ParseSemantic(await WorkerOutput.ReadResultAsync(resultPath, ct), jobId);
     }
 
     private static string Truncate(string value) => value.Length <= 200 ? value : value[..200];
