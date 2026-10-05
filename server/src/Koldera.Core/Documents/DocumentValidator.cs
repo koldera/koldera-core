@@ -25,7 +25,7 @@ public static class DocumentValidator
     /// </summary>
     public static IReadOnlyList<ValidationError> Validate(JsonElement doc)
     {
-        var structural = Schema.Value.Validate(doc.GetRawText()).Select(ToSchemaError).ToList();
+        var structural = Schema.Value.Validate(doc.GetRawText(), redact: false).Select(ToSchemaError).ToList();
         if (structural.Count > 0)
         {
             return structural;
@@ -58,7 +58,13 @@ public static class DocumentValidator
         {
             pointer.Append('/').Append(part.Groups[1].Success ? Escape(part.Groups[1].Value) : part.Groups[2].Value);
         }
-        return new ValidationError(pointer.ToString(), DocumentErrorCodes.Schema, message[(split + 2)..]);
+        var text = message[(split + 2)..];
+        // An unexpected property is located at the property itself, so the caller sees which one is wrong.
+        if (Regex.Match(text, "^unexpected property '(.*)'$", RegexOptions.Singleline) is { Success: true } unexpected)
+        {
+            pointer.Append('/').Append(Escape(unexpected.Groups[1].Value));
+        }
+        return new ValidationError(pointer.ToString(), DocumentErrorCodes.Schema, text);
     }
 
     private static string Escape(string name) => name.Replace("~", "~0").Replace("/", "~1");

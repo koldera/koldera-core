@@ -77,7 +77,7 @@ public static class WebWorkerContracts
         var errors = SchemaResources.Validate(ResultSchema, json);
         if (errors.Count > 0)
         {
-            throw new WorkerContractException("web worker result violates schema: " + string.Join("; ", errors));
+            throw SchemaResources.Violation(ResultSchema, json, "web worker result");
         }
         var result = JsonSerializer.Deserialize<WebWorkerResult>(json, Json) ?? throw new WorkerContractException("web worker result is empty");
         if (result.SpecVersion != SpecVersion)

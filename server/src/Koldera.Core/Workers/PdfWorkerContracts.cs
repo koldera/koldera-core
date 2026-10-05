@@ -103,7 +103,7 @@ public static class WorkerContracts
         var errors = SchemaResources.Validate(ResultSchema, json);
         if (errors.Count > 0)
         {
-            throw new WorkerContractException("worker result violates schema: " + string.Join("; ", errors));
+            throw SchemaResources.Violation(ResultSchema, json, "worker result");
         }
         var result = JsonSerializer.Deserialize<WorkerResult>(json, Json) ?? throw new WorkerContractException("worker result is empty");
         if (result.SpecVersion != SpecVersion)
@@ -133,6 +133,11 @@ public static class SchemaResources
             : Path.Combine(AppContext.BaseDirectory, "contracts");
 
     public static IReadOnlyList<string> Validate(ContractSchema schema, string json) => schema.Validate(json);
+
+    /// <summary>A contract violation: the client message is redacted, the log detail also names unexpected properties.</summary>
+    public static WorkerContractException Violation(ContractSchema schema, string json, string what) =>
+        new(what + " violates schema: " + string.Join("; ", schema.Validate(json)),
+            what + " violates schema: " + string.Join("; ", schema.Validate(json, redact: false)));
 
     public static ContractSchema Load(string fileName)
     {

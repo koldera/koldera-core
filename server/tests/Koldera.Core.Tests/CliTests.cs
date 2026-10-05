@@ -259,6 +259,8 @@ public class CliTests
         var stored = JsonNode.Parse(render.StoredDocument!)!["body"]![1]!.AsObject();
         Assert.Equal(image, stored["uploadId"]!.GetValue<string>()); // the renderer looks the file up by that name
         Assert.False(stored.ContainsKey("file"));
+        // The renderer is never told to accept file sources: the CLI turned the file into an upload first.
+        Assert.False(JsonNode.Parse(render.RequestJson!)!.AsObject().ContainsKey("allowFileImages"));
         Assert.Equal(Png(), await File.ReadAllBytesAsync(Path.Combine(dir, "img", "logo.png"))); // the input is not modified
     }
 

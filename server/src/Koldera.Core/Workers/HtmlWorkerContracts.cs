@@ -103,7 +103,7 @@ public static class HtmlWorkerContracts
         var errors = SchemaResources.Validate(ResultSchema, json);
         if (errors.Count > 0)
         {
-            throw new WorkerContractException("html renderer result violates schema: " + string.Join("; ", errors));
+            throw SchemaResources.Violation(ResultSchema, json, "html renderer result");
         }
         var result = JsonSerializer.Deserialize<HtmlRendererResult>(json, Json) ?? throw new WorkerContractException("html renderer result is empty");
         if (result.SpecVersion != SpecVersion)
@@ -126,7 +126,7 @@ public static class HtmlWorkerContracts
         var errors = SchemaResources.Validate(InspectSchema, json);
         if (errors.Count > 0)
         {
-            throw new WorkerContractException("inspect result violates schema: " + string.Join("; ", errors));
+            throw SchemaResources.Violation(InspectSchema, json, "inspect result");
         }
         var result = JsonSerializer.Deserialize<InspectResult>(json, Json) ?? throw new WorkerContractException("inspect result is empty");
         if (result.SpecVersion != SpecVersion)

@@ -47,8 +47,8 @@ public sealed class ContractSchema
         return new ContractSchema(rootNode);
     }
 
-    /// <summary>Error messages as "&lt;json path&gt;: &lt;problem&gt;", at most 20, empty when the document is valid. Never quotes a value or a property name of the document: the messages reach clients.</summary>
-    public IReadOnlyList<string> Validate(string json)
+    /// <summary>Error messages as "&lt;json path&gt;: &lt;problem&gt;", at most 20, empty when the document is valid. Never quotes a value. With redact (the default) it does not quote a property name either: use that for anything that reaches a client about data the caller did not write.</summary>
+    public IReadOnlyList<string> Validate(string json, bool redact = true)
     {
         JsonDocument document;
         try
@@ -62,7 +62,7 @@ public sealed class ContractSchema
         using (document)
         {
             var errors = new List<string>();
-            _root.Check(document.RootElement, "$", errors);
+            _root.Check(document.RootElement, "$", errors, redact);
             return errors.Distinct().Take(20).ToList();
         }
     }
@@ -214,9 +214,9 @@ public sealed class ContractSchema
         public bool UniqueItems;
         public string? Format;
 
-        public void Check(JsonElement value, string path, List<string> errors)
+        public void Check(JsonElement value, string path, List<string> errors, bool redact)
         {
-            Ref?.Check(value, path, errors);
+            Ref?.Check(value, path, errors, redact);
             if (Types is not null && !Types.Any(t => Matches(t, value)))
             {
                 errors.Add($"{path}: expected {string.Join(" or ", Types)}");
@@ -235,7 +235,7 @@ public sealed class ContractSchema
                 var matching = OneOf.Count(alternative =>
                 {
                     var scratch = new List<string>();
-                    alternative.Check(value, path, scratch);
+                    alternative.Check(value, path, scratch, redact);
                     return scratch.Count == 0;
                 });
                 if (matching == 0)
@@ -250,10 +250,10 @@ public sealed class ContractSchema
             switch (value.ValueKind)
             {
                 case JsonValueKind.Object:
-                    CheckObject(value, path, errors);
+                    CheckObject(value, path, errors, redact);
                     break;
                 case JsonValueKind.Array:
-                    CheckArray(value, path, errors);
+                    CheckArray(value, path, errors, redact);
                     break;
                 case JsonValueKind.String:
                     CheckString(value.GetString()!, path, errors);
@@ -264,7 +264,7 @@ public sealed class ContractSchema
             }
         }
 
-        private void CheckObject(JsonElement value, string path, List<string> errors)
+        private void CheckObject(JsonElement value, string path, List<string> errors, bool redact)
         {
             if (Required is not null)
             {
@@ -280,16 +280,17 @@ public sealed class ContractSchema
             {
                 if (Properties is not null && Properties.TryGetValue(property.Name, out var schema))
                 {
-                    schema.Check(property.Value, path + "." + property.Name, errors);
+                    schema.Check(property.Value, path + "." + property.Name, errors, redact);
                 }
                 else if (AdditionalProperties == false)
                 {
-                    errors.Add($"{path}: unexpected property"); // the name is worker output, not echoed
+                    // Redacted: the name is worker output and reaches clients. Unredacted (the caller's own document, operator logs): named.
+                    errors.Add(redact ? $"{path}: unexpected property" : $"{path}: unexpected property '{property.Name}'");
                 }
             }
         }
 
-        private void CheckArray(JsonElement value, string path, List<string> errors)
+        private void CheckArray(JsonElement value, string path, List<string> errors, bool redact)
         {
             var count = value.GetArrayLength();
             if (MinItems is { } min && count < min)
@@ -304,7 +305,7 @@ public sealed class ContractSchema
             var seen = new List<JsonElement>();
             foreach (var item in value.EnumerateArray())
             {
-                Items?.Check(item, $"{path}[{index}]", errors);
+                Items?.Check(item, $"{path}[{index}]", errors, redact);
                 if (UniqueItems)
                 {
                     if (seen.Any(s => DeepEquals(s, item)))

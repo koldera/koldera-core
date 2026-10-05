@@ -138,8 +138,8 @@ public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, 
 
     internal static DocumentRenderResult ParseResult(string json, Guid expectedJobId)
     {
-        var errors = SchemaResources.Load(ResultSchema).Validate(json);
-        if (errors.Count > 0) throw new WorkerContractException("document render result violates schema: " + string.Join("; ", errors));
+        var schema = SchemaResources.Load(ResultSchema);
+        if (schema.Validate(json).Count > 0) throw SchemaResources.Violation(schema, json, "document render result");
         var result = JsonSerializer.Deserialize<DocumentRenderResult>(json, Json) ?? throw new WorkerContractException("document render result is empty");
         if (result.JobId != expectedJobId) throw new WorkerContractException("document render result jobId does not match the dispatched job");
         return result;

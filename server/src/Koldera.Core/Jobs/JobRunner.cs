@@ -189,6 +189,8 @@ public sealed class JobRunner : BackgroundService
         }
         catch (WorkerContractException e)
         {
+            // Clients get the redacted message; the log gets the located detail (pointers and property names, never values).
+            _logger.LogWarning("job {JobId} violated the worker contract: {Detail}", id, e.LogDetail);
             Fail(job, "WORKER_CONTRACT", e.Message);
         }
         catch (Exception e)

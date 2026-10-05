@@ -24,10 +24,12 @@ public sealed class StubWorkerFactory : IWorkerFactory
 public sealed class RecordingWorker(IWorkerProcess inner) : IWorkerProcess
 {
     public string? StoredDocument { get; private set; }
+    public string? RequestJson { get; private set; }
     public List<string> ImageNames { get; } = [];
 
     public Task<WorkerRun> RunAsync(string scratchRoot, string requestPath, string resultPath, TimeSpan timeout, CancellationToken ct)
     {
+        RequestJson = File.ReadAllText(requestPath);
         StoredDocument = File.ReadAllText(Path.Combine(scratchRoot, "in", "document.json"));
         ImageNames.AddRange(Directory.GetFiles(Path.Combine(scratchRoot, "in", "images")).Select(p => Path.GetFileName(p)));
         return inner.RunAsync(scratchRoot, requestPath, resultPath, timeout, ct);
