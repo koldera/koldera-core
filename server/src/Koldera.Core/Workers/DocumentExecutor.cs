@@ -83,7 +83,7 @@ public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, 
         if (run.TimedOut) throw new TimeoutException("renderer exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"renderer exited with code {run.ExitCode} without writing a result");
-        var rendered = ParseResult(await File.ReadAllTextAsync(resultPath, ct), job.Id);
+        var rendered = ParseResult(await WorkerOutput.ReadResultAsync(resultPath, ct), job.Id);
 
         if (rendered.Status != "completed")
         {

@@ -46,7 +46,7 @@ public static class PdfWorkerRun
         if (run.TimedOut) throw new TimeoutException("worker exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"worker exited with code {run.ExitCode} without writing a result");
-        var result = WorkerContracts.ParseResult(await File.ReadAllTextAsync(resultPath, ct), job.Id);
+        var result = WorkerContracts.ParseResult(await WorkerOutput.ReadResultAsync(resultPath, ct), job.Id);
         if (result.OriginalSha256 is not null && result.OriginalSha256 != expected)
             throw new WorkerContractException("worker reported a different original SHA-256");
 

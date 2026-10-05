@@ -120,7 +120,7 @@ public sealed class OrderPdfExecutor(DataStore store, PdfWorkers pdf, OrderWorke
         if (run.TimedOut) throw new TimeoutException("reorder exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"reorder exited with code {run.ExitCode} without writing a result");
-        var result = OrderWorkerContracts.ParsePdfReorder(await File.ReadAllTextAsync(resultPath, ct), job.Id);
+        var result = OrderWorkerContracts.ParsePdfReorder(await WorkerOutput.ReadResultAsync(resultPath, ct), job.Id);
         if (result.Status != "applied")
             return OrderOutcomes.Refused(result.Status, result.Error?.Code, result.Error?.Message, "INTEGRITY_REGRESSION", result.EngineVersion);
         if (result.OutputSha256 is null) throw new WorkerContractException("applied reorder without an output hash");
@@ -217,7 +217,7 @@ public sealed class OrderHtmlExecutor(DataStore store, HtmlWorkers html, PdfWork
         if (run.TimedOut) throw new TimeoutException("reorder exceeded its time budget");
         if (!File.Exists(resultPath))
             throw new InvalidOperationException($"reorder exited with code {run.ExitCode} without writing a result");
-        var result = OrderWorkerContracts.ParseHtmlReorder(await File.ReadAllTextAsync(resultPath, ct), job.Id);
+        var result = OrderWorkerContracts.ParseHtmlReorder(await WorkerOutput.ReadResultAsync(resultPath, ct), job.Id);
         if (result.Status != "applied")
         {
             if (result.Artifacts.Count > 0) throw new WorkerContractException("reorder published artifacts for a non-applied result");
@@ -280,7 +280,7 @@ public sealed class OrderHtmlExecutor(DataStore store, HtmlWorkers html, PdfWork
         if (probe.TimedOut) throw new TimeoutException("structure probe exceeded its time budget");
         if (!File.Exists(inspectPath))
             throw new InvalidOperationException($"structure probe exited with code {probe.ExitCode} without writing a result");
-        var inspect = HtmlWorkerContracts.ParseInspectResult(await File.ReadAllTextAsync(inspectPath, ct));
+        var inspect = HtmlWorkerContracts.ParseInspectResult(await WorkerOutput.ReadResultAsync(inspectPath, ct));
         if (inspect.Sha256 is not null && inspect.Sha256 != generated.Sha256)
             throw new WorkerContractException("structure probe reported a different SHA-256");
         var engineVersion = HtmlToPdfExecutor.Truncate(string.IsNullOrEmpty(result.EngineVersion) ? inspect.EngineVersion : result.EngineVersion + "; " + inspect.EngineVersion);

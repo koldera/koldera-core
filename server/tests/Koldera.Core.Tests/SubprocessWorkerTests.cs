@@ -122,6 +122,29 @@ public sealed class SubprocessWorkerTests : IDisposable
     }
 
     [Fact]
+    public async Task Large_stdout_and_stderr_are_drained_and_only_the_stderr_tail_is_kept()
+    {
+        // 48 MiB on each stream: the drain must keep reading (or the child blocks) but hold only the last 4 KiB.
+        var script = "const c='x'.repeat(1<<20);for(let i=0;i<48;i++){process.stdout.write(c);process.stderr.write(c)}process.stderr.write('END')";
+        var run = await SubprocessWorker.ForRequestResult(Node(script)).RunAsync(_scratch, "r.json", "o.json", TimeSpan.FromSeconds(120), CancellationToken.None);
+
+        Assert.Equal(0, run.ExitCode);
+        Assert.Equal(4096, run.StderrTail.Length);
+        Assert.EndsWith("xxxEND", run.StderrTail);
+    }
+
+    [Fact]
+    public async Task The_tail_keeper_returns_the_last_characters_across_buffer_boundaries()
+    {
+        var text = string.Concat(Enumerable.Range(0, 5000).Select(i => (char)('a' + i % 26)));
+        using var reader = new StringReader(text);
+
+        Assert.Equal(text[^4096..], await SubprocessWorker.DrainTailAsync(reader, 4096));
+        using var again = new StringReader(text);
+        Assert.Equal("", await SubprocessWorker.DrainTailAsync(again, 0));
+    }
+
+    [Fact]
     public async Task An_unconfigured_command_is_a_configuration_error()
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
