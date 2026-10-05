@@ -1,0 +1,20 @@
+name: Install veraPDF
+description: Installs the pinned veraPDF greenfield release (SHA-256 checked) and exports VERAPDF_CMD. Needs a JDK on PATH.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VERAPDF_VERSION: "1.30.2"
+        VERAPDF_SHA256: 6cc6341cb1af644044054b81f00a6590a7918abb18f762243de115258bcad838
+      run: |
+        set -euo pipefail
+        # Same pinned installer and unattended config as docker/Dockerfile; only the install path differs.
+        cd "$RUNNER_TEMP"
+        curl -fsSL -o verapdf-installer.zip "https://software.verapdf.org/releases/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip"
+        echo "${VERAPDF_SHA256}  verapdf-installer.zip" | sha256sum -c -
+        unzip -q verapdf-installer.zip
+        sed "s#/opt/verapdf#${RUNNER_TEMP}/verapdf#" "$GITHUB_WORKSPACE/docker/verapdf-auto-install.xml" > auto-install.xml
+        java -jar "verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar" auto-install.xml
+        "${RUNNER_TEMP}/verapdf/verapdf" --version
+        echo "VERAPDF_CMD=${RUNNER_TEMP}/verapdf/verapdf" >> "$GITHUB_ENV"

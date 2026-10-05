@@ -1,0 +1,273 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # release.yml runs this whole workflow for the tagged commit and publishes only when every job passed.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # No telemetry and no first-run banner in logs.
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the full history
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: node scripts/check-source-hygiene.mjs
+      - run: node --test scripts/*.test.mjs
+      - name: Install gitleaks (pinned release, SHA-256 checked)
+        run: |
+          # The gitleaks-action wrapper needs a paid licence for organisations; the plain binary does not.
+          curl -fsSL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Secrets in the working tree
+        run: ./gitleaks dir . --config .gitleaks.toml --redact --no-banner
+      - name: Secrets in the git history
+        run: ./gitleaks git . --config .gitleaks.toml --redact --no-banner
+
+  engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: engine/pom.xml
+      - uses: ./.github/actions/install-verapdf
+      - run: mvn -B verify
+        working-directory: engine
+
+  renderer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: renderer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: renderer/pnpm-lock.yaml
+      - uses: ./.github/actions/install-typst
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium-headless-shell
+      - run: pnpm build
+      - run: pnpm test
+
+  scanner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: scanner/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium-headless-shell
+      - run: pnpm build
+      - run: pnpm test
+
+  server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      # SubprocessWorkerTests spawn node.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('server/**/*.csproj', 'server/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - run: dotnet test server/Koldera.Core.slnx
+
+  real-tools:
+    # The server's opt-in integration tests skip themselves without the real tools; this job supplies them, then
+    # fails if any test was skipped so they cannot go quietly unrun.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: engine/pom.xml
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: renderer/pnpm-lock.yaml
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('server/**/*.csproj', 'server/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - uses: ./.github/actions/install-verapdf
+      - uses: ./.github/actions/install-typst
+      - name: Build the engine jar
+        run: mvn -B -q -DskipTests package
+        working-directory: engine
+      - name: Build the renderer
+        run: pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium-headless-shell && pnpm build
+        working-directory: renderer
+      - name: Server tests against the real tools
+        env:
+          KOLDERA_TEST_ENGINE_JAR: ${{ github.workspace }}/engine/target/koldera-pdf-engine.jar
+          KOLDERA_TEST_RENDERER_CLI: ${{ github.workspace }}/renderer/dist/cli.js
+        run: dotnet test server/Koldera.Core.slnx --logger "trx;LogFileName=real-tools.trx" --results-directory "$RUNNER_TEMP/trx"
+      - name: No test may have been skipped
+        run: |
+          skipped=$(grep -c 'outcome="NotExecuted"' "$RUNNER_TEMP"/trx/real-tools.trx || true)
+          echo "skipped tests: $skipped"
+          test "$skipped" = "0"
+
+  licences:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: engine/pom.xml
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('server/**/*.csproj', 'server/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Resolve the dependencies of every ecosystem
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          (cd engine && mvn -B -q dependency:resolve)
+          (cd renderer && pnpm install --frozen-lockfile)
+          (cd scanner && pnpm install --frozen-lockfile)
+          dotnet restore server/Koldera.Core.slnx
+      - run: node scripts/check-licences.mjs
+
+  docker:
+    needs: [hygiene, engine, renderer, scanner, server, real-tools, licences]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: koldera-core:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start the image and probe it
+        run: |
+          token="ci-$(openssl rand -hex 24)"
+          docker run -d --name core -p 8080:8080 -e KOLDERA_TOKEN="$token" koldera-core:ci
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8080/healthz && break
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/healthz
+          echo
+          curl -fsS -H "Authorization: Bearer $token" http://localhost:8080/v1/info
+          echo
+      - name: Container log on failure
+        if: failure()
+        run: docker logs core || true
+      - name: Compose files are valid
+        run: |
+          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy docker compose -f docker/compose.yaml config -q
+          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy OIDC_ISSUER_URL=https://idp.example/ OIDC_CLIENT_ID=x             OIDC_CLIENT_SECRET=x SSO_EMAIL_DOMAIN=example.com OAUTH2_COOKIE_SECRET=x OIDC_REDIRECT_URL=https://x.example/oauth2/callback             docker compose -f docker/compose.yaml -f docker/compose.sso.yaml config -q
+      - name: Web scan through the egress proxy in the compose setup
+        # core has no DNS and no route out; the scan must go through Squid, and a name resolving to loopback is refused.
+        run: |
+          docker rm -f core # the probe container above holds port 8080
+          KOLDERA_TOKEN="ci-$(openssl rand -hex 24)"
+          export KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN
+          docker compose -f docker/compose.yaml up -d --build --wait
+          scan() {
+            curl -fsS -X POST -H "Authorization: Bearer $KOLDERA_TOKEN" -H "Content-Type: application/json" -H "Prefer: wait=120"               http://localhost:8080/v1/web/jobs -d "{\"url\":\"$1\"}"
+          }
+          scan https://example.com/ | tee ok.json
+          jq -e '.state == "completed"' ok.json
+          scan https://localtest.me/ | tee refused.json
+          jq -e '.error.code == "BLOCKED_DESTINATION"' refused.json
+      - name: Compose log on failure
+        if: failure()
+        run: docker compose -f docker/compose.yaml logs || true

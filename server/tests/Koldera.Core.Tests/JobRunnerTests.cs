@@ -361,6 +361,8 @@ public sealed class JobRunnerTests : IDisposable
     [Fact]
     public async Task A_replace_refused_beyond_the_retry_budget_throws_and_leaves_no_temporary_file()
     {
+        // Only Windows refuses to replace a file that has an open handle; POSIX renames over it, so there is no refusal to provoke.
+        if (!OperatingSystem.IsWindows()) return;
         var job = new CoreJob { Id = Guid.NewGuid(), Kind = "pdf", State = CoreJobState.Queued, Owner = "server", CreatedAt = DateTimeOffset.UtcNow };
         await _store.SaveJobAsync(job);
         job.State = CoreJobState.Completed;

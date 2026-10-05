@@ -1,0 +1,44 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /engine
+    schedule: { interval: weekly }
+    groups:
+      maven-minor-patch: { update-types: [minor, patch] }
+  - package-ecosystem: npm
+    directory: /renderer
+    schedule: { interval: weekly }
+    groups:
+      npm-renderer-minor-patch: { update-types: [minor, patch] }
+  - package-ecosystem: npm
+    directory: /scanner
+    schedule: { interval: weekly }
+    groups:
+      npm-scanner-minor-patch: { update-types: [minor, patch] }
+  - package-ecosystem: nuget
+    directory: /server
+    schedule: { interval: weekly }
+    groups:
+      nuget-minor-patch: { update-types: [minor, patch] }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions-minor-patch: { update-types: [minor, patch] }
+  - package-ecosystem: docker
+    directory: /docker
+    schedule: { interval: weekly }
+    groups:
+      docker-minor-patch: { update-types: [minor, patch] }
+  # Images pinned in docker/compose.yaml and docker/compose.sso.yaml (caddy, oauth2-proxy); the docker entry above
+  # only reads Dockerfiles.
+  - package-ecosystem: docker-compose
+    directory: /docker
+    schedule: { interval: weekly }
+    groups:
+      docker-compose-minor-patch: { update-types: [minor, patch] }
+  - package-ecosystem: docker
+    directory: /docker/egress-proxy
+    schedule: { interval: weekly }
+    groups:
+      docker-egress-minor-patch: { update-types: [minor, patch] }

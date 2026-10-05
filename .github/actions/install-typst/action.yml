@@ -1,0 +1,18 @@
+name: Install Typst
+description: Installs the pinned Typst linux musl build (SHA-256 checked) and exports TYPST_CMD.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TYPST_VERSION: v0.15.1
+        TYPST_SHA256_AMD64: a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
+      run: |
+        set -euo pipefail
+        # Hosted runners are linux/amd64; the arm64 digest lives in docker/Dockerfile.
+        cd "$RUNNER_TEMP"
+        curl -fsSL -o typst.tar.xz "https://github.com/typst/typst/releases/download/${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz"
+        echo "${TYPST_SHA256_AMD64}  typst.tar.xz" | sha256sum -c -
+        mkdir typst && tar -xJf typst.tar.xz --strip-components=1 -C typst
+        "${RUNNER_TEMP}/typst/typst" --version
+        echo "TYPST_CMD=${RUNNER_TEMP}/typst/typst" >> "$GITHUB_ENV"
