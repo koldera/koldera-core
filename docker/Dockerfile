@@ -16,7 +16,7 @@
 #   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is AGPL-3.0-only.
 
 # ---------- PDF engine jar ----------
-FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
+FROM maven:3-eclipse-temurin-26@sha256:5bfb178bea156ab53b779b2be338e8bfb45decfed35d83da92f1dd9b7348845c AS engine
 WORKDIR /src
 COPY engine/pom.xml .
 RUN mvn -q -B dependency:go-offline
