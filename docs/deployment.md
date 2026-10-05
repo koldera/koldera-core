@@ -35,9 +35,21 @@ the open internet without it.
    origin, with scopes, a job and upload budget and a lifetime of at most 60 minutes, and hands only that token to
    the browser. The token is useless from another origin. Origin and CORS checks are secondary controls, not secrets:
    the session token is the credential. Budgets are counted in memory and reset on restart.
-3. **Single sign-on in front.** `docker/compose.sso.yaml` puts oauth2-proxy (OIDC) before every request. People sign
-   in through the proxy; the server still requires its own bearer token on `/v1`, so the proxy proves who the person
-   is and your backend still decides what it may call.
+3. **Single sign-on in front (example).** `docker/compose.sso.yaml` with `docker/Caddyfile.sso` puts oauth2-proxy
+   (OIDC) in front of browser traffic. What it does, exactly:
+   - A request without core's bearer token and without a sign-in cookie is redirected to `/oauth2/start` and then to
+     your identity provider.
+   - Requests that carry `Authorization: Bearer …` (`KOLDERA_TOKEN` from your backend, or a client-session token
+     your backend minted for a browser) and the signed `…/uploads/{id}/content` and `…/artifacts/{id}/content` links
+     skip the sign-in and go straight to core, which checks the token or the signature itself.
+   - Signing in does not replace core's credentials: a signed-in browser without a token still gets `401` on
+     `/v1`. Use the sign-in to gate a page or tool of your own that you place behind the same Caddy, and give that
+     page a client-session token (pattern 2) for its API calls.
+   - The session cookie is `Secure`, so serve the front over TLS, and set `KOLDERA_PUBLIC_URL` to that address.
+
+   It was checked against a local mock OIDC issuer (redirect to sign-in, a completed sign-in, bearer calls, signed
+   upload and download links, a wrong token and a broken signature refused by core), not against a production
+   identity provider; test it with yours before you rely on it.
 
 Whatever you choose: terminate TLS in front of the server and set `KOLDERA_PUBLIC_URL`, set the limits in
 [configuration.md](configuration.md), and keep `KOLDERA_AUTH=none` for a loopback address or a proxy that
