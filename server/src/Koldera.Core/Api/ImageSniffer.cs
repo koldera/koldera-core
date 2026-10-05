@@ -39,10 +39,11 @@ public static class ImageSniffer
     {
         try
         {
-            // Strict UTF-8, no DTD (no entity expansion); only the prolog and the root start tag are read.
+            // Strict UTF-8 (a BOM is skipped). A DOCTYPE is common in real SVG, so it is ignored, not refused: with no
+            // resolver nothing is fetched and no entity is expanded; only the prolog and the root start tag are read.
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var text = new StreamReader(stream, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: false);
-            using var xml = XmlReader.Create(text, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+            using var text = new StreamReader(stream, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: true);
+            using var xml = XmlReader.Create(text, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null });
             while (xml.Read())
             {
                 if (xml.NodeType == XmlNodeType.Element)

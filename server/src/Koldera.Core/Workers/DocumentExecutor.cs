@@ -33,6 +33,7 @@ public sealed record DocumentRenderError(
 public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, PdfWorkers pdf, CoreOptions options, TimeProvider clock) : IJobExecutor
 {
     public const string ValidationFailed = "DOCUMENT_VALIDATION_FAILED";
+    public const string ValidationUnavailable = "DOCUMENT_VALIDATION_UNAVAILABLE";
     private const string RequestSchema = "document-render-request.schema.json";
     private const string ResultSchema = "document-render-result.schema.json";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -112,8 +113,14 @@ public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, 
         if (engine.State != CoreJobState.Completed)
             return new JobOutcome(engine.State, engine.ResultStatus, engine.ErrorCode, engine.ErrorMessage, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
 
-        var failed = FailedRules(engine.FinalValidationJson ?? engine.BaselineValidationJson);
-        if (failed.Count > 0)
+        // Only a verdict counts: error / not_run / missing is "unknown", never "clean".
+        var (status, failed) = Verdict(engine.FinalValidationJson ?? engine.BaselineValidationJson);
+        if (status is not ("passed" or "failed"))
+        {
+            var message = "veraPDF gave no verdict on the generated PDF (" + (status ?? "missing") + "); the file is kept but not treated as valid";
+            return new JobOutcome(CoreJobState.Failed, "failed", ValidationUnavailable, message, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
+        }
+        if (status == "failed" || failed.Count > 0)
         {
             var message = $"the generated PDF fails {failed.Count} veraPDF rule(s): {string.Join(", ", failed.Take(10))}; the file and the findings are kept for inspection";
             return new JobOutcome(CoreJobState.Failed, "failed", ValidationFailed, message, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
@@ -121,11 +128,12 @@ public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, 
         return new JobOutcome(CoreJobState.Completed, engine.ResultStatus, null, null, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
     }
 
-    private static List<string> FailedRules(string? validationJson)
+    private static (string? Status, List<string> FailedRules) Verdict(string? validationJson)
     {
-        if (validationJson is null) return [];
+        if (validationJson is null) return (null, []);
         using var doc = JsonDocument.Parse(validationJson);
-        return doc.RootElement.GetProperty("failedRules").EnumerateArray().Select(r => r.GetProperty("ruleId").GetString()!).ToList();
+        return (doc.RootElement.GetProperty("status").GetString(),
+            doc.RootElement.GetProperty("failedRules").EnumerateArray().Select(r => r.GetProperty("ruleId").GetString()!).ToList());
     }
 
     internal static DocumentRenderResult ParseResult(string json, Guid expectedJobId)
