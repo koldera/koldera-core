@@ -108,7 +108,20 @@ public sealed class ContractSchemaTests
     public void EveryContractSchemaLoads()
     {
         var files = Directory.GetFiles(SchemaResources.ContractsDirectory, "*.schema.json").Select(Path.GetFileName).Order().ToList();
-        Assert.Equal(16, files.Count);
+        // A known list instead of a count: a new schema must not break this test, a deleted required one must.
+        var required = new[]
+        {
+            "document.schema.json", "document-render-request.schema.json", "document-render-result.schema.json",
+            "html-renderer-request.schema.json", "html-renderer-result.schema.json", "html-reorder-request.schema.json",
+            "html-reorder-result.schema.json", "html-semantic-request.schema.json", "html-semantic-result.schema.json",
+            "pdf-inspect-result.schema.json", "pdf-reorder-request.schema.json", "pdf-reorder-result.schema.json",
+            "pdf-structure-result.schema.json", "pdf-worker-request.schema.json", "pdf-worker-result.schema.json",
+            "web-worker-request.schema.json", "web-worker-result.schema.json",
+        };
+        foreach (var name in required)
+        {
+            Assert.Contains(name, files);
+        }
         foreach (var file in files)
         {
             Assert.NotNull(SchemaResources.Load(file!));
