@@ -138,6 +138,35 @@ public static class StubResults
             return result.ToJsonString();
         }, outputs);
 
+    /// <summary>The scanner's result: an optional violation, one incomplete finding and one report artifact "web-report.json".</summary>
+    public static StubWorker WebCompleted(int violations = 1)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("{\"report\":true}");
+        var artifact = new JsonObject { ["kind"] = "web_report", ["path"] = "/work/out/web-report.json", ["sha256"] = Fixtures.Sha256(bytes), ["bytes"] = bytes.Length };
+        return new StubWorker(request =>
+        {
+            var req = JsonNode.Parse(request)!;
+            var findings = new JsonArray();
+            if (violations > 0)
+                findings.Add(new JsonObject { ["ruleId"] = "image-alt", ["kind"] = "violation", ["impact"] = "critical", ["message"] = "Images must have alternative text", ["selector"] = "img", ["snippet"] = "<img>", ["wcagTags"] = new JsonArray("wcag2a"), ["helpUrl"] = "https://example.invalid/image-alt", ["needsHumanReview"] = false });
+            findings.Add(new JsonObject { ["ruleId"] = "color-contrast", ["kind"] = "incomplete", ["impact"] = "serious", ["message"] = "Check contrast", ["selector"] = "p", ["snippet"] = null, ["wcagTags"] = new JsonArray("wcag2aa"), ["helpUrl"] = null, ["needsHumanReview"] = true });
+            return new JsonObject
+            {
+                ["specVersion"] = "1.0",
+                ["jobId"] = req["jobId"]!.GetValue<string>(),
+                ["status"] = "completed",
+                ["requestedUrl"] = req["url"]!.GetValue<string>(),
+                ["finalUrl"] = req["url"]!.GetValue<string>(),
+                ["engineVersion"] = "stub-scanner",
+                ["summary"] = new JsonObject { ["violations"] = violations, ["incomplete"] = 1, ["passes"] = 3, ["inapplicable"] = 0, ["blockedRequests"] = 0 },
+                ["findings"] = findings,
+                ["artifacts"] = new JsonArray(artifact.DeepClone()),
+                ["manualReviewRequired"] = true,
+                ["error"] = null,
+            }.ToJsonString();
+        }, new Dictionary<string, byte[]> { ["web-report.json"] = bytes });
+    }
+
     /// <summary>The renderer's semantic collector: one node and one suspected-mismatch finding for the source with this hash.</summary>
     public static StubWorker SemanticCollected(string sourceSha256, string status = "completed") =>
         new(request => new JsonObject

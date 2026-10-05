@@ -42,6 +42,13 @@ builder.Services.AddSingleton(sp =>
         SubprocessWorker.ForProbe(w.PdfInspectCommand),
         w.HtmlSemanticCommand.Length > 0 ? SubprocessWorker.ForNodeVerb(w.HtmlSemanticCommand, w.ContractsDir) : null);
 });
+builder.Services.AddSingleton(sp =>
+{
+    var w = sp.GetRequiredService<WorkerOptions>();
+    return new WebWorkers(SubprocessWorker.ForWeb(w.WebCommand, w.ContractsDir, w.AllowLoopbackForTests));
+});
+builder.Services.AddSingleton<IJobExecutor>(sp => new WebJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<WebWorkers>(),
+    sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
     sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IJobExecutor>(sp => new PdfJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
