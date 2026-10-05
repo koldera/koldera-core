@@ -1,5 +1,6 @@
-# Single sign-on example: Caddy asks oauth2-proxy before forwarding anything to core. Use it as an override:
-#
+# Single sign-on example: people in a browser sign in with oauth2-proxy (OIDC) before Caddy forwards their requests.
+# Requests with core's bearer token and signed upload/download links go straight to core, which checks them itself.
+# Checked with a local mock OIDC issuer only, not a production IdP. Serve it behind TLS (the cookie is Secure):
 #   docker compose -f docker/compose.yaml -f docker/compose.sso.yaml up -d
 
 # Every OIDC value below is required (no defaults): export them or put them in an untracked .env file, never commit
@@ -7,7 +8,7 @@
 # The provider settings are for a generic OIDC issuer.
 #
 # Core still requires its own bearer token on /v1: oauth2-proxy proves who the person is, it does not
-# replace KOLDERA_TOKEN. Browser users reach the UI or SDK through the proxy, trusted backends use the token.
+# replace KOLDERA_TOKEN. Signing in alone gives a browser no access to /v1; see docs/deployment.md.
 
 services:
   front:

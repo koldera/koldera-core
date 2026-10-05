@@ -1,20 +1,44 @@
-# Used by compose.sso.yaml: every request is checked by oauth2-proxy first (401 sends the browser to sign in).
+# Used by compose.sso.yaml (an example, see docs/deployment.md "Single sign-on"). People in a browser must sign in with
+# oauth2-proxy; API calls keep core's own credentials and never need the sign-in cookie.
 {
 	admin off
 	auto_https off
 }
 
 :8080 {
+	# Identity headers come only from oauth2-proxy (copy_headers below), never from the client.
+	request_header -X-Auth-Request-User
+	request_header -X-Auth-Request-Email
+
+	# Sign-in endpoints of oauth2-proxy itself.
 	handle /oauth2/* {
 		reverse_proxy oauth2-proxy:4180
 	}
 	handle /healthz {
 		reverse_proxy core:8080
 	}
+
+	# Signed upload and download links carry their own signature (and no cookie); core verifies it.
+	@signed path_regexp ^/v1/(uploads|artifacts)/[0-9a-fA-F-]{36}/content$
+	handle @signed {
+		reverse_proxy core:8080
+	}
+
+	# Backends and browser code send core's bearer token (KOLDERA_TOKEN or a client-session token); core checks it.
+	@bearer header_regexp Authorization ^(?i)bearer\s+\S
+	handle @bearer {
+		reverse_proxy core:8080
+	}
+
+	# Everything else is a person in a browser: without a valid oauth2-proxy session it is sent to sign in.
 	handle {
 		forward_auth oauth2-proxy:4180 {
 			uri /oauth2/auth
 			copy_headers X-Auth-Request-User X-Auth-Request-Email
+			@signin status 401
+			handle_response @signin {
+				redir * /oauth2/start?rd={uri} 302
+			}
 		}
 		reverse_proxy core:8080
 	}
