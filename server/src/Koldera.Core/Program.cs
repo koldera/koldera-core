@@ -47,6 +47,13 @@ builder.Services.AddSingleton(sp =>
     var w = sp.GetRequiredService<WorkerOptions>();
     return new WebWorkers(SubprocessWorker.ForWeb(w.WebCommand, w.ContractsDir, w.AllowLoopbackForTests));
 });
+builder.Services.AddSingleton(sp =>
+{
+    var w = sp.GetRequiredService<WorkerOptions>();
+    return new DocumentWorkers(SubprocessWorker.ForNodeVerb(w.DocumentRenderCommand, w.ContractsDir));
+});
+builder.Services.AddSingleton<IJobExecutor>(sp => new DocumentExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<DocumentWorkers>(),
+    sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IJobExecutor>(sp => new WebJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<WebWorkers>(),
     sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
@@ -79,6 +86,7 @@ var v1 = app.MapGroup("/v1").RequireAuthorization();
 v1.MapInfoEndpoints();
 v1.MapUploadEndpoints();
 v1.MapJobEndpoints();
+v1.MapDocumentEndpoints();
 v1.MapJobReadEndpoints();
 v1.MapReadingOrderEndpoints();
 app.Run();

@@ -4,6 +4,7 @@ public static class CoreJobKind
 {
     public const string Pdf = "pdf";
     public const string HtmlToPdf = "html_to_pdf";
+    public const string DocumentToPdf = "document_to_pdf";
     public const string Web = "web";
     public const string OrderPdf = "order_pdf";
     public const string OrderHtml = "order_html";
