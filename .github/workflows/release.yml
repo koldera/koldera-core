@@ -8,7 +8,25 @@ permissions:
   contents: read
 
 jobs:
+  # The full CI workflow for the tagged commit: nothing is built, signed or pushed unless every test job passes.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  on-main:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The tag points at a commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
   image:
+    needs: [ci, on-main]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:

@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # release.yml runs this whole workflow for the tagged commit and publishes only when every job passed.
+  workflow_call:
 
 permissions:
   contents: read
@@ -248,5 +250,24 @@ jobs:
       - name: Container log on failure
         if: failure()
         run: docker logs core || true
-      - name: Compose file is valid
-        run: KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy docker compose -f docker/compose.yaml config -q
+      - name: Compose files are valid
+        run: |
+          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy docker compose -f docker/compose.yaml config -q
+          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy OIDC_ISSUER_URL=https://idp.example/ OIDC_CLIENT_ID=x             OIDC_CLIENT_SECRET=x SSO_EMAIL_DOMAIN=example.com OAUTH2_COOKIE_SECRET=x OIDC_REDIRECT_URL=https://x.example/oauth2/callback             docker compose -f docker/compose.yaml -f docker/compose.sso.yaml config -q
+      - name: Web scan through the egress proxy in the compose setup
+        # core has no DNS and no route out; the scan must go through Squid, and a name resolving to loopback is refused.
+        run: |
+          docker rm -f core # the probe container above holds port 8080
+          KOLDERA_TOKEN="ci-$(openssl rand -hex 24)"
+          export KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN
+          docker compose -f docker/compose.yaml up -d --build --wait
+          scan() {
+            curl -fsS -X POST -H "Authorization: Bearer $KOLDERA_TOKEN" -H "Content-Type: application/json" -H "Prefer: wait=120"               http://localhost:8080/v1/web/jobs -d "{\"url\":\"$1\"}"
+          }
+          scan https://example.com/ | tee ok.json
+          jq -e '.state == "completed"' ok.json
+          scan https://localtest.me/ | tee refused.json
+          jq -e '.error.code == "BLOCKED_DESTINATION"' refused.json
+      - name: Compose log on failure
+        if: failure()
+        run: docker compose -f docker/compose.yaml logs || true
