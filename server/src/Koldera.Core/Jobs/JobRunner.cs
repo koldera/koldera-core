@@ -145,6 +145,8 @@ public sealed class JobRunner : BackgroundService
         finally
         {
             _claimed.TryRemove(id, out _);
+            // Whatever happened to the record (even an unreadable one), a waiter must never be left hanging.
+            Signal(id);
         }
     }
 
@@ -155,12 +157,7 @@ public sealed class JobRunner : BackgroundService
 
         job.State = CoreJobState.Running;
         job.StartedAt = _clock.GetUtcNow();
-        if (!await TryMarkRunningAsync(job, stop))
-        {
-            // Whatever happens to the record, a waiter must never be left hanging.
-            Signal(id);
-            return;
-        }
+        if (!await TryMarkRunningAsync(job, stop)) return;
 
         var scratch = Path.Combine(ScratchRoot, id.ToString("N"));
         try
@@ -195,14 +192,7 @@ public sealed class JobRunner : BackgroundService
         }
 
         job.FinishedAt = _clock.GetUtcNow();
-        try
-        {
-            await _store.SaveJobAsync(job);
-        }
-        finally
-        {
-            Signal(id);
-        }
+        await _store.SaveJobAsync(job);
     }
 
     /// <summary>

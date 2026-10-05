@@ -130,7 +130,28 @@ public class DataStore
         var path = Path.Combine(JobDir(job.Id), "job.json");
         var tmp = path + ".tmp";
         await File.WriteAllBytesAsync(tmp, JsonSerializer.SerializeToUtf8Bytes(job, Json));
-        File.Move(tmp, path, overwrite: true);
+        for (var attempt = 1; !TryReplace(tmp, path, attempt); attempt++)
+            await Task.Delay(ReplaceDelay(attempt));
+    }
+
+    // Windows refuses to replace a file while any handle is open on it: a concurrent read of the same record,
+    // an indexer or a virus scanner. Such a refusal is waited out for a bounded real time (about 2.5 s in all).
+    private const int ReplaceAttempts = 30;
+
+    private static TimeSpan ReplaceDelay(int attempt) => TimeSpan.FromMilliseconds(Math.Min(10 * attempt, 100));
+
+    /// <summary>Moves <paramref name="tmp"/> over <paramref name="path"/>; false when refused and another attempt is due.</summary>
+    private static bool TryReplace(string tmp, string path, int attempt)
+    {
+        try
+        {
+            File.Move(tmp, path, overwrite: true);
+            return true;
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException and not (FileNotFoundException or DirectoryNotFoundException) && attempt < ReplaceAttempts)
+        {
+            return false;
+        }
     }
 
     public CoreJob? GetJob(Guid id) => ReadJson<CoreJob>(Path.Combine(JobsDir, id.ToString("N"), "job.json"));
@@ -196,7 +217,8 @@ public class DataStore
     {
         var tmp = path + ".tmp";
         File.WriteAllBytes(tmp, JsonSerializer.SerializeToUtf8Bytes(value, Json));
-        File.Move(tmp, path, overwrite: true);
+        for (var attempt = 1; !TryReplace(tmp, path, attempt); attempt++)
+            Thread.Sleep(ReplaceDelay(attempt));
     }
 
     private static T? ReadJson<T>(string path) where T : class
