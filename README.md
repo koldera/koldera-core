@@ -37,6 +37,9 @@ memory and lost on restart; it is a single instance and does not scale horizonta
 
 ## Quick start: Docker
 
+The image `ghcr.io/koldera/core:0.1.0` is published with the first release. Until then build it locally with
+`docker build -f docker/Dockerfile -t koldera-core .` and use `koldera-core` in place of the image name below.
+
 ```bash
 export KOLDERA_TOKEN="$(openssl rand -base64 32)"
 docker run -d --name koldera -p 8080:8080 -v koldera-data:/data \
@@ -79,11 +82,11 @@ If the job is still running after the wait, the answer is `202`; poll `GET /v1/j
 The image contains the command-line tool, so no server is needed:
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" -e KOLDERA_DATA_DIR=/tmp/koldera \
+docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD:/work" -w /work ghcr.io/koldera/core:0.1.0 pdf report.pdf --fix
 ```
 
-It writes `report.remediated.pdf` and the reports next to the input (or to `--out <dir>`) and never touches the
+It writes `report.remediated.pdf` and the reports to the current directory (or to `--out <dir>`) and never touches the
 original. Commands: `pdf`, `html`, `scan`, `document`; add `--json` for machine-readable output.
 
 | Exit code | Meaning |
@@ -92,13 +95,14 @@ original. Commands: `pdf`, `html`, `scan`, `document`; add `--json` for machine-
 | `2` | The job completed but machine rules failed. |
 | `3` | The job failed, the input is unsupported, or there is no machine verdict. |
 | `64` | Usage error. |
+| `130` | Interrupted (Ctrl+C or SIGINT). |
 
 GitHub Actions:
 
 ```yaml
 - name: Check PDFs for PDF/UA-1 machine rules
   run: |
-    docker run --rm --user "$(id -u):$(id -g)" -e KOLDERA_DATA_DIR=/tmp/koldera \
+    docker run --rm --user "$(id -u):$(id -g)" \
       -v "$PWD:/work" -w /work ghcr.io/koldera/core:0.1.0 pdf docs/report.pdf --out koldera-out
 ```
 
@@ -149,11 +153,12 @@ They will live under github.com/koldera. Until they are published, use the HTTP 
 
 ## Licensing
 
-koldera-core is licensed under the **GNU Affero General Public License v3.0** ([LICENSE](LICENSE)), and the owner also
-offers a **commercial licence**. Using it inside your own organization is free. If you offer a product or a hosted
-service built on koldera-core, you must either publish your own code under the AGPL or buy a commercial licence.
-See [COMMERCIAL.md](COMMERCIAL.md) or write to licensing@koldera-accessibility.dev. Third-party components and their
-licences are listed in [NOTICE](NOTICE).
+koldera-core is licensed under **AGPL-3.0-only** ([LICENSE](LICENSE)). If you modify it and let users interact with it
+over a network, or distribute it or a work based on it, the AGPL requires you to offer the corresponding source under
+the same licence. A commercial licence lets you do this without the AGPL obligations. Using an unmodified
+koldera-core, including inside a company or behind your own service over its HTTP API, is free.
+For embedding or redistribution without source, OEM terms or support, see [COMMERCIAL.md](COMMERCIAL.md) or write to
+licensing@koldera-accessibility.dev. Third-party components and their licences are listed in [NOTICE](NOTICE).
 
 ## Contributing and security
 

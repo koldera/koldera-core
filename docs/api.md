@@ -21,13 +21,15 @@ query string (`exp`, `sig`) is the credential. See [deployment.md](deployment.md
 
 ## Job lifecycle
 
+Every `POST` under `/v1` must send `Content-Type: application/json`, otherwise the answer is `415 UNSUPPORTED_MEDIA_TYPE`.
+
 1. **Declare an upload.** `POST /v1/uploads` with `fileName`, `sizeBytes`, `sha256` and `contentType`
    (`application/pdf`, `text/html`, `image/png`, `image/jpeg` or `image/svg+xml`). The answer carries a signed
    `uploadUrl` valid for ten minutes.
 2. **Send the bytes.** `PUT` the file to `uploadUrl`. The server checks size and SHA-256 against the declaration.
 3. **Create a job.**
    - `POST /v1/pdf/jobs` with `mode` `analyze` or `fix` and `profile` `ua1`.
-   - `POST /v1/html-to-pdf/jobs` with `mode` `generate_analyze` or `generate_fix`.
+   - `POST /v1/html-to-pdf/jobs` with `mode` `generate_analyze` or `generate_fix` and `profile` `ua1` (required here too).
    - `POST /v1/web/jobs` with a `url` (no upload).
    - `POST /v1/documents/jobs` with a structured document as the body (see [documents.md](documents.md)).
 

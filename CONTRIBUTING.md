@@ -12,8 +12,10 @@ Thanks for helping. Please read this page, the [Code of Conduct](CODE_OF_CONDUCT
 
 ## CLA
 
-Contributions need a signed [CLA](CLA.md) because koldera-core is offered under the AGPL and under a commercial
-licence. On your first pull request a bot comments; reply with the sentence it asks for. It is recorded once.
+Contributions need a signed [CLA](CLA.md) because koldera-core is offered under AGPL-3.0-only and under a commercial
+licence. The automatic CLA check ships with the CI workflows, which are pending; once it is active a bot comments on
+your first pull request and you reply with the sentence it asks for. Until then a maintainer will ask you to confirm
+in the pull request.
 
 ## Repository layout and setup
 

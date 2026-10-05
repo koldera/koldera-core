@@ -6,11 +6,14 @@ never printed in logs.
 
 ## Server
 
+The "Default" column shows the value when nothing is set. Where the container image sets a value itself, the
+variable is marked "set by the image".
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `KOLDERA_TOKEN` | generated at start | Bearer token for `/v1`. Several tokens: separate them with commas. When unset, a random token is generated and written once to the log as a `token_generated` event; set your own for anything that restarts. |
 | `KOLDERA_AUTH` | unset (token authentication) | The only accepted value is `none`, which switches authentication off: every caller is the server. Use it only on a loopback address or behind a proxy that authenticates (see [deployment.md](deployment.md)). |
-| `KOLDERA_DATA_DIR` | `/data` | Uploads, jobs, artifacts and the signing key. Must be writable; the server refuses to start otherwise. |
+| `KOLDERA_DATA_DIR` | `/data` (set by the image) | Uploads, jobs, artifacts and the signing key. Must be writable; the server refuses to start otherwise. |
 | `KOLDERA_PUBLIC_URL` | built from the request | Externally visible base URL used in signed upload and download links. Set it behind a proxy that terminates TLS, otherwise links carry the scheme the server sees (`http`). |
 | `KOLDERA_SIGNING_KEY` | persisted in `$KOLDERA_DATA_DIR/.signing-key` | Base64, at least 32 bytes. Signs upload and download URLs and client-session tokens. Set the same key on every instance or execution environment that must accept each other's links. |
 | `KOLDERA_FEATURES` | `pdf,html,web,document` | Comma-separated subset of `pdf`, `html`, `web`, `document`. A disabled feature answers `404` on its route. Leave `web` off if you do not need page scans. |
@@ -18,7 +21,7 @@ never printed in logs.
 | `KOLDERA_RETENTION_HOURS` | `24` | How long uploads, jobs and artifacts are kept before they are removed. |
 | `KOLDERA_CONCURRENCY` | half the CPU count, at least 1 | Jobs that run at the same time. |
 | `KOLDERA_QUEUE_CAPACITY` | `100` | Jobs that may wait. A full queue answers `503 QUEUE_FULL` with `Retry-After`. |
-| `ASPNETCORE_URLS` | `http://+:8080` in the image | Listen address (standard ASP.NET Core setting). |
+| `ASPNETCORE_URLS` | `http://+:8080` (set by the image) | Listen address (standard ASP.NET Core setting). |
 
 ## Limits
 
@@ -44,25 +47,25 @@ do not trust.
 
 ## Tools the server starts
 
-The container image already sets these. Change them only for a custom layout.
+The image sets `KOLDERA_TYPST_CMD`, `VERAPDF_CMD`, `KOLDERA_CONTRACTS_DIR` and `KOLDERA_FONTS_DIR`; the other defaults below are code defaults that match the image layout. Change them only for a custom layout.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `KOLDERA_TYPST_CMD` | `/opt/typst/typst` | Typst binary used for structured documents. |
-| `VERAPDF_CMD` | `/opt/verapdf/verapdf` | veraPDF launcher the PDF engine calls. |
+| `KOLDERA_TYPST_CMD` | `/opt/typst/typst` (also set by the image) | Typst binary used for structured documents. |
+| `VERAPDF_CMD` | `/opt/verapdf/verapdf` (set by the image) | veraPDF launcher the PDF engine calls. |
 | `KOLDERA_JAVA` | `java` | Java launcher for the PDF engine. |
 | `KOLDERA_NODE` | `node` | Node.js launcher for the renderer and the scanner. |
 | `KOLDERA_ENGINE_JAR` | `/app/engine/koldera-pdf-engine.jar` | PDF engine. |
 | `KOLDERA_RENDERER_CLI` | `/app/renderer/dist/cli.js` | HTML and document renderer. |
 | `KOLDERA_SCANNER_CLI` | `/app/scanner/dist/cli.js` | Web scanner. |
-| `KOLDERA_CONTRACTS_DIR` | `/app/contracts` | Directory of the JSON schemas the workers validate against. |
-| `KOLDERA_FONTS_DIR` | `/app/renderer/fonts` | Bundled Noto fonts for structured documents. |
+| `KOLDERA_CONTRACTS_DIR` | `/app/contracts` (set by the image) | Directory of the JSON schemas the workers validate against. |
+| `KOLDERA_FONTS_DIR` | `/app/renderer/fonts` (set by the image) | Bundled Noto fonts. Read by the renderer when it runs standalone; the server does not use it. |
 
 ## Command line
 
 `koldera pdf|html|scan|document` reads the same variables (data directory, limits, Typst and worker locations,
 `KOLDERA_WEB_PROXY`, `KOLDERA_WEB_ALLOW_HTTP`, `KOLDERA_CHROMIUM_SANDBOX`). Exit codes: `0` machine check passed, `2` completed with failed
-machine rules, `3` job failed, unsupported or no machine verdict, `64` usage error.
+machine rules, `3` job failed, unsupported or no machine verdict, `64` usage error, `130` interrupted (Ctrl+C).
 
 ## What survives a restart
 

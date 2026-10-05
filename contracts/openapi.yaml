@@ -138,6 +138,7 @@ paths:
       operationId: createPdfJob
       summary: Analyze a PDF, or analyze and write a fixed copy
       description: |
+        Needs the `pdf` feature (`404` when it is switched off).
         `analyze` runs the veraPDF PDF/UA-1 profile. `fix` additionally writes a repaired copy as a `remediated`
         artifact; the original is never modified, and a copy that fails a gate is discarded (`rolled_back`).
       parameters:
@@ -154,6 +155,7 @@ paths:
         "400": {$ref: "#/components/responses/Problem"}
         "401": {$ref: "#/components/responses/Problem"}
         "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
         "409": {$ref: "#/components/responses/Problem"}
         "415": {$ref: "#/components/responses/Problem"}
         "422": {$ref: "#/components/responses/Problem"}

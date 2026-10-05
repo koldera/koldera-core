@@ -9,8 +9,9 @@ name the supported lines.
 
 Please do not open a public issue.
 
-- Use GitHub's **private vulnerability reporting**: on the repository, choose Security, then "Report a vulnerability".
-- Or write to security@koldera-accessibility.dev.
+- Write to security@koldera-accessibility.dev.
+- GitHub's private vulnerability reporting (Security tab, "Report a vulnerability") can be used as well once it is
+  enabled for the repository.
 
 Include the version or image tag, what you did, what you expected and what happened. A proof of concept helps. Do not
 send real customer documents; a synthetic file that reproduces the problem is enough.

@@ -38,8 +38,9 @@ public static class JobEndpoints
         return await AcceptAsync(job, http, store, queue);
     }
 
-    private static async Task<IResult> CreatePdfAsync(PdfJobRequest request, HttpContext http, DataStore store, JobQueue queue, TimeProvider clock)
+    private static async Task<IResult> CreatePdfAsync(PdfJobRequest request, HttpContext http, CoreOptions options, DataStore store, JobQueue queue, TimeProvider clock)
     {
+        if (!options.Features.Contains("pdf")) return RequestContext.NotFound();
         if (request.Mode is not ("analyze" or "fix")) return Invalid("mode must be analyze or fix");
         if (request.Profile != "ua1") return Invalid("profile must be ua1");
         if (request.ExplicitLanguage is not null && !JobRequestRules.IsLanguageTag(request.ExplicitLanguage))
