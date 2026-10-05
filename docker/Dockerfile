@@ -102,7 +102,7 @@ FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddf
 # ---------- runtime ----------
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
 # WebKit too, and deleting them in a later layer would not make the image smaller.
-FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+FROM ubuntu:25.10@sha256:7cc5e35f6567ee8c66d2abb4aab0fd866669e6207c237c3a8f0947a5c7f17092
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
