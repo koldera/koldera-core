@@ -53,7 +53,8 @@ the open internet without it.
 
 Whatever you choose: terminate TLS in front of the server and set `KOLDERA_PUBLIC_URL`, set the limits in
 [configuration.md](configuration.md), and keep `KOLDERA_AUTH=none` for a loopback address or a proxy that
-authenticates every request. The server is one instance with a local data directory; do not put several behind one
+authenticates every request. With `KOLDERA_AUTH=none` the server answers only the host names in `KOLDERA_ALLOWED_HOSTS`
+(loopback names by default), so a proxy in front must forward one of them or you list its name there. The server is one instance with a local data directory; do not put several behind one
 load balancer. Serverless: see [aws-lambda.md](aws-lambda.md).
 
 ## Browser sandbox

@@ -68,7 +68,9 @@ app.Services.GetRequiredService<UrlSigner>(); // fails fast on a bad signing key
 app.Services.GetRequiredService<ArtifactIndex>(); // rebuilds the artifact lookup from the data directory
 app.Services.GetRequiredService<ServerTokens>(); // resolves (and, if needed, generates and logs) the tokens at startup
 
-// CORS first so preflights and error responses carry its headers; the policy and idempotency layers need the principal.
+// Host filter (KOLDERA_AUTH=none only), then CORS so preflights and error responses carry its headers; the policy and
+// idempotency layers need the principal.
+app.UseMiddleware<HostFilterMiddleware>();
 app.UseMiddleware<CorsMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -116,3 +116,30 @@ internal sealed class JsonContentTypeMiddleware(RequestDelegate next)
         await next(http);
     }
 }
+
+/// <summary>
+/// With KOLDERA_AUTH=none every caller is the owner, and a CORS check alone does not stop DNS rebinding: a web page can
+/// point its own host name at 127.0.0.1 and then talk to this server as a same-origin page. Such a request still names
+/// the attacker's host in Host, so only KOLDERA_ALLOWED_HOSTS (default loopback names, any port) plus the
+/// KOLDERA_PUBLIC_URL host are answered; <c>*</c> switches the check off. With token authentication the token protects.
+/// </summary>
+internal sealed class HostFilterMiddleware(RequestDelegate next, CoreOptions options)
+{
+    private readonly HashSet<string> _allowed = BuildAllowed(options);
+
+    private static HashSet<string> BuildAllowed(CoreOptions options)
+    {
+        var allowed = new HashSet<string>(options.AllowedHosts ?? CoreOptions.DefaultAllowedHosts, StringComparer.OrdinalIgnoreCase);
+        if (Uri.TryCreate(options.PublicUrl, UriKind.Absolute, out var publicUrl)) allowed.Add(CoreOptions.NormalizeHost(publicUrl.Authority));
+        return allowed;
+    }
+
+    public Task InvokeAsync(HttpContext http)
+    {
+        if (options.Auth != "none" || _allowed.Contains("*")) return next(http);
+        var host = CoreOptions.NormalizeHost(http.Request.Host.Value ?? "");
+        if (host.Length > 0 && _allowed.Contains(host)) return next(http);
+        return Problems.Result(421, "HOST_NOT_ALLOWED", "Host not allowed",
+            "With KOLDERA_AUTH=none only the host names in KOLDERA_ALLOWED_HOSTS are answered.").ExecuteAsync(http);
+    }
+}

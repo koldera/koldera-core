@@ -32,8 +32,25 @@ public sealed record CoreOptions(
     bool WebAllowHttp,
     Limits Limits,
     string TypstCommand = CoreOptions.DefaultTypstCommand,
-    bool ChromiumSandbox = false)
+    bool ChromiumSandbox = false,
+    IReadOnlyList<string>? AllowedHosts = null)
 {
+    /// <summary>KOLDERA_ALLOWED_HOSTS default: the loopback names (any port). Only enforced with KOLDERA_AUTH=none.</summary>
+    public static readonly IReadOnlyList<string> DefaultAllowedHosts = ["localhost", "127.0.0.1", "[::1]"];
+
+    /// <summary>Lower-cased host without port; IPv6 literals keep their brackets.</summary>
+    public static string NormalizeHost(string host)
+    {
+        var h = host.Trim().ToLowerInvariant();
+        if (h.StartsWith('['))
+        {
+            var end = h.IndexOf(']');
+            return end < 0 ? h : h[..(end + 1)];
+        }
+        var colon = h.IndexOf(':');
+        return colon >= 0 && colon == h.LastIndexOf(':') ? h[..colon] : h;
+    }
+
     public const string DefaultTypstCommand = "/opt/typst/typst";
 
     public static readonly IReadOnlyList<string> KnownFeatures = ["pdf", "html", "web", "document"];
@@ -116,7 +133,10 @@ public sealed record CoreOptions(
                 Long("WEB_MAX_RESPONSE_BYTES"),
                 OptionalInt("WEB_MAX_REQUESTS")),
             TypstCommand: Text("TYPST_CMD") ?? DefaultTypstCommand,
-            ChromiumSandbox: chromiumSandbox is not null && bool.Parse(chromiumSandbox));
+            ChromiumSandbox: chromiumSandbox is not null && bool.Parse(chromiumSandbox),
+            AllowedHosts: Text("ALLOWED_HOSTS") is { } hosts
+                ? hosts.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(NormalizeHost).Distinct().ToList()
+                : DefaultAllowedHosts);
     }
 
     // Secrets never appear in the printed form (logs, exception messages, test output).
@@ -125,7 +145,7 @@ public sealed record CoreOptions(
         $"RetentionHours = {RetentionHours}, Concurrency = {Concurrency}, QueueCapacity = {QueueCapacity}, " +
         $"Features = [{string.Join(", ", Features.Order())}], CorsOrigins = [{string.Join(", ", CorsOrigins)}], " +
         $"SigningKey = {(SigningKey is null ? "null" : "***")}, WebProxy = {(WebProxy is null ? "null" : "***")}, " +
-        $"WebAllowHttp = {WebAllowHttp}, ChromiumSandbox = {ChromiumSandbox}, Limits = {Limits} }}";
+        $"WebAllowHttp = {WebAllowHttp}, ChromiumSandbox = {ChromiumSandbox}, AllowedHosts = [{string.Join(", ", AllowedHosts ?? DefaultAllowedHosts)}], Limits = {Limits} }}";
 
     public void EnsureDataDirWritable()
     {
