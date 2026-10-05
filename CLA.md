@@ -10,8 +10,8 @@ By signing, you agree to the following.
 
 1. **Copyright licence.** You grant the Owner a perpetual, worldwide, non-exclusive, royalty-free, irrevocable licence
    to use, copy, modify, publish, distribute, sublicense and **relicense** your Contribution, in whole or in part, under
-   any licence terms, including the GNU Affero General Public License v3.0 and commercial licences. This is what lets
-   the Owner offer koldera-core under both the AGPL and a commercial licence.
+   any licence terms, including AGPL-3.0-only and commercial licences. This is what lets
+   the Owner offer koldera-core under both AGPL-3.0-only and a commercial licence.
 2. **Patent licence.** You grant the Owner and everyone who receives koldera-core a perpetual, worldwide,
    non-exclusive, royalty-free, irrevocable patent licence to make, have made, use, sell, offer to sell, import and
    otherwise transfer your Contribution, alone or combined with koldera-core, where the patent claims are ones you can
@@ -27,6 +27,7 @@ By signing, you agree to the following.
 
 ## How to sign
 
-Open a pull request. A bot comments with instructions; reply with the sentence it asks for. Your signature is
-recorded once and covers your later contributions. For an entity, write to licensing@koldera-accessibility.dev
+Once the CLA check is active (it ships with the CI workflows, which are pending), a bot comments on your first pull
+request with instructions; reply with the sentence it asks for. Your signature is recorded once and covers your later
+contributions. Until then a maintainer will ask you to confirm in the pull request. For an entity, write to licensing@koldera-accessibility.dev
 before the first pull request.

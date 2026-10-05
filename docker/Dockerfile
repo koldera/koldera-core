@@ -140,7 +140,7 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     KOLDERA_CONTRACTS_DIR=/app/contracts \
     KOLDERA_FONTS_DIR=/app/renderer/fonts \
     VERAPDF_CMD=/opt/verapdf/verapdf \
-    TYPST_CMD=/opt/typst/typst \
+    KOLDERA_TYPST_CMD=/opt/typst/typst \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50 -Djava.awt.headless=true"
 

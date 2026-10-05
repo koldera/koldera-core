@@ -60,6 +60,16 @@ public class PdfJobTests
     }
 
     [Fact]
+    public async Task The_pdf_feature_can_be_switched_off_while_uploads_still_work()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted(), features: "html");
+        var upload = await f.CompletedUpload(Fixtures.SmallPdf());
+        var r = await f.AuthorizedClient().PostAsJsonAsync("/v1/pdf/jobs", new { uploadId = upload, mode = "analyze", profile = "ua1" });
+        Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
+        Assert.Empty(f.Store.AllJobs());
+    }
+
+    [Fact]
     public async Task Another_profile_is_rejected()
     {
         using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
