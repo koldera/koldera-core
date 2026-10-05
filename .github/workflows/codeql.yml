@@ -52,6 +52,9 @@ jobs:
       - if: matrix.language == 'java-kotlin'
         run: mvn -B -q -DskipTests package
         working-directory: engine
-      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+      # A private repository without GitHub Code Security cannot accept the results ("Advanced Security must be enabled"):
+      # that must not fail the build. Remove continue-on-error once the repository is public or Code Security is enabled.
+      - continue-on-error: true
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           category: /language:${{ matrix.language }}
