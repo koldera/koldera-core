@@ -679,6 +679,7 @@ components:
             - FILE_IMAGE_NOT_ALLOWED
             - FILE_TOO_LARGE
             - FORBIDDEN
+            - HOST_NOT_ALLOWED
             - IDEMPOTENCY_KEY_REUSED
             - IMAGE_UPLOAD_INVALID
             - INSUFFICIENT_SCOPE
