@@ -7,6 +7,9 @@
 # them. Placeholders for reference: OIDC_ISSUER_URL=https://idp.example/, OIDC_CLIENT_ID=change-me, OIDC_CLIENT_SECRET=change-me.
 # The provider settings are for a generic OIDC issuer.
 #
+# WARNING: Never combine with KOLDERA_AUTH=none: bearer and signed requests bypass sign-in;
+# core's own KOLDERA_TOKEN must stay set.
+
 # Core still requires its own bearer token on /v1: oauth2-proxy proves who the person is, it does not
 # replace KOLDERA_TOKEN. Signing in alone gives a browser no access to /v1; see docs/deployment.md.
 
