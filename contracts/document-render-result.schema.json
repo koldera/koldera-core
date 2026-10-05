@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/document-render-result.v1.json",
+  "title": "DocumentRenderResultV1",
+  "description": "Outcome of a structured-document render. A completed result carries exactly one generated_pdf artifact; a failed one carries none and an error. Typst refuses a document that cannot be tagged as PDF/UA-1 (for example an image without a description): that is DOCUMENT_REFUSED.",
+  "type": "object", "additionalProperties": false,
+  "required": ["specVersion", "jobId", "status", "engineVersion", "templateVersion", "artifacts"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "jobId": {"type": "string", "format": "uuid"},
+    "status": {"enum": ["completed", "failed"]},
+    "engineVersion": {"type": "string", "description": "First line of the Typst --version output, or unknown when Typst could not be run."},
+    "templateVersion": {"const": "1"},
+    "artifacts": {
+      "type": "array", "maxItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "path", "sha256", "bytes"],
+        "properties": {
+          "kind": {"const": "generated_pdf"},
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "bytes": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"enum": ["INVALID_INPUT", "DOCUMENT_REFUSED", "TIMEOUT", "WORKER_ERROR"]},
+            "message": {"type": "string", "maxLength": 500}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "note": "Static hinted TTFs from the official notofonts GitHub repository (main branch at download time, 2026-10-05). License: SIL OFL 1.1, see OFL.txt (text from google/fonts ofl/notosans/OFL.txt).",
+  "files": [
+    {
+      "file": "NotoSans-Bold.ttf",
+      "family": "Noto Sans",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSans/hinted/ttf/NotoSans-Bold.ttf",
+      "sha256": "1df075a380fc7cb898acf64c1f7b3b4dd780de3caa860178bf929de35817a913",
+      "bytes": 631484
+    },
+    {
+      "file": "NotoSans-Regular.ttf",
+      "family": "Noto Sans",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSans/hinted/ttf/NotoSans-Regular.ttf",
+      "sha256": "478c558ea716033cd60c03438f628dfa75694dcf6b5f6d505a2f05fd2b4f3823",
+      "bytes": 621572
+    },
+    {
+      "file": "NotoSansArabic-Bold.ttf",
+      "family": "Noto Sans Arabic",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansArabic/hinted/ttf/NotoSansArabic-Bold.ttf",
+      "sha256": "4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555",
+      "bytes": 261460
+    },
+    {
+      "file": "NotoSansArabic-Regular.ttf",
+      "family": "Noto Sans Arabic",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansArabic/hinted/ttf/NotoSansArabic-Regular.ttf",
+      "sha256": "bdff3e5659d67e67def05b33f749683b9376ae819d65d3dd62ac4640b3aaef48",
+      "bytes": 234892
+    },
+    {
+      "file": "NotoSansHebrew-Bold.ttf",
+      "family": "Noto Sans Hebrew",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansHebrew/hinted/ttf/NotoSansHebrew-Bold.ttf",
+      "sha256": "da9226e886c245a7e11673c24dec82bded64d8574c1e1f03983bf89297d2aaa8",
+      "bytes": 26860
+    },
+    {
+      "file": "NotoSansHebrew-Regular.ttf",
+      "family": "Noto Sans Hebrew",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSansHebrew/hinted/ttf/NotoSansHebrew-Regular.ttf",
+      "sha256": "cdefaf8efd47045f6820928eba84db5bed7557539328952b5f828315485e02ee",
+      "bytes": 26860
+    },
+    {
+      "file": "NotoSerif-Bold.ttf",
+      "family": "Noto Serif",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSerif/hinted/ttf/NotoSerif-Bold.ttf",
+      "sha256": "96656aa5cec8f1d6fd0e804c1fad397e1a1cfa082e6642124e0bda68cd8363ce",
+      "bytes": 747144
+    },
+    {
+      "file": "NotoSerif-Regular.ttf",
+      "family": "Noto Serif",
+      "source": "https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSerif/hinted/ttf/NotoSerif-Regular.ttf",
+      "sha256": "19e72cd8d595fae5bd74a5206f5d938512e1183d4fed7abb1ec1be1d7efa5f88",
+      "bytes": 712444
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "title": "Лист клієнту",
+  "language": "uk",
+  "theme": { "font": "Noto Sans", "fontSize": 12 },
+  "body": [
+    { "type": "heading", "level": 1, "text": "Шановний клієнте" },
+    { "type": "paragraph", "content": ["Це вигаданий лист для перевірки кількох мов в одному документі."] },
+    { "type": "paragraph", "lang": "en", "content": ["This sentence is in English and is marked as such."] },
+    { "type": "paragraph", "lang": "ar", "font": "Noto Sans Arabic", "content": ["هذه جملة تجريبية باللغة العربية."] },
+    { "type": "paragraph", "content": ["З повагою, ", { "strong": "Example Co." }] }
+  ]
+}

@@ -8,6 +8,10 @@ import {
   validateReorderResult,
   validateSemanticRequest,
   validateSemanticResult,
+  validateDocumentRenderRequest,
+  validateDocumentRenderResult,
+  type DocumentRenderRequest,
+  type DocumentRenderResult,
   type HtmlRendererRequest,
   type HtmlRendererResult,
   type HtmlReorderRequest,
@@ -16,12 +20,13 @@ import {
   type HtmlSemanticResult,
   type RendererErrorCode,
 } from "./contracts/types.js";
+import { runDocument } from "./document/run.js";
 import { reorderSource } from "./remediation/reorder.js";
 import { render } from "./render/renderer.js";
 import { collectSemantic } from "./semantic/semantic.js";
 
 /**
- * `render | semantic | reorder --request PATH --result PATH [--work-root DIR]` — the same
+ * `render | semantic | reorder | document --request PATH --result PATH [--work-root DIR]` — the same
  * envelope as the other workers: exit 0 when a contract-valid result was written (including
  * unsupported/failed results), 1 when the result could not be persisted, 2 on usage errors. Logs
  * are single JSON lines without document content or host paths.
@@ -29,10 +34,12 @@ import { collectSemantic } from "./semantic/semantic.js";
 export async function main(argv: string[]): Promise<number> {
   const args = parse(argv);
   if (!args) {
-    process.stderr.write("usage: render|semantic|reorder --request PATH --result PATH [--work-root DIR]\n");
+    process.stderr.write("usage: render|semantic|reorder|document --request PATH --result PATH [--work-root DIR]\n");
     return 2;
   }
   const workRoot = path.resolve(args.workRoot ?? "/work");
+
+  if (args.verb === "document") return mainDocument(args, workRoot);
 
   let result: HtmlRendererResult | HtmlSemanticResult | HtmlReorderResult;
   let jobId = "00000000-0000-0000-0000-000000000000";
@@ -78,7 +85,43 @@ export async function main(argv: string[]): Promise<number> {
   return 0;
 }
 
-type Verb = "render" | "semantic" | "reorder";
+type Verb = "render" | "semantic" | "reorder" | "document";
+
+/** The `document` verb has its own request/result contracts and no HTML-renderer diagnostics. */
+async function mainDocument(args: { request: string; result: string }, workRoot: string): Promise<number> {
+  let result: DocumentRenderResult;
+  let jobId = "00000000-0000-0000-0000-000000000000";
+  const failedResult = (code: "INVALID_INPUT" | "WORKER_ERROR", message: string): DocumentRenderResult => ({ specVersion: "1.0", jobId, status: "failed", engineVersion: "unknown", templateVersion: "1", artifacts: [], error: { code, message } });
+  try {
+    const parsed = JSON.parse(await readFile(args.request, "utf8")) as { jobId?: unknown };
+    if (typeof parsed.jobId === "string" && /^[0-9a-f-]{36}$/i.test(parsed.jobId)) jobId = parsed.jobId;
+    const errors = validateDocumentRenderRequest(parsed);
+    if (errors.length > 0) {
+      result = failedResult("INVALID_INPUT", "request violates schema: " + errors.join("; "));
+      log("request_invalid", { count: errors.length });
+    } else {
+      result = await runDocument(parsed as unknown as DocumentRenderRequest, { workRoot });
+    }
+  } catch (e) {
+    log("worker_error", { type: e instanceof Error ? e.name : "unknown" });
+    result = failedResult("WORKER_ERROR", "unexpected worker failure");
+  }
+  if (validateDocumentRenderResult(result).length > 0) {
+    log("result_invalid", {});
+    return 1;
+  }
+  try {
+    await mkdir(path.dirname(path.resolve(args.result)), { recursive: true });
+    const tmp = args.result + ".tmp";
+    await writeFile(tmp, JSON.stringify(result, null, 2), "utf8");
+    await rename(tmp, args.result);
+  } catch {
+    log("result_not_persisted", {});
+    return 1;
+  }
+  log("result_written", { verb: "document", status: result.status, jobId: result.jobId });
+  return 0;
+}
 
 function failed(verb: Verb, jobId: string, code: RendererErrorCode, message: string): HtmlRendererResult | HtmlSemanticResult | HtmlReorderResult {
   const engineVersion = "koldera-html-renderer 0.1.0";
@@ -104,7 +147,7 @@ function failed(verb: Verb, jobId: string, code: RendererErrorCode, message: str
 
 function parse(argv: string[]): { verb: Verb; request: string; result: string; workRoot?: string } | null {
   const verb = argv[0];
-  if (verb !== "render" && verb !== "semantic" && verb !== "reorder") return null;
+  if (verb !== "render" && verb !== "semantic" && verb !== "reorder" && verb !== "document") return null;
   const values: Record<string, string> = {};
   for (let i = 1; i < argv.length; i += 2) {
     const key = argv[i];

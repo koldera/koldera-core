@@ -102,3 +102,12 @@ without network egress as well; the in-process layers are not a substitute.
 
 It never fetches a URL, runs author scripts, loads remote assets, guesses alternative text or reading order,
 or claims that the PDF is accessible or conformant. It never modifies the source file.
+
+## Document verb
+
+`node dist/cli.js document --request R --result S --work-root DIR` renders a structured document
+(`contracts/document.schema.json`) with Typst as a tagged PDF/UA-1 file. Request and result:
+`contracts/document-render-{request,result}.schema.json`. Typst runs with only the bundled Noto fonts
+in `fonts/` (see `fonts/fonts.json`), the work root as its project root, a fixed creation timestamp
+and an environment holding only PATH. Row-header cells are set in bold; Typst 0.15 cannot tag a
+body cell as a header cell. Tests that need Typst run when `TYPST_CMD` is set.
