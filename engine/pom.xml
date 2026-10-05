@@ -21,7 +21,7 @@
     <pdfbox.version>3.0.8</pdfbox.version>
     <bouncycastle.version>1.84</bouncycastle.version>
     <jackson.version>2.22.2</jackson.version>
-    <json-schema-validator.version>1.5.9</json-schema-validator.version>
+    <json-schema-validator.version>3.0.8</json-schema-validator.version>
     <junit.version>5.14.4</junit.version>
     <commons-logging.version>1.4.0</commons-logging.version>
     <slf4j.version>2.0.19</slf4j.version>
