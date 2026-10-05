@@ -33,8 +33,8 @@ public static partial class UploadEndpoints
             var now = clock.GetUtcNow();
             var id = Guid.NewGuid();
             var record = store.CreateUpload(new UploadRecord(
-                id, name, req.SizeBytes.Value, req.Sha256, req.ContentType, Owner(http), now, now.Add(RecordTtl), false));
-            var baseUrl = (options.PublicUrl ?? $"{http.Request.Scheme}://{http.Request.Host}").TrimEnd('/');
+                id, name, req.SizeBytes.Value, req.Sha256, req.ContentType, RequestContext.Owner(http), now, now.Add(RecordTtl), false));
+            var baseUrl = RequestContext.BaseUrl(http, options);
             return Results.Json(new
             {
                 uploadId = id,
@@ -72,9 +72,6 @@ public static partial class UploadEndpoints
             }
         }).AllowAnonymous();
     }
-
-    // Server principals own what they create; session owners ("session:<sid>") arrive with sessions.
-    private static string Owner(HttpContext http) => "server";
 
     private static IResult Invalid(string detail) => Problems.Result(422, "VALIDATION_ERROR", "Invalid upload declaration", detail);
 }
