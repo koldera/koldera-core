@@ -40,6 +40,8 @@ RUN pnpm install --frozen-lockfile
 COPY scanner/tsconfig.json ./
 COPY scanner/src ./src
 RUN pnpm run build && pnpm prune --prod
+# Third-party licence text that the final image ships next to the licence of koldera-core.
+RUN mkdir -p /licenses && cp -L node_modules/axe-core/LICENSE /licenses/axe-core-LICENSE
 
 # ---------- ASP.NET server ----------
 FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317 AS server
@@ -64,6 +66,13 @@ COPY docker/verapdf-auto-install.xml auto-install.xml
 RUN java -jar "verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar" auto-install.xml \
     && /opt/verapdf/verapdf --version
 
+# The installer ships no licence files; the dual licence texts come from the tagged upstream source, checksum-pinned.
+RUN mkdir -p /licenses \
+    && curl -fsSL -o /licenses/verapdf-LICENSE.GPL https://raw.githubusercontent.com/veraPDF/veraPDF-library/v${VERAPDF_VERSION}/LICENSE.GPL \
+    && curl -fsSL -o /licenses/verapdf-LICENSE.MPL https://raw.githubusercontent.com/veraPDF/veraPDF-library/v${VERAPDF_VERSION}/LICENSE.MPL \
+    && echo "d62f065830aa3739cc031156b9690805c7b2e811b4a178c8b4acd8725d561c94  /licenses/verapdf-LICENSE.GPL" | sha256sum -c - \
+    && echo "af175b9d96ee93c21a036152e1b905b0b95304d4ae8c2c921c7609100ba8df7e  /licenses/verapdf-LICENSE.MPL" | sha256sum -c -
+
 # ---------- Typst (static musl binary, checksum per architecture) ----------
 FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS typst
 ARG TARGETARCH
@@ -82,6 +91,7 @@ RUN case "${TARGETARCH:-amd64}" in \
     && echo "${sha}  typst.tar.xz" | sha256sum -c - \
     && tar -xJf typst.tar.xz --strip-components=1 \
     && install -D -m 0755 typst /out/opt/typst/typst \
+    && install -D -m 0644 LICENSE /out/licenses/typst-LICENSE \
     && /out/opt/typst/typst --version
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
@@ -96,7 +106,10 @@ FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
-      org.opencontainers.image.licenses="AGPL-3.0-only"
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.documentation="https://github.com/koldera/koldera-core/blob/main/NOTICE" \
+      org.opencontainers.image.version="0.1.0" \
+      dev.koldera.source-offer="Corresponding source (AGPL-3.0 sections 6 and 13): the git tag of this image's version in https://github.com/koldera/koldera-core; licence texts of bundled components: /usr/share/licenses/koldera"
 
 COPY --from=jre /opt/java/openjdk /opt/java/openjdk
 COPY --from=dotnet /usr/share/dotnet /usr/share/dotnet
@@ -124,6 +137,13 @@ COPY --from=node /src/scanner/node_modules /app/scanner/node_modules
 COPY --from=node /src/scanner/package.json /app/scanner/package.json
 COPY --from=server /out/server /app/server
 COPY contracts /app/contracts
+# Licence texts (AGPL-3.0 for koldera-core, third-party licences of what is bundled). Source: the tagged GitHub release.
+COPY LICENSE NOTICE /usr/share/licenses/koldera/
+COPY renderer/fonts/OFL.txt /usr/share/licenses/koldera/fonts-noto-OFL.txt
+COPY engine/src/main/resources/fonts/liberation/LICENSE /usr/share/licenses/koldera/fonts-liberation-LICENSE
+COPY --from=node /licenses/ /usr/share/licenses/koldera/
+COPY --from=verapdf /licenses/ /usr/share/licenses/koldera/
+COPY --from=typst /out/licenses/ /usr/share/licenses/koldera/
 # `koldera pdf|html|scan|document ...` runs the command-line tool from inside the container (the ENTRYPOINT does the same).
 RUN printf '%s\n' '#!/bin/sh' 'exec dotnet /app/server/Koldera.Core.dll "$@"' > /usr/local/bin/koldera && chmod 0755 /usr/local/bin/koldera
 
