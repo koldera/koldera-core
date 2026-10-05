@@ -110,6 +110,11 @@ export function isPublicAddress(ip: string): boolean {
     if (!hextets) return false;
     const embedded = embeddedIpv4(hextets);
     if (embedded) return isPublicAddress(embedded);
+    // IPv4-compatible (::/96), SIIT (::ffff:0:0:0/96) and Teredo (2001::/32) carry an IPv4 address that a gateway or
+    // tunnel reaches; none has a legitimate public destination, so the whole blocks are refused.
+    if (hextets.slice(0, 6).every((h) => h === 0)) return false;
+    if (hextets.slice(0, 4).every((h) => h === 0) && hextets[4] === 0xffff && hextets[5] === 0) return false;
+    if (hextets[0] === 0x2001 && hextets[1] === 0) return false;
     const [a, b] = hextets as [number, number];
     if (hextets.every((h) => h === 0)) return false; // ::
     if (hextets.slice(0, 7).every((h) => h === 0) && hextets[7] === 1) return false; // ::1
