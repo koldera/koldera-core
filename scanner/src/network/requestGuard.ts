@@ -6,6 +6,8 @@ export interface GuardStats {
   blocked: number;
   /** Reason of the first blocked request or redirect hop on the main navigation, if any. */
   navigationBlockReason: string | null;
+  /** Set when the egress proxy answered a navigation with an error page other than a refusal. */
+  navigationFailReason: string | null;
   responseBytes: number;
   limitExceeded: boolean;
 }
@@ -29,7 +31,7 @@ export const PROXY_REFUSED_HEADER = "x-koldera-egress-refused";
  * headers. A navigation is finally redirected once to the vetted end of the chain.
  */
 export class RequestGuard {
-  readonly stats: GuardStats = { requests: 0, blocked: 0, navigationBlockReason: null, responseBytes: 0, limitExceeded: false };
+  readonly stats: GuardStats = { requests: 0, blocked: 0, navigationBlockReason: null, navigationFailReason: null, responseBytes: 0, limitExceeded: false };
 
   constructor(private readonly options: GuardOptions) {}
 
@@ -128,13 +130,22 @@ export class RequestGuard {
 
   /**
    * A proxy that refuses a CONNECT answers with its own error page, and the proxy agent hands that page back as if the
-   * site had sent it. Squid marks it with X-Squid-Error, the scanner's own gate with X-Koldera-Egress-Refused; such a
-   * page is a refused destination, never something to scan.
+   * site had sent it. Squid marks it with X-Squid-Error, the scanner's own gate with X-Koldera-Egress-Refused. Such a
+   * page is never scanned: an access refusal is a blocked destination, any other proxy error (unreachable host, DNS
+   * failure) a failed navigation.
    */
   private refusedByProxy(response: APIResponse, isNavigation: boolean): boolean {
     const h = response.headers();
-    if (h[PROXY_REFUSED_HEADER] === undefined && !(this.options.policy.resolveViaProxy && h["x-squid-error"] !== undefined)) {
+    const squid = this.options.policy.resolveViaProxy ? h["x-squid-error"] : undefined;
+    if (h[PROXY_REFUSED_HEADER] === undefined && squid === undefined) {
       return false;
+    }
+    if (squid !== undefined && !/^ERR_(ACCESS_DENIED|KOLDERA_REFUSED)\b/.test(squid)) {
+      this.stats.blocked += 1;
+      if (isNavigation && this.stats.navigationFailReason === null) {
+        this.stats.navigationFailReason = "the egress proxy could not reach the destination";
+      }
+      return true;
     }
     this.block(isNavigation, "the egress proxy refused the destination");
     return true;

@@ -51,6 +51,12 @@ async function startForwardProxy(): Promise<{ url: string; asked: string[]; clos
       socket.end(`HTTP/1.1 403 Forbidden\r\nX-Squid-Error: ERR_ACCESS_DENIED 0\r\nContent-Type: text/html\r\nContent-Length: ${body.length}\r\n\r\n${body}`);
       return;
     }
+    if ((req.url ?? "").startsWith("down.example:")) {
+      // What Squid answers when the destination does not accept connections.
+      const body = "<html><body>Connection failed</body></html>";
+      socket.end(`HTTP/1.1 503 Service Unavailable\r\nX-Squid-Error: ERR_CONNECT_FAIL 111\r\nContent-Type: text/html\r\nContent-Length: ${body.length}\r\n\r\n${body}`);
+      return;
+    }
     const upstream = connect(fixturePort, "127.0.0.1", () => {
       socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
       if (head.length) upstream.write(head);
@@ -147,6 +153,19 @@ describe("scans through an egress proxy (no local DNS)", () => {
       expect(result.status).toBe("unsupported");
       expect(result.error?.code).toBe("BLOCKED_DESTINATION");
       expect(result.error?.message).toContain("egress proxy refused");
+      expect(result.artifacts).toEqual([]);
+    } finally {
+      await proxy.close();
+    }
+  });
+
+  it("reports a destination the proxy could not reach as a failed navigation, not as a scanned error page", async () => {
+    const proxy = await startForwardProxy();
+    try {
+      const result = await run(request("http://down.example/", { allowHttp: true, proxyServer: proxy.url }), { resolver: failingResolver });
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toEqual({ code: "NAVIGATION_FAILED", message: "the egress proxy could not reach the destination" });
       expect(result.artifacts).toEqual([]);
     } finally {
       await proxy.close();
