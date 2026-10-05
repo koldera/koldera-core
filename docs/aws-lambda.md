@@ -81,11 +81,27 @@ curl -sS -X POST "$BASE/v1/pdf/jobs" \
 Function URLs and API Gateway have their own response time limits (API Gateway REST APIs stop at 29 s by default);
 use a `wait` below the limit of the front door you use, or a function URL (up to the function timeout).
 
+## Payload and time limits
+
+- Synchronous invocations (function URLs, API Gateway, ALB) limit the request and the response body to 6 MB each.
+  Uploads and artifact downloads through the HTTP server must fit; larger files belong to the S3 recipe below
+  (the CLI reads and writes files, with no payload limit). Response streaming is not needed for either path.
+- API Gateway stops an integration at 29 s by default; use a `wait` below that, or a function URL, whose limit is the
+  function timeout (up to 900 s).
+- A poll, download or later request that lands on a different execution environment than the one that created the
+  job returns 404: the job, its upload and its artifacts exist only in the environment that handled them. Prefer
+  `wait=N` and read what you need from that one answer, or use the CLI recipe.
+
 ## S3 trigger
 
 For file-in, file-out processing the command-line tool is simpler than the HTTP server: no upload tickets, no
-polling, no state across invocations. The handler below is a recipe, it is not part of the image. It downloads
-the object, runs `koldera pdf <file> --fix --json --out /tmp/out`, and uploads the results next to the input.
+polling, no state across invocations, and no payload limit. The handler below is a recipe, it is not part of the
+image. It downloads the object, runs `koldera pdf <file> --fix --json --out /tmp/out`, and uploads the results
+under `OUT_PREFIX`.
+
+Configure the S3 event notification with a prefix and suffix filter (for example prefix `incoming/`, suffix `.pdf`)
+and keep `OUT_PREFIX` outside that prefix, or write to a separate bucket. The handler also skips keys under
+`OUT_PREFIX`, so a misconfigured trigger cannot make the function run on its own output.
 
 ```js
 // handler.mjs (Node.js 22 runtime in a container image based on the koldera-core image, or a layer that provides `koldera`)
@@ -97,39 +113,49 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 
 const run = promisify(execFile);
 const s3 = new S3Client({});
+const OUT_PREFIX = process.env.OUT_PREFIX ?? "koldera-out/";
+const OUT_BUCKET = process.env.OUT_BUCKET; // optional: a separate bucket for the results
 
 export const handler = async (event) => {
   for (const record of event.Records) {
     const bucket = record.s3.bucket.name;
-    const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, " "));
+    const key = decodeURIComponent(record.s3.object.key.replace(/+/g, " "));
+    if (key.startsWith(OUT_PREFIX)) continue; // never process our own output
     const work = "/tmp/job";
     const out = "/tmp/out";
-    await rm(work, { recursive: true, force: true });
-    await rm(out, { recursive: true, force: true });
-    await mkdir(work, { recursive: true });
-    await mkdir(out, { recursive: true });
-
-    const input = path.join(work, "input.pdf");
-    const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    await writeFile(input, Buffer.from(await object.Body.transformToByteArray()));
-
-    // Exit code 0: machine check passed; 2: completed with failed machine rules (still a result); anything else is an error.
-    let stdout;
     try {
-      ({ stdout } = await run("koldera", ["pdf", input, "--fix", "--json", "--out", out], {
-        env: { ...process.env, KOLDERA_DATA_DIR: "/tmp/koldera" },
-        maxBuffer: 64 * 1024 * 1024,
-      }));
-    } catch (e) {
-      if (e.code !== 2 || !e.stdout) throw e;
-      stdout = e.stdout;
-    }
-    const result = JSON.parse(stdout);
+      await rm(work, { recursive: true, force: true });
+      await rm(out, { recursive: true, force: true });
+      await mkdir(work, { recursive: true });
+      await mkdir(out, { recursive: true });
 
-    const prefix = key.replace(/\.pdf$/i, "");
-    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: `${prefix}.koldera.json`, Body: stdout, ContentType: "application/json" }));
-    for (const artifact of result.artifacts ?? []) {
-      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: `${prefix}.${path.basename(artifact.path)}`, Body: await readFile(artifact.path) }));
+      const input = path.join(work, "input.pdf");
+      const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      await writeFile(input, Buffer.from(await object.Body.transformToByteArray()));
+
+      // Exit code 0: machine check passed; 2: completed with failed machine rules (still a result); anything else is an error.
+      let stdout;
+      try {
+        ({ stdout } = await run("koldera", ["pdf", input, "--fix", "--json", "--out", out], {
+          env: { ...process.env, KOLDERA_DATA_DIR: "/tmp/koldera" },
+          maxBuffer: 64 * 1024 * 1024,
+        }));
+      } catch (e) {
+        if (e.code !== 2 || !e.stdout) throw e;
+        stdout = e.stdout;
+      }
+      const result = JSON.parse(stdout);
+
+      const target = OUT_BUCKET ?? bucket;
+      const prefix = OUT_PREFIX + key.replace(/.pdf$/i, "");
+      await s3.send(new PutObjectCommand({ Bucket: target, Key: `${prefix}.koldera.json`, Body: stdout, ContentType: "application/json" }));
+      for (const artifact of result.artifacts ?? []) {
+        await s3.send(new PutObjectCommand({ Bucket: target, Key: `${prefix}.${path.basename(artifact.path)}`, Body: await readFile(artifact.path) }));
+      }
+    } finally {
+      await rm(work, { recursive: true, force: true });
+      await rm(out, { recursive: true, force: true });
+      await rm("/tmp/koldera", { recursive: true, force: true });
     }
   }
 };
@@ -138,7 +164,5 @@ export const handler = async (event) => {
 Notes for this recipe:
 
 - `--json` prints `{job, findings, actions, artifacts}`; each artifact has `id`, `kind`, `sha256`, `sizeBytes` and the `path` it was written to.
-- Write results under a prefix your S3 trigger does not watch, or the function will run on its own output.
-- `/tmp` is ephemeral storage: size it (up to 10 GB) for the largest input plus its artifacts. Jobs do not survive
-  across invocations; a timeout loses the work of that invocation and S3 retries the event.
+- `/tmp` is ephemeral storage: size it (up to 10 GB) for the largest input plus its artifacts; the handler cleans it after each record. Jobs do not survive across invocations; a timeout loses the work of that invocation and S3 retries the event.
 - The result lists machine rules only. A person still has to review what the checks cannot decide.

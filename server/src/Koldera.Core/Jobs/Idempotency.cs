@@ -16,12 +16,11 @@ public enum IdempotencyOutcome { Miss, Hit, Conflict }
 public sealed class Idempotency(TimeProvider clock)
 {
     public static readonly TimeSpan Retention = TimeSpan.FromHours(24);
-    private const int LockStripes = 64;
 
     private sealed record Entry(string RequestHash, StoredResponse Response, DateTimeOffset Expires);
 
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
-    private readonly SemaphoreSlim[] _locks = Enumerable.Range(0, LockStripes).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
+    private readonly Dictionary<string, KeyGate> _gates = new(StringComparer.Ordinal);
     private DateTimeOffset _lastSweep = DateTimeOffset.MinValue;
 
     /// <summary>Same key and same request hash is a hit; same key with another hash is a conflict.</summary>
@@ -42,12 +41,40 @@ public sealed class Idempotency(TimeProvider clock)
         _entries[Compose(principalKey, key)] = new Entry(requestHash, response, now.Add(Retention));
     }
 
-    /// <summary>Serializes requests that share a key, so two concurrent identical requests create one job (a striped lock, nothing to clean up).</summary>
+    /// <summary>Number of keys currently locked or waited for (zero when idle; for tests).</summary>
+    public int ActiveLockCount { get { lock (_gates) return _gates.Count; } }
+
+    /// <summary>
+    /// Serializes requests that share a key, so two concurrent identical requests create one job. The lock is per key
+    /// (a held key never delays another), reference-counted and dropped when its last holder or waiter is gone.
+    /// </summary>
     public async Task<IDisposable> LockAsync(string principalKey, string key, CancellationToken ct)
     {
-        var gate = _locks[(int)((uint)Compose(principalKey, key).GetHashCode() % LockStripes)];
-        await gate.WaitAsync(ct);
-        return new Releaser(gate);
+        var id = Compose(principalKey, key);
+        KeyGate gate;
+        lock (_gates)
+        {
+            if (!_gates.TryGetValue(id, out gate!)) _gates[id] = gate = new KeyGate();
+            gate.Users++;
+        }
+        try { await gate.Semaphore.WaitAsync(ct); }
+        catch { Release(id, gate, held: false); throw; }
+        return new Releaser(() => Release(id, gate, held: true));
+    }
+
+    private void Release(string id, KeyGate gate, bool held)
+    {
+        lock (_gates)
+        {
+            if (held) gate.Semaphore.Release();
+            if (--gate.Users == 0) _gates.Remove(id);
+        }
+    }
+
+    private sealed class KeyGate
+    {
+        public readonly SemaphoreSlim Semaphore = new(1, 1);
+        public int Users;
     }
 
     private static string Compose(string principalKey, string key) => principalKey + "\n" + key;
@@ -60,9 +87,10 @@ public sealed class Idempotency(TimeProvider clock)
             if (e.Expires <= now) _entries.TryRemove(k, out _);
     }
 
-    private sealed class Releaser(SemaphoreSlim gate) : IDisposable
+    private sealed class Releaser(Action release) : IDisposable
     {
-        public void Dispose() => gate.Release();
+        private int _done;
+        public void Dispose() { if (Interlocked.Exchange(ref _done, 1) == 0) release(); }
     }
 }
 
