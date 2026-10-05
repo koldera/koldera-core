@@ -54,7 +54,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
 
     /// <summary>A server (token "t") whose PDF engine processes are the given stubs; the structure probe is off unless one is given.</summary>
     public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null,
-        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null)
+        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null)
     {
         var values = new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "t" };
         foreach (var (k, v) in env ?? []) values[k] = v;
@@ -66,7 +66,8 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             // Without HTML stubs a render would start a real process; fail loudly if a test forgot them.
             s.RemoveAll<HtmlWorkers>();
             s.AddSingleton(new HtmlWorkers(htmlRender ?? new StubWorker(_ => throw new InvalidOperationException("no html render stub")),
-                inspect ?? new StubWorker(_ => throw new InvalidOperationException("no inspect stub"))));
+                inspect ?? new StubWorker(_ => throw new InvalidOperationException("no inspect stub")), semantic));
+            configure?.Invoke(s);
         };
         return factory;
     }
@@ -84,6 +85,9 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
         put.EnsureSuccessStatusCode();
         return id;
     }
+
+    /// <summary>Declares an HTML upload without sending its content.</summary>
+    public async Task<Guid> HtmlUploadTicket() => (await Declare(Fixtures.SmallHtml(), "page.html", "text/html")).Id;
 
     /// <summary>Declares an upload without sending its content.</summary>
     public async Task<Guid> UploadTicket(byte[] bytes) => (await Declare(bytes)).Id;
@@ -116,7 +120,17 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     public async Task<JsonElement> WaitForJob(Guid id)
     {
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        Assert.True(await Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(id, TimeSpan.FromSeconds(30), limit.Token), "the job did not finish");
+        var finished = false;
+        try
+        {
+            finished = await Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(id, TimeSpan.FromSeconds(30), limit.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // reported below with the job's state instead of a bare cancellation
+        }
+        var current = Store.GetJob(id);
+        Assert.True(finished, $"the job did not finish within 30 s; current state: {current?.State ?? "missing"}, error: {current?.ErrorCode ?? "none"}");
         return await AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}");
     }
 

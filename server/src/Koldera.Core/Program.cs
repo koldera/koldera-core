@@ -38,7 +38,9 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
 {
     var w = sp.GetRequiredService<WorkerOptions>();
-    return new HtmlWorkers(SubprocessWorker.ForNodeVerb(w.HtmlRenderCommand, w.ContractsDir), SubprocessWorker.ForProbe(w.PdfInspectCommand));
+    return new HtmlWorkers(SubprocessWorker.ForNodeVerb(w.HtmlRenderCommand, w.ContractsDir),
+        SubprocessWorker.ForProbe(w.PdfInspectCommand),
+        w.HtmlSemanticCommand.Length > 0 ? SubprocessWorker.ForNodeVerb(w.HtmlSemanticCommand, w.ContractsDir) : null);
 });
 builder.Services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
     sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));

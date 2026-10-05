@@ -137,4 +137,32 @@ public static class StubResults
             mutate(result);
             return result.ToJsonString();
         }, outputs);
+
+    /// <summary>The renderer's semantic collector: one node and one suspected-mismatch finding for the source with this hash.</summary>
+    public static StubWorker SemanticCollected(string sourceSha256, string status = "completed") =>
+        new(request => new JsonObject
+        {
+            ["specVersion"] = "1.0",
+            ["jobId"] = JsonNode.Parse(request)!["jobId"]!.GetValue<string>(),
+            ["status"] = status,
+            ["sourceSha256"] = sourceSha256,
+            ["engineVersion"] = "stub-semantic",
+            ["nodes"] = status != "completed" ? new JsonArray() : new JsonArray(new JsonObject
+            {
+                ["nodeId"] = "n1", ["parentId"] = null, ["role"] = "h1", ["logicalIndex"] = 0, ["textPreview"] = "Hello", ["boundingBox"] = null,
+                ["private"] = new JsonObject
+                {
+                    ["domPath"] = "1/0", ["tag"] = "h1", ["elementChildren"] = 0, ["focusable"] = false, ["tabindex"] = null,
+                    ["cssOrder"] = 0, ["inlineOrder"] = false, ["parentDisplay"] = "block", ["parentFlexReversed"] = false,
+                },
+            }),
+            ["focusOrderNodeIds"] = new JsonArray(),
+            ["focusOrderMeasured"] = false,
+            ["visualOrderCandidateNodeIds"] = new JsonArray(),
+            ["findings"] = status != "completed" ? new JsonArray() : new JsonArray(new JsonObject
+            {
+                ["code"] = "DOM_ORDER_NOTE", ["category"] = "suspected_semantic_mismatch", ["message"] = "CSS order differs from DOM order", ["nodeIds"] = new JsonArray("n1"), ["evidence"] = null,
+            }),
+            ["error"] = status == "completed" ? null : new JsonObject { ["code"] = "UNSUPPORTED_CONTENT", ["message"] = "not collectable" },
+        }.ToJsonString());
 }

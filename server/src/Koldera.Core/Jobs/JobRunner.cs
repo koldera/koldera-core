@@ -155,7 +155,12 @@ public sealed class JobRunner : BackgroundService
 
         job.State = CoreJobState.Running;
         job.StartedAt = _clock.GetUtcNow();
-        await _store.SaveJobAsync(job);
+        if (!await TryMarkRunningAsync(job, stop))
+        {
+            // Whatever happens to the record, a waiter must never be left hanging.
+            Signal(id);
+            return;
+        }
 
         var scratch = Path.Combine(ScratchRoot, id.ToString("N"));
         try
@@ -197,6 +202,41 @@ public sealed class JobRunner : BackgroundService
         finally
         {
             Signal(id);
+        }
+    }
+
+    /// <summary>
+    /// Persists the running state, retrying once like the store's reads (a replace can be refused for a moment).
+    /// If it still cannot be saved the job is ended as failed when that can be recorded; false means the job was ended and must not run.
+    /// </summary>
+    private async Task<bool> TryMarkRunningAsync(CoreJob job, CancellationToken stop)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await _store.SaveJobAsync(job);
+                return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt == 0)
+            {
+                await Task.Delay(20, stop);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _logger.LogError("job {JobId} could not be marked running: {ExceptionType}", job.Id, e.GetType().Name);
+                Fail(job, "WORKER_ERROR", GenericFailureMessage);
+                job.FinishedAt = _clock.GetUtcNow();
+                try
+                {
+                    await _store.SaveJobAsync(job);
+                }
+                catch (Exception inner) when (inner is not OperationCanceledException)
+                {
+                    _logger.LogError("job {JobId} could not be recorded as failed: {ExceptionType}", job.Id, inner.GetType().Name);
+                }
+                return false;
+            }
         }
     }
 
