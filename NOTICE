@@ -1,5 +1,6 @@
 koldera-core
-Copyright (c) the koldera-core authors. Licensed under AGPL-3.0-only (see LICENSE).
+Copyright (c) 2026 makulatura78
+Licensed under AGPL-3.0-only (see LICENSE); a commercial licence is also available (see COMMERCIAL.md).
 
 koldera-core uses or ships the third-party components below. They keep their own licences. This list names the
 major components; each package's own licence text is in its distribution. Exact versions are pinned in

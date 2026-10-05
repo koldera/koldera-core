@@ -14,7 +14,7 @@ Thanks for helping. Please read this page, the [Code of Conduct](CODE_OF_CONDUCT
 
 Contributions need a signed [CLA](CLA.md) because koldera-core is offered under AGPL-3.0-only and under a commercial
 licence. The automatic CLA check ships with the CI workflows, which are pending; once it is active a bot comments on
-your first pull request and you reply with the sentence it asks for. Until then a maintainer will ask you to confirm
+your first pull request and you reply with the sentence it asks for. Until then the Koldera team will ask you to confirm
 in the pull request.
 
 ## Repository layout and setup
@@ -104,5 +104,5 @@ obvious. Avoid messages like "update" or "fix".
 ## Pull requests
 
 Describe what changed and why, list the commands you ran with their results, and note anything you could not run. Keep
-a pull request to one concern. A maintainer reviews it; expect questions about tests and about what a change could
+a pull request to one concern. The Koldera team reviews it; expect questions about tests and about what a change could
 make the tool claim.
