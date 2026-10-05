@@ -139,12 +139,18 @@ To run on AWS Lambda see [docs/aws-lambda.md](docs/aws-lambda.md).
 
 ## SDKs and command-line client
 
-These are separate projects under the Apache-2.0 licence, planned and not yet published:
+Client libraries are separate projects under the Apache-2.0 licence. They target this server's API (`0.1`) and are
+published to their registries at their first release:
 
-- `koldera-cli`, a Rust command-line client for a remote server or the local Docker image
-- `koldera-js` (TypeScript and Node.js, with React), `koldera-python`, `koldera-dotnet`, `koldera-go`
+| Language | Repository | Package |
+| --- | --- | --- |
+| TypeScript / JavaScript (Node.js, browsers, React) | [koldera/koldera-js](https://github.com/koldera/koldera-js) | `@koldera/sdk`, `@koldera/react` on npm |
+| Python 3.10+ (sync and async) | [koldera/koldera-python](https://github.com/koldera/koldera-python) | `koldera` on PyPI |
+| .NET 8 and 10 | [koldera/koldera-dotnet](https://github.com/koldera/koldera-dotnet) | `Koldera.Sdk` on NuGet |
+| Go 1.24+ | [koldera/koldera-go](https://github.com/koldera/koldera-go) | `github.com/koldera/koldera-go` |
 
-They will live under github.com/koldera. Until they are published, use the HTTP API directly.
+A Rust command-line client (`koldera-cli`) for a remote server or the local Docker image is planned. Until a library
+is published, use the HTTP API directly.
 
 ## Components
 
