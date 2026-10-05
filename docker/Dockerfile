@@ -52,7 +52,7 @@ COPY contracts ./contracts
 RUN dotnet publish server/src/Koldera.Core/Koldera.Core.csproj -c Release -o /out/server --no-self-contained -p:UseAppHost=false
 
 # ---------- veraPDF (unattended IzPack install) ----------
-FROM eclipse-temurin:21-jdk-noble@sha256:b468c3fc688b14450571494f588bd939378e7fd542ed5a73f8efc13f17872a87 AS verapdf
+FROM eclipse-temurin:24-jdk-noble@sha256:dacac8e9a0df0d2bd24e702b4431132875c249930b70555ebd7ca285b5bee684 AS verapdf
 ARG VERAPDF_VERSION=1.30.2
 ARG VERAPDF_URL=https://software.verapdf.org/releases/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip
 ARG VERAPDF_SHA256=6cc6341cb1af644044054b81f00a6590a7918abb18f762243de115258bcad838
@@ -95,7 +95,7 @@ RUN case "${TARGETARCH:-amd64}" in \
     && /out/opt/typst/typst --version
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
-FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
+FROM eclipse-temurin:24-jre-noble@sha256:b416d02335e702b0403ff280de9475a3348e29382285969c9d4e17862ce632e7 AS jre
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4 AS dotnet
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS nodejs
 
