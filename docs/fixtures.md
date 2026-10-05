@@ -4,7 +4,9 @@ Every fixture in this repository is synthetic: written for these tests, with no 
 site content and no personal data. Reviewed 2026-10-05 (Info dictionary, first text, all text, link targets and
 e-mail addresses read with `pdfinfo` / `pdftotext` / `pdftohtml`). Addresses and hosts are limited to
 `example.com`, `example.org`, `*.example`, `*.invalid` and reserved/loopback ranges; the only public URL is the
-W3C WCAG overview in `generated-annual-report.pdf`.
+W3C WCAG overview in `engine/src/test/resources/generated/generated-annual-report.pdf`.
+`scripts/fixtures-listed.test.mjs` fails when a binary or document fixture under a test directory is not listed
+here with its full path.
 
 ## Static PDFs (`engine/src/test/resources/generated/`)
 
@@ -15,21 +17,21 @@ Author, Subject or Keywords entry is present in any of them.
 
 | File | Pages | Content |
 |---|---|---|
-| `generated-annual-report.pdf` | 16 | "Annual Service Report 2026": invented regional service statistics, tables, a contents list, links to `example.com`/`example.org`, a W3C link, one `mailto:accessibility@example.org`; states that it contains no real people or customers. |
-| `generated-containers.pdf` | 1 | List items on a background, a shaded table, ruby text, a "Show all updates" link, loose items without a list. |
-| `generated-controls.pdf` | 1 | A fictional permit application: paragraphs, form controls ("Resident", "Visitor", "I confirm the details are correct", "Priority"), shaded blocks. |
-| `generated-figures.pdf` | 1 | Five figure variants: raster image, vector image, two images in one figure, a table in a figure, a caption only. |
-| `generated-forms.pdf` | 1 | A contact form with placeholder values (`Jane Example`, `name@example.org`, `Poland`). |
-| `generated-headings.pdf` | 1 | A cookie notice and a "Service guidance" page with a heading hierarchy that skips levels. |
-| `generated-inline-blocks.pdf` | 1 | Links and text directly inside `div`, `section` and quotation blocks. |
-| `generated-irregular-tables.pdf` | 1 | Tables with empty cells, rows shorter than the table, row and column spans. |
-| `generated-link-runs.pdf` | 1 | A skip link and links placed between blocks, in mixed blocks and after lists. |
-| `generated-links.pdf` | 3 | Links to `example.com` that wrap over lines or pages, with filler paragraphs. |
-| `generated-lists.pdf` | 1 | Plain, ordered and nested lists, a list holding only a nested list, items with links. |
-| `generated-shaded-tables.pdf` | 1 | A table whose rows are shaded by background only (`Ann`, `Bob`, `Cleo`, `Dan`, rooms). |
-| `generated-tables.pdf` | 1 | Tables with two header rows, no `thead`, no header cells, row headers (invented sales figures). |
-| `generated-trailing-field.pdf` | 1 | A feedback paragraph with a form field as the last element and a "Printed from example.org" footer. |
-| `generated-untagged-text.pdf` | 2 | A page with content Chromium leaves untagged (CSS counters, quotation marks, `aria-hidden` text, a table), "Example Co." header. |
+| `engine/src/test/resources/generated/generated-annual-report.pdf` | 16 | "Annual Service Report 2026": invented regional service statistics, tables, a contents list, links to `example.com`/`example.org`, a W3C link, one `mailto:accessibility@example.org`; states that it contains no real people or customers. |
+| `engine/src/test/resources/generated/generated-containers.pdf` | 1 | List items on a background, a shaded table, ruby text, a "Show all updates" link, loose items without a list. |
+| `engine/src/test/resources/generated/generated-controls.pdf` | 1 | A fictional permit application: paragraphs, form controls ("Resident", "Visitor", "I confirm the details are correct", "Priority"), shaded blocks. |
+| `engine/src/test/resources/generated/generated-figures.pdf` | 1 | Five figure variants: raster image, vector image, two images in one figure, a table in a figure, a caption only. |
+| `engine/src/test/resources/generated/generated-forms.pdf` | 1 | A contact form with placeholder values (`Jane Example`, `name@example.org`, `Poland`). |
+| `engine/src/test/resources/generated/generated-headings.pdf` | 1 | A cookie notice and a "Service guidance" page with a heading hierarchy that skips levels. |
+| `engine/src/test/resources/generated/generated-inline-blocks.pdf` | 1 | Links and text directly inside `div`, `section` and quotation blocks. |
+| `engine/src/test/resources/generated/generated-irregular-tables.pdf` | 1 | Tables with empty cells, rows shorter than the table, row and column spans. |
+| `engine/src/test/resources/generated/generated-link-runs.pdf` | 1 | A skip link and links placed between blocks, in mixed blocks and after lists. |
+| `engine/src/test/resources/generated/generated-links.pdf` | 3 | Links to `example.com` that wrap over lines or pages, with filler paragraphs. |
+| `engine/src/test/resources/generated/generated-lists.pdf` | 1 | Plain, ordered and nested lists, a list holding only a nested list, items with links. |
+| `engine/src/test/resources/generated/generated-shaded-tables.pdf` | 1 | A table whose rows are shaded by background only (`Ann`, `Bob`, `Cleo`, `Dan`, rooms). |
+| `engine/src/test/resources/generated/generated-tables.pdf` | 1 | Tables with two header rows, no `thead`, no header cells, row headers (invented sales figures). |
+| `engine/src/test/resources/generated/generated-trailing-field.pdf` | 1 | A feedback paragraph with a form field as the last element and a "Printed from example.org" footer. |
+| `engine/src/test/resources/generated/generated-untagged-text.pdf` | 2 | A page with content Chromium leaves untagged (CSS counters, quotation marks, `aria-hidden` text, a table), "Example Co." header. |
 
 ## PDFs built at test time (engine)
 
@@ -39,6 +41,21 @@ encrypted and corrupt shells, non-embedded standard fonts, hostile structure tre
 is a fixed sentence such as "Synthetic fixture paragraph for accessibility engine tests." Nothing is read from
 disk. `CorpusGeneratorTest` (skipped by default) writes a local, ignored corpus from the same factory.
 
+## Structured documents (renderer and server)
+
+The same six files exist twice, byte for byte: the renderer's Typst tests read them from
+`renderer/tests/document/fixtures/`, the server's document-job tests from `server/tests/Koldera.Core.Tests/Fixtures/documents/`.
+All text is invented; the only address is `billing@example.com` and every link points to `example.com` or `mailto:billing@example.com`.
+
+| Files | Content |
+|---|---|
+| `renderer/tests/document/fixtures/invoice.json`, `server/tests/Koldera.Core.Tests/Fixtures/documents/invoice.json` | "Invoice 2026-0042" (`en`): headings, paragraphs, key-value pairs, an item table and page numbers; seller "Example Co.", customer "Sample Customer Ltd.", contact link `mailto:billing@example.com`. |
+| `renderer/tests/document/fixtures/report.json`, `server/tests/Koldera.Core.Tests/Fixtures/documents/report.json` | "Quarterly Report, Example Co." (`en`): headings, paragraphs, a list, a table, a spacer, links to `https://example.com/report` and `https://example.com/data`, and the two images below. |
+| `renderer/tests/document/fixtures/statement.json`, `server/tests/Koldera.Core.Tests/Fixtures/documents/statement.json` | "Account statement, 30 sections" (`en`): thirty headings, each with a table of "Sample transaction" rows, and page breaks, for multi-page output. |
+| `renderer/tests/document/fixtures/multilingual.json`, `server/tests/Koldera.Core.Tests/Fixtures/documents/multilingual.json` | "Лист клієнту" (`uk`): a short Ukrainian heading and paragraphs, for non-Latin text and the language tag. |
+| `renderer/tests/document/fixtures/logo.png`, `server/tests/Koldera.Core.Tests/Fixtures/documents/logo.png` | 79 bytes, a 2x2 RGB PNG with no metadata chunks (only IHDR, IDAT, IEND): dark blue `#1f3a5f` and white pixels, written byte by byte for these tests. |
+| `renderer/tests/document/fixtures/chart.png`, `server/tests/Koldera.Core.Tests/Fixtures/documents/chart.png` | 79 bytes, a 2x2 RGB PNG with no metadata chunks: dark red `#8a1c1c` and grey `#c8c8c8` pixels, written the same way. |
+
 ## HTML (scanner)
 
 | File | Content |
@@ -47,7 +64,7 @@ disk. `CorpusGeneratorTest` (skipped by default) writes a local, ignored corpus 
 | `scanner/tests/fixtures/missing-label.html` | Same page with an unlabelled input, an image without `alt` and low-contrast text; the axe-core violation case. |
 
 `scanner/tests/fixtureServer.ts` serves them and a few generated routes (`/slow`, `/big`, `/many.html`,
-`/redirect`) on a loopback port for the duration of a test run.
+`/redirect`, `/echo-headers`, `/ws-probe.html`, `/report`) on a loopback port for the duration of a test run.
 
 ## HTML, images and JSON inside test sources
 
