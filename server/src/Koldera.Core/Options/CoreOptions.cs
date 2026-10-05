@@ -28,8 +28,11 @@ public sealed record CoreOptions(
     string? SigningKey,
     string? WebProxy,
     bool WebAllowHttp,
-    Limits Limits)
+    Limits Limits,
+    string TypstCommand = CoreOptions.DefaultTypstCommand)
 {
+    public const string DefaultTypstCommand = "/opt/typst/typst";
+
     public static readonly IReadOnlyList<string> KnownFeatures = ["pdf", "html", "web", "document"];
 
     public static CoreOptions FromEnvironment(IDictionary<string, string?> env) =>
@@ -104,7 +107,8 @@ public sealed record CoreOptions(
                 Long("HTML_MAX_BYTES"),
                 OptionalInt("JOB_TIMEOUT_SECONDS"),
                 Long("WEB_MAX_RESPONSE_BYTES"),
-                OptionalInt("WEB_MAX_REQUESTS")));
+                OptionalInt("WEB_MAX_REQUESTS")),
+            TypstCommand: Text("TYPST_CMD") ?? DefaultTypstCommand);
     }
 
     // Secrets never appear in the printed form (logs, exception messages, test output).

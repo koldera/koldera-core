@@ -8,7 +8,8 @@ public static partial class UploadEndpoints
     // The upload record lives for an hour; the signed URL only for ten minutes.
     private static readonly TimeSpan RecordTtl = TimeSpan.FromHours(1);
     private static readonly TimeSpan SignatureTtl = TimeSpan.FromMinutes(10);
-    private static readonly string[] ContentTypes = ["application/pdf", "text/html"];
+    public static readonly string[] ImageContentTypes = ["image/png", "image/jpeg", "image/svg+xml"];
+    private static readonly string[] ContentTypes = ["application/pdf", "text/html", .. ImageContentTypes];
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex Sha256Pattern();
@@ -22,11 +23,11 @@ public static partial class UploadEndpoints
             var name = (req.FileName ?? "").Trim();
             if (name.Length > 255) name = name[..255];
             if (name.Length == 0) return Invalid("fileName is required");
-            if (req.ContentType is null || !ContentTypes.Contains(req.ContentType)) return Invalid("contentType must be application/pdf or text/html");
+            if (req.ContentType is null || !ContentTypes.Contains(req.ContentType)) return Invalid("contentType must be application/pdf, text/html, image/png, image/jpeg or image/svg+xml");
             if (req.SizeBytes is not > 0) return Invalid("sizeBytes must be a positive integer");
             if (req.Sha256 is null || !Sha256Pattern().IsMatch(req.Sha256)) return Invalid("sha256 must be 64 lowercase hexadecimal characters");
 
-            long? maxBytes = req.ContentType == "text/html" ? options.Limits.HtmlMaxBytes : options.Limits.PdfMaxBytes;
+            long? maxBytes = req.ContentType == "text/html" ? options.Limits.HtmlMaxBytes : ImageContentTypes.Contains(req.ContentType) ? null : options.Limits.PdfMaxBytes;
             if (maxBytes is { } cap && req.SizeBytes > cap)
                 return Problems.Result(422, "FILE_TOO_LARGE", "File too large", $"The configured limit is {cap} bytes.");
 

@@ -18,7 +18,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     [
         "TOKEN", "AUTH", "DATA_DIR", "PUBLIC_URL", "RETENTION_HOURS", "CONCURRENCY", "QUEUE_CAPACITY", "FEATURES",
         "CORS_ORIGINS", "SIGNING_KEY", "WEB_PROXY", "WEB_ALLOW_HTTP", "PDF_MAX_BYTES", "PDF_MAX_PAGES",
-        "HTML_MAX_BYTES", "JOB_TIMEOUT_SECONDS", "WEB_MAX_RESPONSE_BYTES", "WEB_MAX_REQUESTS",
+        "TYPST_CMD", "HTML_MAX_BYTES", "JOB_TIMEOUT_SECONDS", "WEB_MAX_RESPONSE_BYTES", "WEB_MAX_REQUESTS",
     ];
 
     private readonly Dictionary<string, string?> _env;
@@ -54,7 +54,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
 
     /// <summary>A server (token "t") whose PDF engine processes are the given stubs; the structure probe is off unless one is given.</summary>
     public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null,
-        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null, IWorkerProcess? web = null, string? features = null, IWorkerProcess? pdfReorder = null, IWorkerProcess? htmlReorder = null)
+        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null, IWorkerProcess? web = null, string? features = null, IWorkerProcess? pdfReorder = null, IWorkerProcess? htmlReorder = null, IWorkerProcess? documentRender = null)
     {
         var values = new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "t" };
         foreach (var (k, v) in env ?? []) values[k] = v;
@@ -73,6 +73,8 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             s.AddSingleton(new OrderWorkers(pdfReorder ?? new StubWorker(_ => throw new InvalidOperationException("no pdf reorder stub")),
                 htmlReorder ?? new StubWorker(_ => throw new InvalidOperationException("no html reorder stub"))));
             // Without a web stub a scan would start a real process; fail loudly if a test forgot it.
+            s.RemoveAll<DocumentWorkers>();
+            s.AddSingleton(new DocumentWorkers(documentRender ?? new StubWorker(_ => throw new InvalidOperationException("no document render stub"))));
             s.RemoveAll<WebWorkers>();
             s.AddSingleton(new WebWorkers(web ?? new StubWorker(_ => throw new InvalidOperationException("no web stub"))));
             configure?.Invoke(s);
@@ -86,7 +88,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     /// <summary>Uploads <paramref name="bytes"/> as an HTML document and returns the completed upload's id.</summary>
     public async Task<Guid> CompletedHtmlUpload(byte[]? bytes = null) => await CompletedUpload(bytes ?? Fixtures.SmallHtml(), "page.html", "text/html");
 
-    private async Task<Guid> CompletedUpload(byte[] bytes, string fileName, string contentType)
+    public async Task<Guid> CompletedUpload(byte[] bytes, string fileName, string contentType)
     {
         var (id, url) = await Declare(bytes, fileName, contentType);
         var put = await CreateClient().PutAsync(url, new ByteArrayContent(bytes));

@@ -138,6 +138,34 @@ public static class StubResults
             return result.ToJsonString();
         }, outputs);
 
+    /// <summary>The PDF engine's analyze result with a passed baseline (no failed veraPDF rule).</summary>
+    public static StubWorker PdfAnalyzeClean() => PdfCustom(r => r["baseline"] = Validation("passed"));
+
+    /// <summary>The Typst renderer wrote "document.pdf" (the small PDF, so the PDF stub's original hash matches).</summary>
+    public static StubWorker DocumentRenderCompleted()
+    {
+        var bytes = Fixtures.SmallPdf();
+        var artifact = new JsonObject { ["kind"] = "generated_pdf", ["path"] = "/work/out/document.pdf", ["sha256"] = Fixtures.Sha256(bytes), ["bytes"] = bytes.Length };
+        return new StubWorker(request => DocumentRenderResult(request, "completed", new JsonArray(artifact), null),
+            new Dictionary<string, byte[]> { ["document.pdf"] = bytes });
+    }
+
+    /// <summary>The renderer failed with this error code and message and published nothing.</summary>
+    public static StubWorker DocumentRenderFailed(string code, string message) =>
+        new(request => DocumentRenderResult(request, "failed", [], new JsonObject { ["code"] = code, ["message"] = message }));
+
+    internal static string DocumentRenderResult(string request, string status, JsonArray artifacts, JsonObject? error) =>
+        new JsonObject
+        {
+            ["specVersion"] = "1.0",
+            ["jobId"] = JsonNode.Parse(request)!["jobId"]!.GetValue<string>(),
+            ["status"] = status,
+            ["engineVersion"] = "typst stub",
+            ["templateVersion"] = "1",
+            ["artifacts"] = artifacts,
+            ["error"] = error,
+        }.ToJsonString();
+
     /// <summary>The scanner's result: an optional violation, one incomplete finding and one report artifact "web-report.json".</summary>
     public static StubWorker WebCompleted(int violations = 1)
     {

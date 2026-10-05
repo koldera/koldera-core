@@ -25,6 +25,8 @@ public sealed class WorkerOptions
     public string[] HtmlRenderCommand { get; set; } = [];
     public string[] HtmlSemanticCommand { get; set; } = [];
     public string[] HtmlReorderCommand { get; set; } = [];
+    /// <summary>e.g. <c>["node","/app/renderer/dist/cli.js","document"]</c>.</summary>
+    public string[] DocumentRenderCommand { get; set; } = [];
     public string[] WebCommand { get; set; } = [];
 
     /// <summary>Forwarded to the Node workers; null when KOLDERA_CONTRACTS_DIR is not set.</summary>
