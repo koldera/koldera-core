@@ -66,6 +66,11 @@ public static class ScanTargetPolicy
             if (IPAddress.IPv6Loopback.Equals(ip) || IPAddress.IPv6Any.Equals(ip) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast || ip.IsIPv6UniqueLocal)
                 return false;
             var b = ip.GetAddressBytes();
+            // IPv4-compatible (::/96) and SIIT (::ffff:0:0:0/96) addresses and Teredo (2001::/32) carry an IPv4
+            // address that a gateway or tunnel reaches; none has a legitimate public destination, so refuse the blocks.
+            if (b[..12].All(x => x == 0)) return false;
+            if (b[..8].All(x => x == 0) && b[8] == 0xff && b[9] == 0xff && b[10] == 0 && b[11] == 0) return false;
+            if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0 && b[3] == 0) return false;
             // NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embed an IPv4 address: judge that one.
             if (b[0] == 0x64 && b[1] == 0xff && b[2] == 0x9b && b[3..12].All(x => x == 0))
                 return IsPublic(new IPAddress(b[12..16]));
