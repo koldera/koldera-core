@@ -108,7 +108,7 @@ public sealed class ContractSchemaTests
     public void EveryContractSchemaLoads()
     {
         var files = Directory.GetFiles(SchemaResources.ContractsDirectory, "*.schema.json").Select(Path.GetFileName).Order().ToList();
-        Assert.Equal(15, files.Count);
+        Assert.Equal(16, files.Count);
         foreach (var file in files)
         {
             Assert.NotNull(SchemaResources.Load(file!));
