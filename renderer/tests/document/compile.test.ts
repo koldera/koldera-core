@@ -29,6 +29,7 @@ const request = () => ({
   imagesDirectory: "/work/in/images" as const,
   outputDirectory: "/work/out" as const,
   typstCommand: typst ?? "typst",
+  allowFileImages: true,
 });
 
 const fixtureDoc = async (name: string) => JSON.parse(await readFile(path.join(fixtures, `${name}.json`), "utf8")) as unknown;

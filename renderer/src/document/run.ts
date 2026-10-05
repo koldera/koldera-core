@@ -69,7 +69,7 @@ export async function runDocument(request: DocumentRenderRequest, options: { wor
   const imagesRoot = "/" + request.imagesDirectory.split("/").slice(2).join("/");
   let source: string;
   try {
-    source = toTypst(parsed as RenderDocument, { imagesRoot });
+    source = toTypst(parsed as RenderDocument, { imagesRoot, allowFileImages: request.allowFileImages === true });
   } catch (e) {
     if (e instanceof DocumentRefusedError) return fail(request, version, "DOCUMENT_REFUSED", e.message);
     throw e;

@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, type ExecFileOptions } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,19 +21,26 @@ interface RunResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  outputTooLarge: boolean;
   spawnFailed: boolean;
 }
 
-function run(command: string, args: string[], cwd: string, timeoutMs: number): Promise<RunResult> {
+/** The part of execFile that run() uses; tests substitute it. */
+export type ExecFileFn = (file: string, args: string[], options: ExecFileOptions, callback: (error: Error | null, stdout: string, stderr: string) => void) => unknown;
+
+function run(command: string, args: string[], cwd: string, timeoutMs: number, exec: ExecFileFn = execFile as ExecFileFn): Promise<RunResult> {
   return new Promise((resolve) => {
-    execFile(command, args, { cwd, env: typstEnv(), timeout: timeoutMs, maxBuffer: 1 << 20, windowsHide: true, shell: false }, (error, stdout, stderr) => {
+    exec(command, args, { cwd, env: typstEnv(), timeout: timeoutMs, maxBuffer: 1 << 20, windowsHide: true, shell: false }, (error, stdout, stderr) => {
       const e = error as (Error & { killed?: boolean; code?: number | string }) | null;
+      // Node also kills the child when its output outgrows maxBuffer (killed is set, code is a string): not a timeout, not a missing command.
+      const outputTooLarge = e?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
       resolve({
         code: e ? (typeof e.code === "number" ? e.code : null) : 0,
         stdout: String(stdout),
         stderr: String(stderr),
-        timedOut: Boolean(e?.killed),
-        spawnFailed: e !== null && typeof e.code === "string",
+        timedOut: Boolean(e?.killed) && !outputTooLarge,
+        outputTooLarge,
+        spawnFailed: e !== null && typeof e.code === "string" && !outputTooLarge,
       });
     });
   });
@@ -61,7 +68,7 @@ export function firstErrorLine(stderr: string, workRoot: string): string {
  * result does not depend on the host), the work root as the only readable root, and a fixed
  * creation timestamp so the same document gives the same bytes.
  */
-export async function compileTypst(options: { command: string; workRoot: string; source: string; output: string; timeoutMs?: number }): Promise<CompileOutcome> {
+export async function compileTypst(options: { command: string; workRoot: string; source: string; output: string; timeoutMs?: number; execFile?: ExecFileFn }): Promise<CompileOutcome> {
   const args = [
     "compile",
     "--pdf-standard", "ua-1",
@@ -73,7 +80,8 @@ export async function compileTypst(options: { command: string; workRoot: string;
     options.source,
     options.output,
   ];
-  const r = await run(options.command, args, options.workRoot, options.timeoutMs ?? 120_000);
+  const r = await run(options.command, args, options.workRoot, options.timeoutMs ?? 120_000, options.execFile);
+  if (r.outputTooLarge) return { ok: false, code: "WORKER_ERROR", message: "Typst produced more output than allowed" };
   if (r.timedOut) return { ok: false, code: "TIMEOUT", message: "Typst did not finish in time" };
   if (r.spawnFailed) return { ok: false, code: "WORKER_ERROR", message: "Typst could not be started" };
   if (r.code !== 0) return { ok: false, code: "DOCUMENT_REFUSED", message: firstErrorLine(r.stderr, options.workRoot) };

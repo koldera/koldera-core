@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DocumentRefusedError, lit, toTypst, type RenderDocument } from "../../src/document/toTypst.js";
 
 const fixture = (name: string): RenderDocument => JSON.parse(readFileSync(path.join(import.meta.dirname, "fixtures", name), "utf8")) as RenderDocument;
-const opts = { imagesRoot: "/in/images" };
+const opts = { imagesRoot: "/in/images", allowFileImages: true };
 const doc = (body: unknown[], extra: Record<string, unknown> = {}) => ({ title: "T", language: "uk", body, ...extra }) as unknown as RenderDocument;
 
 /** Removes string literals and comments so that only Typst syntax is left to scan. */

@@ -24,6 +24,8 @@ export interface RenderDocument {
 export interface ToTypstOptions {
   /** Directory of the images as a Typst root-relative path, for example /in/images. */
   imagesRoot: string;
+  /** Image blocks with a `file` source are refused unless this is true; uploads never need it. */
+  allowFileImages?: boolean;
 }
 
 const FONTS = ["Noto Sans", "Noto Serif", "Noto Sans Arabic", "Noto Sans Hebrew"];
@@ -41,7 +43,8 @@ function refuse(message: string): never {
 /** A Typst string literal. Quotes, backslashes and every control character are escaped. */
 export function lit(value: string): string {
   let out = '"';
-  for (const ch of value.replace(/[�-�](?![�-�])|(?<![�-�])[�-�]/g, "�")) {
+  // A lone surrogate cannot be encoded as UTF-8; it becomes U+FFFD instead of reaching the source.
+  for (const ch of value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD")) {
     const cp = ch.codePointAt(0)!;
     if (ch === "\\") out += "\\\\";
     else if (ch === '"') out += '\\"';
@@ -136,6 +139,7 @@ function image(b: Record<string, unknown>, o: ToTypstOptions): string {
     name = str(b["uploadId"], "uploadId");
     if (!UPLOAD_ID.test(name)) refuse("uploadId is not an identifier");
   } else {
+    if (o.allowFileImages !== true) refuse("an image file source is not allowed here; use an upload");
     name = str(b["file"], "file");
     if (!FILE.test(name)) refuse("image file path is not allowed");
   }
@@ -176,7 +180,10 @@ function keyValue(b: Record<string, unknown>): string {
   return `#table(columns: 2, stroke: none, ${cells.join(", ")})`;
 }
 
-function block(raw: unknown, o: ToTypstOptions, inPage: boolean): string {
+type Part = "header" | "footer" | "body";
+
+function block(raw: unknown, o: ToTypstOptions, part: Part): string {
+  const inPage = part !== "body";
   const b = obj(raw, "block");
   switch (b["type"]) {
     case "heading": {
@@ -208,15 +215,16 @@ function block(raw: unknown, o: ToTypstOptions, inPage: boolean): string {
     case "keyValue":
       return keyValue(b);
     case "pageNumber":
-      if (inPage) return "#par[#context counter(page).display()]";
+      // The contract allows a page number in the footer only.
+      if (part === "footer") return "#par[#context counter(page).display()]";
       return refuse("pageNumber is only allowed in the footer");
     default:
       return refuse("unknown block type");
   }
 }
 
-const blocks = (list: unknown[] | undefined, o: ToTypstOptions, inPage: boolean): string =>
-  arr(list ?? [], "blocks").map((b) => block(b, o, inPage)).join("\n");
+const blocks = (list: unknown[] | undefined, o: ToTypstOptions, part: Part): string =>
+  arr(list ?? [], "blocks").map((b) => block(b, o, part)).join("\n");
 
 export function toTypst(d: RenderDocument, o: ToTypstOptions): string {
   const doc = obj(d, "document");
@@ -234,9 +242,9 @@ export function toTypst(d: RenderDocument, o: ToTypstOptions): string {
   const accent = theme["accent"] === undefined ? "#1a1a1a" : str(theme["accent"], "accent");
   if (!COLOR.test(accent)) refuse("accent must be #rrggbb");
 
-  const header = blocks(doc["header"] as unknown[] | undefined, o, true);
-  const footer = blocks(doc["footer"] as unknown[] | undefined, o, true);
-  const body = blocks(doc["body"] as unknown[], o, false);
+  const header = blocks(doc["header"] as unknown[] | undefined, o, "header");
+  const footer = blocks(doc["footer"] as unknown[] | undefined, o, "footer");
+  const body = blocks(doc["body"] as unknown[], o, "body");
 
   return [
     `// Koldera document template ${TEMPLATE_VERSION}`,
