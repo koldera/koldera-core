@@ -14,6 +14,26 @@ the internet is the `egress` Squid proxy, which refuses private, loopback, link-
 For TLS see `docker/Caddyfile`; for single sign-on `docker/compose.sso.yaml` (needs Docker Compose 2.x; every OIDC
 variable is required and has no default). Base images are pinned by digest in the Dockerfile and compose files.
 
+## Who calls the API
+
+koldera-core is built to be called by your backend. Pick one of three patterns and do not publish the server to
+the open internet without it.
+
+1. **Backend only (recommended).** Your server holds `KOLDERA_TOKEN` and calls the API; the server is on a private
+   network or behind your own gateway. Browsers never see the token.
+2. **Browser through client sessions.** Your backend mints a short-lived token with `POST /v1/client-sessions` for one
+   origin, with scopes, a job and upload budget and a lifetime of at most 60 minutes, and hands only that token to
+   the browser. The token is useless from another origin. Origin and CORS checks are secondary controls, not secrets:
+   the session token is the credential. Budgets are counted in memory and reset on restart.
+3. **Single sign-on in front.** `docker/compose.sso.yaml` puts oauth2-proxy (OIDC) before every request. People sign
+   in through the proxy; the server still requires its own bearer token on `/v1`, so the proxy proves who the person
+   is and your backend still decides what it may call.
+
+Whatever you choose: terminate TLS in front of the server and set `KOLDERA_PUBLIC_URL`, set the limits in
+[configuration.md](configuration.md), and keep `KOLDERA_AUTH=none` for a loopback address or a proxy that
+authenticates every request. The server is one instance with a local data directory; do not put several behind one
+load balancer. Serverless: see [aws-lambda.md](aws-lambda.md).
+
 ## Browser sandbox
 
 The renderer and the web scanner drive Chromium through Playwright, which starts it with `--no-sandbox`
