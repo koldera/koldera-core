@@ -2,8 +2,8 @@
 
 > Draft — pending legal review.
 
-This agreement is between you (an individual, or the entity you represent) and the owner of koldera-core
-(the "Owner"). It covers every contribution you submit to koldera-core: code, documentation, tests and anything else
+This agreement is between you (an individual, or the entity you represent) and Roman Lakusta, the copyright holder of koldera-core, and his successors and assigns
+(together the "Owner"; a company he later forms or transfers the project to can take over his rights). It covers every contribution you submit to koldera-core: code, documentation, tests and anything else
 you send in a pull request, issue or patch (a "Contribution").
 
 By signing, you agree to the following.
@@ -29,5 +29,5 @@ By signing, you agree to the following.
 
 Once the CLA check is active (it ships with the CI workflows, which are pending), a bot comments on your first pull
 request with instructions; reply with the sentence it asks for. Your signature is recorded once and covers your later
-contributions. Until then a maintainer will ask you to confirm in the pull request. For an entity, write to licensing@koldera-accessibility.dev
+contributions. Until then the Koldera team will ask you to confirm in the pull request. For an entity, write to licensing@koldera-accessibility.dev
 before the first pull request.

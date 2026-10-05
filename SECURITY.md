@@ -16,7 +16,7 @@ Please do not open a public issue.
 Include the version or image tag, what you did, what you expected and what happened. A proof of concept helps. Do not
 send real customer documents; a synthetic file that reproduces the problem is enough.
 
-We aim to confirm receipt within a few working days and will tell you what we decide. We credit reporters who want
+The Koldera team aims to confirm receipt within a few working days and will tell you what we decide. The Koldera team credits reporters who want
 credit once a fix is released.
 
 ## Scope

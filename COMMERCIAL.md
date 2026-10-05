@@ -1,9 +1,9 @@
 # Commercial licence
 
 > Draft — pending legal review. This page describes the intent; the terms of a commercial licence are those of the
-> agreement you sign with the owner.
+> agreement you sign with the licensor.
 
-koldera-core is licensed under **AGPL-3.0-only** (see [LICENSE](LICENSE)). The owner also offers a **commercial
+koldera-core is licensed under **AGPL-3.0-only** (see [LICENSE](LICENSE)). The licensor, Roman Lakusta (the copyright holder), also offers a **commercial
 licence** for cases the AGPL does not suit.
 
 If you modify koldera-core and let users interact with it over a network, or distribute it or a work based on it, the
@@ -19,7 +19,7 @@ over its HTTP API, is free.
 | Call an unmodified koldera-core over its HTTP API from your own service or product | AGPL-3.0-only, at no cost |
 | Modify it, or build on it, and offer the result over a network or distribute it, with the corresponding source under the AGPL | AGPL-3.0-only |
 | Modify it, embed it in a product or redistribute it **without** offering the corresponding source (including OEM terms) | Commercial licence |
-| Get support or service terms from the owner | Commercial agreement |
+| Get support or service terms from the licensor | Commercial agreement |
 
 The SDKs and the command-line client (`koldera-cli`, `koldera-js`, `koldera-python`, `koldera-dotnet`, `koldera-go`)
 are separate projects under the Apache-2.0 licence. They are planned and not yet published. Using one of them does not

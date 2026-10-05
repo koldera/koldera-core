@@ -8,6 +8,8 @@ axe-core. Automated checks cannot decide everything, so a person still has to re
 
 Status: early release (0.1.0). The API may change before 1.0.
 
+No telemetry: koldera-core does not send data anywhere; documents stay on your server.
+
 ## What it does
 
 - **PDF analyze and fix.** Validates a PDF against the PDF/UA-1 profile. With `fix` it writes a separate repaired

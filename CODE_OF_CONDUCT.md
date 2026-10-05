@@ -8,6 +8,6 @@ In short: be respectful, assume good faith, accept feedback, and do not harass a
 
 ## Reporting
 
-Write to security@koldera-accessibility.dev (put "Code of conduct" in the subject). Reports are handled privately by the maintainers, and the person who
+Write to security@koldera-accessibility.dev (put "Code of conduct" in the subject). Reports are handled privately by the Koldera team, and the person who
 reports is not named to anyone outside the people handling the report. Enforcement follows the Contributor Covenant's
 enforcement guidelines.
