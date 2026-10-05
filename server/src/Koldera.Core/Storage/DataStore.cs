@@ -152,6 +152,12 @@ public class DataStore
         {
             return false;
         }
+        catch
+        {
+            // Out of attempts or not a refusal: the record keeps its previous content and no partial file is left.
+            TryDeleteFile(tmp);
+            throw;
+        }
     }
 
     public CoreJob? GetJob(Guid id) => ReadJson<CoreJob>(Path.Combine(JobsDir, id.ToString("N"), "job.json"));
