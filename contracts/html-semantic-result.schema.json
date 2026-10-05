@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.koldera-core.invalid/html-semantic-result.v1.json",
   "title": "HtmlSemanticResultV1",
-  "description": "DOM (reading) order, rendered geometry, keyboard focus order and deterministic candidate findings for a static HTML source. Geometry is evidence; the visual candidate is never a verdict. The `private` block never leaves the platform.",
+  "description": "DOM (reading) order, rendered geometry, keyboard focus order and deterministic candidate findings for a static HTML source. Geometry is evidence; the visual candidate is never a verdict. The `private` block never leaves the server.",
   "type": "object", "additionalProperties": false,
   "required": ["specVersion", "jobId", "status", "sourceSha256", "engineVersion", "nodes", "focusOrderNodeIds", "focusOrderMeasured", "visualOrderCandidateNodeIds", "findings", "error"],
   "properties": {

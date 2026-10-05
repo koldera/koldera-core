@@ -146,7 +146,7 @@ public final class GeneratedStructureRule implements RemediationRule {
       return new WorkerResult.Action(
           id(), ActionOutcome.FAILED, "could not normalize the generated structure (" + e.getClass().getSimpleName() + ")", decision.before(), decision.after());
     }
-    // The order of the counts is part of the reason format (docs/04, web fix summary): new counts are appended.
+    // The order of the counts is part of the reason format (clients and tests parse it): new counts are appended.
     LinkedHashMap<String, Integer> counted = new LinkedHashMap<>();
     counted.put("list items", listItems);
     counted.put("tables", tables);

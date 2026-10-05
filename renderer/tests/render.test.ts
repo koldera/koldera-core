@@ -117,7 +117,7 @@ describe("render (real Chromium, scripts off, offline)", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(artifact.sha256);
     expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
 
-    // Renderer-side smoke only: the platform's Java probe is the independent verdict.
+    // Renderer-side smoke only: the PDF engine's Java probe in the server is the independent verdict.
     const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
     expect(pdf.getPageCount()).toBe(1);
     expect(pdf.catalog.get(PDFName.of("StructTreeRoot"))).toBeDefined();

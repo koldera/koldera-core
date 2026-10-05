@@ -21,7 +21,7 @@ public sealed record HtmlRendererRequest(
     public const string CanonicalOutputDirectory = "/work/out";
 }
 
-/// <summary>Content selection of an HTML job: only the outermost elements matching the CSS selector are printed (docs/13).</summary>
+/// <summary>Content selection of an HTML job: only the outermost elements matching the CSS selector are printed.</summary>
 public sealed record HtmlRendererContent([property: JsonPropertyName("selector")] string Selector)
 {
     public static HtmlRendererContent? For(string? selector) => string.IsNullOrWhiteSpace(selector) ? null : new HtmlRendererContent(selector);
