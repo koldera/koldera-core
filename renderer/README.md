@@ -8,8 +8,14 @@ beyond `taggedRequested`, and `manualReviewRequired` is always `true`.
 Requires Node 22 and the Chromium build that matches the pinned Playwright version.
 
 ```
-pnpm install --frozen-lockfile && pnpm build && pnpm test
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium-headless-shell
+pnpm build && pnpm test
 ```
+
+The package launches headless Chromium, which Playwright serves as its headless shell, so that is the browser to install
+(once per Playwright version). On a bare Linux host add `--with-deps` for the system libraries; the Docker image does the
+same with `playwright install --with-deps --only-shell chromium`.
 
 ## CLI
 
@@ -111,3 +117,6 @@ or claims that the PDF is accessible or conformant. It never modifies the source
 in `fonts/` (see `fonts/fonts.json`), the work root as its project root, a fixed creation timestamp
 and an environment holding only PATH. Row-header cells are set in bold; Typst 0.15 cannot tag a
 body cell as a header cell. Tests that need Typst run when `TYPST_CMD` is set.
+
+Image blocks name an upload (`uploadId`, a file `in/images/<id>`). The `file` source is refused unless the request sets
+`allowFileImages: true`; only a standalone caller that placed the files itself should set it, and the server never does.
