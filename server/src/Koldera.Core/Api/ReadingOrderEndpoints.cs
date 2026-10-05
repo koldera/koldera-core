@@ -95,7 +95,7 @@ public static class ReadingOrderEndpoints
         if (request.Reviewer is not null)
         {
             var label = request.Reviewer.Trim();
-            if (label.Length == 0 || label.EnumerateRunes().Count() > 200 || label.Any(char.IsControl))
+            if (label.EnumerateRunes().Count() > 200 || !IsPrintableLabel(label))
                 return Invalid("reviewer must be 1-200 printable characters or omitted");
             reviewer = label;
         }
@@ -151,6 +151,12 @@ public static class ReadingOrderEndpoints
             Directory.CreateDirectory(RemediationPlan.Dir(store, job.Id));
             await File.WriteAllBytesAsync(RemediationPlan.PlanPath(store, job.Id), JsonSerializer.SerializeToUtf8Bytes(plan, RemediationPlan.Json), http.RequestAborted);
             File.Copy(baseFile.Path, RemediationPlan.BasePath(store, job.Id, request.Target));
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Retention removed the base after it was resolved: the same answer as when it was already gone.
+            store.DeleteJob(job.Id);
+            return Problems.Result(409, "ARTIFACT_EXPIRED", "Artifact expired", "The artifact the snapshot describes has expired.");
         }
         catch
         {
@@ -247,6 +253,26 @@ public static class ReadingOrderEndpoints
             }
             return new ResolvedPlan(null, null, parentPrivate.DomPath, indexes);
         }
+    }
+
+    /// <summary>
+    /// Printable text only: no control, format (bidi overrides, zero-width, BOM), surrogate or unassigned characters, so a label
+    /// cannot reorder or hide text in an audit record. Lone surrogates are checked per char because rune enumeration would mask them.
+    /// </summary>
+    internal static bool IsPrintableLabel(string label)
+    {
+        if (label.Length == 0) return false;
+        for (var i = 0; i < label.Length; i++)
+        {
+            var step = 1;
+            if (char.IsHighSurrogate(label[i]) && i + 1 < label.Length && char.IsLowSurrogate(label[i + 1])) step = 2;
+            else if (char.IsSurrogate(label[i])) return false;
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(label, i) is System.Globalization.UnicodeCategory.Control
+                or System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.OtherNotAssigned
+                or System.Globalization.UnicodeCategory.Surrogate) return false;
+            i += step - 1;
+        }
+        return true;
     }
 
     private static bool IsSha256(string? value) => value is { Length: 64 } && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');

@@ -79,4 +79,34 @@ public class AuthTests
         using var f = CoreFactory.Create(new() { ["KOLDERA_TOKEN"] = "t" });
         Assert.Equal(HttpStatusCode.OK, (await f.AuthorizedClient().GetAsync("/v1/info")).StatusCode);
     }
+
+    [Fact]
+    public async Task The_scheme_name_is_case_insensitive()
+    {
+        using var f = CoreFactory.Create(new() { ["KOLDERA_TOKEN"] = "t" });
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "bearer t");
+        Assert.Equal(HttpStatusCode.OK, (await c.GetAsync("/v1/info")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Bearer ")]
+    [InlineData("Bearer")]
+    public async Task A_bearer_header_without_a_token_is_401(string header)
+    {
+        using var f = CoreFactory.Create(new() { ["KOLDERA_TOKEN"] = "t" });
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", header);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.GetAsync("/v1/info")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Two_authorization_headers_are_401_even_when_both_are_valid()
+    {
+        using var f = CoreFactory.Create(new() { ["KOLDERA_TOKEN"] = "t" });
+        var request = new HttpRequestMessage(HttpMethod.Get, "/v1/info");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer t");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer t");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await f.CreateClient().SendAsync(request)).StatusCode);
+    }
 }

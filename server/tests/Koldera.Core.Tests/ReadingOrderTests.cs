@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Koldera.Core.Tests.Support;
 using Koldera.Core.Workers;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Koldera.Core.Tests;
 
@@ -362,6 +364,8 @@ public class ReadingOrderTests
             Body(sha, [p[2], p[1], p[0]], reviewer: new string('r', 201)),
             Body(sha, [p[2], p[1], p[0]], reviewer: "bad\nname"),
             Body(sha, [p[2], p[1], p[0]], reviewer: "   "),
+            Body(sha, [p[2], p[1], p[0]], reviewer: "bidi" + Cp(0x202E) + "override"),
+            Body(sha, [p[2], p[1], p[0]], reviewer: "zero" + Cp(0x200B) + "width"),
         })
         {
             Assert.Equal((HttpStatusCode.UnprocessableEntity, "VALIDATION_ERROR"), Take(await Refused(body)));
@@ -432,6 +436,99 @@ public class ReadingOrderTests
         var p = Ids(snapshot, "P");
         var r = await Post(f, id, Body(Sha(Fixtures.ThirdPdf()), [p[2], p[1], p[0]]));
         Assert.Equal((HttpStatusCode.Conflict, "ARTIFACT_EXPIRED"), (r.StatusCode, (await Problem(r)).Code));
+    }
+
+    private static string Cp(int codePoint) => char.ConvertFromUtf32(codePoint);
+
+    public static TheoryData<string> FormatCharacterLabels => new()
+    {
+        "a" + Cp(0x202E) + "b", // right-to-left override
+        "a" + Cp(0x200B) + "b", // zero-width space
+        Cp(0xFEFF) + "a",       // byte order mark
+        "a" + Cp(0x2066) + "b", // left-to-right isolate
+        "a" + Cp(0x0378) + "b", // unassigned
+    };
+
+    [Theory]
+    [MemberData(nameof(FormatCharacterLabels))]
+    public async Task A_reviewer_label_with_format_bidi_or_unassigned_characters_is_refused(string reviewer)
+    {
+        using var f = PdfFactory();
+        var (id, snapshot) = await CompletedPdfJob(f);
+        var p = Ids(snapshot, "P");
+        var r = await Post(f, id, Body(Sha(Fixtures.SmallPdf()), [p[2], p[1], p[0]], reviewer: reviewer));
+        Assert.Equal((HttpStatusCode.UnprocessableEntity, "VALIDATION_ERROR"), (r.StatusCode, (await Problem(r)).Code));
+    }
+
+    public static TheoryData<string, bool> LabelRule => new()
+    {
+        { "a.lovelace@example.org", true },
+        { "Zo" + Cp(0xEB) + " M" + Cp(0xFC) + "ller " + Cp(0x7530) + Cp(0x4E2D), true },
+        { "a" + Cp(0x1F600) + "b", true },
+        { "a" + Cp(0x202E) + "b", false },
+        { "a" + Cp(0x200B) + "b", false },
+        { Cp(0xFEFF) + "a", false },
+        { "a\tb", false },
+        { "a" + Cp(0x0378) + "b", false },
+        { "a" + Cp(0xE0001) + "b", false },  // language tag (format)
+    };
+
+    [Theory]
+    [MemberData(nameof(LabelRule))]
+    public void The_reviewer_label_rule_accepts_printable_text_only(string label, bool expected) =>
+        Assert.Equal(expected, ReadingOrderEndpoints.IsPrintableLabel(label));
+
+    // Not theory data: the test framework would replace a lone surrogate by U+FFFD before the test sees it.
+    [Fact]
+    public void The_reviewer_label_rule_refuses_lone_surrogates()
+    {
+        Assert.False(ReadingOrderEndpoints.IsPrintableLabel("a" + (char)0xD800 + "b"));
+        Assert.False(ReadingOrderEndpoints.IsPrintableLabel("a" + (char)0xDC00 + "b"));
+        Assert.False(ReadingOrderEndpoints.IsPrintableLabel("a" + (char)0xD800));
+        Assert.False(ReadingOrderEndpoints.IsPrintableLabel(string.Concat((char)0xDC00, (char)0xD800)));
+        Assert.True(ReadingOrderEndpoints.IsPrintableLabel(char.ConvertFromUtf32(0x1F600)));
+    }
+
+    /// <summary>Deletes a stored file just when the endpoint asks for the new job's directory: after the base was resolved, before it is copied.</summary>
+    private sealed class RetentionRaceStore(string root, TimeProvider clock) : DataStore(root, clock)
+    {
+        public Guid? SourceJobId { get; set; }
+        public string? FileToDelete { get; set; }
+
+        public override string JobDir(Guid id)
+        {
+            if (FileToDelete is { } file && SourceJobId is { } source && id != source)
+            {
+                FileToDelete = null;
+                File.Delete(file);
+            }
+            return base.JobDir(id);
+        }
+    }
+
+    [Fact]
+    public async Task A_base_deleted_by_retention_while_the_correction_is_queued_is_409_not_500_and_leaves_no_job_directory()
+    {
+        using var f = CoreFactory.WithStubWorkers(OrderStubs.PdfEngine(Fixtures.ThirdPdf(), [("7.1-3", 2)]), OrderStubs.StructureTree(PdfTexts),
+            pdfReorder: OrderStubs.PdfReorderApplied(Fixtures.OtherPdf()),
+            configure: s =>
+            {
+                s.RemoveAll<DataStore>();
+                s.AddSingleton<DataStore>(sp => new RetentionRaceStore(sp.GetRequiredService<CoreOptions>().DataDir, sp.GetRequiredService<TimeProvider>()));
+            });
+        var (id, snapshot) = await CompletedPdfJob(f, "fix");
+        var p = Ids(snapshot, "P");
+        var copy = f.Store.GetJob(id)!.Artifacts.Single(a => a.Kind == "remediated");
+        var race = (RetentionRaceStore)f.Store;
+        race.SourceJobId = id;
+        race.FileToDelete = Path.Combine(f.Store.JobDir(id), "out", copy.FileName);
+        var jobsDir = Path.Combine(f.Services.GetRequiredService<CoreOptions>().DataDir, "jobs");
+        var before = Directory.GetDirectories(jobsDir).Length;
+
+        var r = await Post(f, id, Body(Sha(Fixtures.ThirdPdf()), [p[2], p[1], p[0]]));
+
+        Assert.Equal((HttpStatusCode.Conflict, "ARTIFACT_EXPIRED"), (r.StatusCode, (await Problem(r)).Code));
+        Assert.Equal(before, Directory.GetDirectories(jobsDir).Length);
     }
 
     [Fact]

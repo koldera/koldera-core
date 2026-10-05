@@ -38,6 +38,8 @@ public static class JobReadEndpoints
 {
     private const int PollDelaySeconds = 2;
     private static readonly TimeSpan DownloadTtl = TimeSpan.FromMinutes(10);
+    // Every artifact kind the workers can publish (contracts/*-result.schema.json plus the reorder copy).
+    private static readonly HashSet<string> DownloadKinds = ["original", "remediated", "baseline_report", "final_report", "generated_pdf", "source_html", "web_report", "reordered"];
 
     public static void MapJobReadEndpoints(this RouteGroupBuilder v1)
     {
@@ -92,8 +94,9 @@ public static class JobReadEndpoints
 
             var extension = Path.GetExtension(artifact.FileName).ToLowerInvariant();
             var contentType = extension switch { ".pdf" => "application/pdf", ".html" => "text/html; charset=utf-8", _ => "application/json" };
-            // Never the user's file name: it may carry anything.
-            http.Response.Headers.ContentDisposition = $"attachment; filename=\"{artifact.Kind}{extension}\"";
+            // Never the user's file name, and only a known kind: both could carry anything.
+            var kind = DownloadKinds.Contains(artifact.Kind) ? artifact.Kind : "artifact";
+            http.Response.Headers.ContentDisposition = $"attachment; filename=\"{kind}{extension}\"";
             http.Response.Headers["X-Content-Type-Options"] = "nosniff";
             return Results.File(path, contentType);
         }).AllowAnonymous();
