@@ -14,6 +14,16 @@ the internet is the `egress` Squid proxy, which refuses private, loopback, link-
 For TLS see `docker/Caddyfile`; for single sign-on `docker/compose.sso.yaml` (needs Docker Compose 2.x; every OIDC
 variable is required and has no default). Base images are pinned by digest in the Dockerfile and compose files.
 
+### Egress proxy limits
+
+The server itself has no limits by default, but the supplied egress proxy does: `docker/egress-proxy/squid.conf`
+sets `reply_body_max_size 5 MB`, so any single response a scanned page loads (the page, a script, an image) that is
+larger than 5 MB is cut off by Squid, and a scan whose page is larger fails with `NAVIGATION_FAILED`. The proxy also
+allows only ports 80 and 443 and keeps no cache. To change the cap, edit that line (for example `reply_body_max_size
+20 MB`, or delete it for no cap) and rebuild the proxy with `docker compose -f docker/compose.yaml up -d --build egress`.
+The scanner's own budgets (`KOLDERA_WEB_MAX_RESPONSE_BYTES` and friends in [configuration.md](configuration.md))
+apply on top of it.
+
 ## Who calls the API
 
 koldera-core is built to be called by your backend. Pick one of three patterns and do not publish the server to

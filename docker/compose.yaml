@@ -49,6 +49,8 @@ services:
     pids_limit: 512
 
   egress:
+    # Squid caps every single response at 5 MB (reply_body_max_size in egress-proxy/squid.conf); edit it there and
+    # rebuild with `up -d --build egress` to change it. See docs/deployment.md, "Egress proxy limits".
     build:
       context: ./egress-proxy
     restart: unless-stopped
