@@ -1,44 +1,41 @@
 # Single sign-on example: Caddy asks oauth2-proxy before forwarding anything to core. Use it as an override:
-
+#
 #   docker compose -f docker/compose.yaml -f docker/compose.sso.yaml up -d
 
-# Every value marked change-me is a placeholder; supply real ones through your environment or an
-# untracked .env file, never commit them. The provider settings below are for a generic OIDC issuer.
-
+# Every OIDC value below is required (no defaults): export them or put them in an untracked .env file, never commit
+# them. Placeholders for reference: OIDC_ISSUER_URL=https://idp.example/, OIDC_CLIENT_ID=change-me, OIDC_CLIENT_SECRET=change-me.
+# The provider settings are for a generic OIDC issuer.
+#
 # Core still requires its own bearer token on /v1: oauth2-proxy proves who the person is, it does not
 # replace KOLDERA_TOKEN. Browser users reach the UI or SDK through the proxy, trusted backends use the token.
 
 services:
   front:
     # Replace the plain-HTTP front with Caddy plus a forward_auth check against oauth2-proxy.
-    ports:
-      - "8080:8080"
-    volumes: !override
+    # Same container path as in compose.yaml, so Compose replaces that mount (merge key is the target path).
+    volumes:
       - ./Caddyfile.sso:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks: [public, internal]
     depends_on:
       - oauth2-proxy
 
   oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.9.0
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.9.0@sha256:37c1570c0427e02fc7c947ef2c04e8995b8347b7abc9fcf1dbb4e376a4b221a7
     restart: unless-stopped
     command:
       - --http-address=0.0.0.0:4180
       - --provider=oidc
-      - --oidc-issuer-url=${OIDC_ISSUER_URL:-https://change-me.example/}
-      - --email-domain=${SSO_EMAIL_DOMAIN:-change-me.example}
+      - --oidc-issuer-url=${OIDC_ISSUER_URL:?set OIDC_ISSUER_URL}
+      - --email-domain=${SSO_EMAIL_DOMAIN:?set SSO_EMAIL_DOMAIN}
       - --upstream=static://202
       - --reverse-proxy=true
       - --set-xauthrequest=true
       - --cookie-secure=true
     environment:
-      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:-change-me}
-      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-change-me}
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET}
       # 32 random bytes, base64: openssl rand -base64 32 | tr -- '+/' '-_'
-      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET:-change-me-change-me-change-me-32b=}
-      OAUTH2_PROXY_REDIRECT_URL: ${OIDC_REDIRECT_URL:-https://change-me.example/oauth2/callback}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET:?set OAUTH2_COOKIE_SECRET (openssl rand -base64 32 | tr -- +/ -_)}
+      OAUTH2_PROXY_REDIRECT_URL: ${OIDC_REDIRECT_URL:?set OIDC_REDIRECT_URL}
     # The identity provider is outside, so this one needs the outbound network as well.
     networks: [internal, outbound]
     read_only: true
