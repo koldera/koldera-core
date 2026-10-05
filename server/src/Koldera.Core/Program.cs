@@ -35,6 +35,13 @@ builder.Services.AddSingleton(sp =>
         SubprocessWorker.ForPdfProcess(w.PdfCommand, w.VeraPdfCommand),
         w.PdfStructureCommand.Length > 0 ? SubprocessWorker.ForProbe(w.PdfStructureCommand) : null);
 });
+builder.Services.AddSingleton(sp =>
+{
+    var w = sp.GetRequiredService<WorkerOptions>();
+    return new HtmlWorkers(SubprocessWorker.ForNodeVerb(w.HtmlRenderCommand, w.ContractsDir), SubprocessWorker.ForProbe(w.PdfInspectCommand));
+});
+builder.Services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
+    sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IJobExecutor>(sp => new PdfJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
     sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new ArtifactIndex(sp.GetRequiredService<DataStore>()));

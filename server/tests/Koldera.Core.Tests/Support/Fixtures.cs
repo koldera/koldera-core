@@ -17,5 +17,7 @@ public static class Fixtures
 
     public static byte[] OtherPdf() => Pdf("Other document");
 
+    public static byte[] SmallHtml() => Encoding.UTF8.GetBytes("<!doctype html><html lang=\"en\"><head><title>Page</title></head><body><h1>Hello</h1><p>Text.</p></body></html>");
+
     public static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 }
