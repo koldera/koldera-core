@@ -1,0 +1,53 @@
+koldera-core
+Copyright (c) the koldera-core authors. Licensed under the GNU Affero General Public License v3.0 (see LICENSE).
+
+koldera-core uses or ships the third-party components below. They keep their own licences. This list names the
+major components; each package's own licence text is in its distribution. Exact versions are pinned in
+engine/pom.xml, renderer/pnpm-lock.yaml, scanner/pnpm-lock.yaml, server/Directory.Packages.props and docker/Dockerfile.
+
+Linked into the PDF engine (Java)
+  Apache PDFBox and xmpbox            Apache-2.0        https://pdfbox.apache.org/
+  Jackson (databind, core)            Apache-2.0        https://github.com/FasterXML/jackson
+  networknt json-schema-validator     Apache-2.0        https://github.com/networknt/json-schema-validator
+  Apache Commons Logging              Apache-2.0        https://commons.apache.org/proper/commons-logging/
+  Bouncy Castle (bcprov, bcpkix)      MIT-style (Bouncy Castle Licence)   https://www.bouncycastle.org/
+  SLF4J (slf4j-nop)                   MIT               https://www.slf4j.org/
+
+Run as separate processes (not linked into koldera-core)
+  veraPDF                             GPL-3.0-or-later OR MPL-2.0 (dual licence)   https://verapdf.org/
+      Started as a command-line process by the PDF engine; koldera-core does not link its libraries.
+  Typst                               Apache-2.0        https://github.com/typst/typst
+      Started as a command-line process by the document renderer.
+  Chromium (headless shell)           BSD-3-Clause and the licences of its own dependencies   https://www.chromium.org/
+      Started by Playwright for the HTML renderer and the web scanner.
+  Squid (egress proxy container)      GPL-2.0-or-later  http://www.squid-cache.org/
+      Shipped as a separate container image in docker/egress-proxy; not part of the koldera-core image.
+  Caddy (front container)             Apache-2.0        https://caddyserver.com/
+      Used as a separate container in docker/compose.yaml.
+  oauth2-proxy (optional SSO)         MIT               https://github.com/oauth2-proxy/oauth2-proxy
+      Used as a separate container in docker/compose.sso.yaml.
+
+Node.js workers (renderer and scanner)
+  Playwright                          Apache-2.0        https://playwright.dev/
+  axe-core and @axe-core/playwright   MPL-2.0           https://github.com/dequelabs/axe-core
+      Used unmodified. The MPL-2.0 source of axe-core is available at the address above.
+  Ajv and ajv-formats                 MIT               https://ajv.js.org/
+  parse5                              MIT               https://github.com/inikulin/parse5
+  pdf-lib                             MIT               https://github.com/Hopding/pdf-lib
+  pngjs                               MIT               https://github.com/pngjs/pngjs
+
+Fonts
+  Noto Sans, Noto Serif, Noto Sans Arabic, Noto Sans Hebrew    SIL Open Font Licence 1.1
+      Bundled in renderer/fonts (licence text: renderer/fonts/OFL.txt). Source: https://github.com/notofonts
+  Liberation Sans, Liberation Serif                            SIL Open Font Licence 1.1
+      Bundled in engine/src/main/resources/fonts/liberation (licence text in that directory) and used to embed a
+      substitute for non-embedded standard fonts. Source: https://github.com/liberationfonts/liberation-fonts
+
+Runtimes in the container image
+  .NET runtime and ASP.NET Core       MIT               https://github.com/dotnet/runtime
+  Node.js                             MIT-style (plus licences of bundled components)   https://nodejs.org/
+  Eclipse Temurin (OpenJDK 21)        GPL-2.0 with Classpath Exception   https://adoptium.net/
+  Ubuntu 24.04 base image             various; see the package licences in /usr/share/doc
+
+The GPL-licensed tools above run in their own processes or containers and communicate with koldera-core only through
+files, command-line arguments and network sockets.
