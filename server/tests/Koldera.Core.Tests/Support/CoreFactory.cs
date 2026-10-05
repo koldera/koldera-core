@@ -133,6 +133,58 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
+    /// <summary>Mints a client session through the real endpoint (as the server token) and returns the session token.</summary>
+    public async Task<string> MintSession(string origin, int? maxJobs = null, string[]? scopes = null, int? ttlSeconds = null)
+    {
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/client-sessions", new { allowedOrigin = origin, maxJobs, scopes, ttlSeconds });
+        Assert.Equal(System.Net.HttpStatusCode.Created, r.StatusCode);
+        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sessionToken").GetString()!;
+    }
+
+    /// <summary>A client carrying a session token and the origin a browser would send.</summary>
+    public HttpClient SessionClient(string session, string origin)
+    {
+        var c = CreateClient();
+        c.DefaultRequestHeaders.Authorization = new("Bearer", session);
+        c.DefaultRequestHeaders.Add("Origin", origin);
+        return c;
+    }
+
+    /// <summary>Uploads a small PDF and posts an analyze job, both as the session; returns the raw job response.</summary>
+    public async Task<HttpResponseMessage> TryCreatePdfJobAs(string session, string origin)
+    {
+        var c = SessionClient(session, origin);
+        var bytes = Fixtures.SmallPdf();
+        var d = await c.PostAsJsonAsync("/v1/uploads", new { fileName = "r.pdf", sizeBytes = bytes.Length, sha256 = Fixtures.Sha256(bytes), contentType = "application/pdf" });
+        d.EnsureSuccessStatusCode();
+        var ticket = await d.Content.ReadFromJsonAsync<JsonElement>();
+        (await CreateClient().PutAsync(ticket.GetProperty("uploadUrl").GetString()!, new ByteArrayContent(bytes))).EnsureSuccessStatusCode();
+        return await c.PostAsJsonAsync("/v1/pdf/jobs", new { uploadId = ticket.GetProperty("uploadId").GetGuid(), mode = "analyze", profile = "ua1" });
+    }
+
+    public async Task<Guid> CreatePdfJobAs(string session, string origin)
+    {
+        var r = await TryCreatePdfJobAs(session, origin);
+        Assert.Equal(System.Net.HttpStatusCode.Accepted, r.StatusCode);
+        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>POST with an Idempotency-Key (as the server token unless a client is given); returns the raw response.</summary>
+    public async Task<HttpResponseMessage> RawPostWithKey(string path, object body, string key, HttpClient? client = null)
+    {
+        var c = client ?? AuthorizedClient();
+        var req = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        req.Headers.Add("Idempotency-Key", key);
+        return await c.SendAsync(req);
+    }
+
+    public async Task<JsonElement> PostWithKey(string path, object body, string key)
+    {
+        var r = await RawPostWithKey(path, body, key);
+        Assert.True(r.IsSuccessStatusCode, $"POST {path} answered {(int)r.StatusCode}");
+        return await r.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
     /// <summary>Waits for the job to finish (real time limit of 30 seconds) and returns its job resource.</summary>
     public async Task<JsonElement> WaitForJob(Guid id)
     {
