@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.koldera-core.invalid/document.v1.json",
+  "title": "Structured document",
+  "description": "Input of a structured-document job: semantic blocks that are rendered into a tagged PDF. Structure is declared, never inferred: headings, table headers, image descriptions and languages are stated by the author. Checks that a schema cannot express (heading order, empty table headers, missing image descriptions, language tags, font names) are made by the validator in addition to this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "language", "body"],
+  "properties": {
+    "title": {"type": "string", "minLength": 1, "maxLength": 500, "description": "Document title. Written to the PDF title metadata and shown by viewers in the window title."},
+    "language": {"type": "string", "description": "Primary language of the document as a BCP 47 tag, for example uk, en or en-US. Checked by the validator (code LANGUAGE_INVALID)."},
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Page setup. Every property is optional.",
+      "properties": {
+        "size": {"type": "string", "enum": ["A4", "A5", "Letter", "Legal"], "description": "Paper size. Default A4."},
+        "orientation": {"type": "string", "enum": ["portrait", "landscape"], "description": "Page orientation. Default portrait."},
+        "margins": {"$ref": "#/$defs/length", "description": "Margin on all four sides, for example 20mm. Default 20mm."}
+      }
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typography and colour. Every property is optional.",
+      "properties": {
+        "font": {"type": "string", "description": "Body font. One of the bundled fonts: Noto Sans, Noto Serif, Noto Sans Arabic, Noto Sans Hebrew. Checked by the validator (code FONT_UNKNOWN). Default Noto Sans."},
+        "fontSize": {"type": "number", "minimum": 6, "maximum": 24, "description": "Body font size in points. Default 11."},
+        "accent": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "Accent colour of headings and table header rows as #rrggbb. Default #1a1a1a."}
+      }
+    },
+    "header": {"type": "array", "items": {"$ref": "#/$defs/block"}, "description": "Blocks repeated at the top of every page. Headings here are decoration and do not take part in the heading order."},
+    "footer": {"type": "array", "items": {"$ref": "#/$defs/footerBlock"}, "description": "Blocks repeated at the bottom of every page. May contain a pageNumber block. Headings here do not take part in the heading order."},
+    "body": {"type": "array", "items": {"$ref": "#/$defs/block"}, "description": "The document content in reading order."}
+  },
+  "$defs": {
+    "length": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(mm|cm|in|pt)$", "description": "A non-negative length with a unit: mm, cm, in or pt, for example 8mm."},
+    "url": {"type": "string", "pattern": "^(https?://|mailto:)[^\\s]+$", "description": "A link target. Only http, https and mailto addresses are allowed."},
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "url"],
+      "description": "A hyperlink. The text must describe the target and must not be blank.",
+      "properties": {
+        "text": {"type": "string", "description": "Visible link text. Blank text is reported by the validator (code LINK_TEXT_EMPTY)."},
+        "url": {"$ref": "#/$defs/url", "description": "Link target (http, https or mailto)."}
+      }
+    },
+    "inline": {
+      "description": "A piece of running text: a plain string, strong text, emphasised text or a link.",
+      "oneOf": [
+        {"type": "string", "description": "Plain text."},
+        {"type": "object", "additionalProperties": false, "required": ["strong"], "description": "Strong text.", "properties": {"strong": {"type": "string", "description": "The text to set strong."}}},
+        {"type": "object", "additionalProperties": false, "required": ["emphasis"], "description": "Emphasised text.", "properties": {"emphasis": {"type": "string", "description": "The text to emphasise."}}},
+        {"type": "object", "additionalProperties": false, "required": ["link"], "description": "An inline link.", "properties": {"link": {"$ref": "#/$defs/link", "description": "The link."}}}
+      ]
+    },
+    "listBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "description": "The items of a list.",
+      "properties": {
+        "ordered": {"type": "boolean", "description": "True for a numbered list. Default false (bulleted)."},
+        "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/listItem"}, "description": "List items in order."}
+      }
+    },
+    "listItem": {
+      "type": "array",
+      "description": "One list item: inline pieces of text, optionally followed by one nested list as the last element.",
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/inline"},
+          {"type": "object", "additionalProperties": false, "required": ["list"], "description": "A nested list. Only meaningful as the last element of an item.", "properties": {"list": {"$ref": "#/$defs/listBody", "description": "The nested list."}}}
+        ]
+      }
+    },
+    "cells": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}, "description": "Table rows, each an array of cell texts."},
+    "block": {
+      "description": "A block of the document. The type property selects the kind.",
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "level", "text"],
+          "description": "A heading. The first heading in the body must be level 1 or 2 and each later heading at most one level deeper than the previous one.",
+          "properties": {
+            "type": {"const": "heading", "description": "Block kind."},
+            "level": {"type": "integer", "minimum": 1, "maximum": 6, "description": "Heading level, 1 to 6."},
+            "text": {"type": "string", "minLength": 1, "description": "Heading text."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "content"],
+          "description": "A paragraph of running text.",
+          "properties": {
+            "type": {"const": "paragraph", "description": "Block kind."},
+            "content": {"type": "array", "items": {"$ref": "#/$defs/inline"}, "description": "Inline pieces of text in order."},
+            "lang": {"type": "string", "description": "Language of this paragraph as a BCP 47 tag when it differs from the document language. Checked by the validator (code LANGUAGE_INVALID)."},
+            "font": {"type": "string", "description": "Font of this paragraph when it differs from the theme font, for example Noto Sans Arabic for Arabic text. Must be a bundled font name (code FONT_UNKNOWN)."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "items"],
+          "description": "A bulleted or numbered list.",
+          "properties": {
+            "type": {"const": "list", "description": "Block kind."},
+            "ordered": {"type": "boolean", "description": "True for a numbered list. Default false (bulleted)."},
+            "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/listItem"}, "description": "List items in order."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "caption", "header", "rows"],
+          "description": "A data table with a caption and at least one header row. Header cells are tagged as headers.",
+          "properties": {
+            "type": {"const": "table", "description": "Block kind."},
+            "caption": {"type": "string", "minLength": 1, "description": "What the table shows. Read by assistive technology before the table."},
+            "header": {"$ref": "#/$defs/cells", "description": "Header rows. At least one row with at least one non-blank cell (code TABLE_HEADER_EMPTY)."},
+            "rows": {"$ref": "#/$defs/cells", "description": "Body rows."},
+            "rowHeaders": {"type": "boolean", "description": "True when the first cell of every body row is a row header. Default false."},
+            "columnAlign": {"type": "array", "items": {"type": "string", "enum": ["left", "center", "right"]}, "description": "Horizontal alignment per column, left to right. Missing entries mean left."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type"],
+          "description": "An image. Needs exactly one source (uploadId or file) and either a non-blank alt or decorative true; a missing description is reported with code IMAGE_ALT_MISSING.",
+          "properties": {
+            "type": {"const": "image", "description": "Block kind."},
+            "uploadId": {"type": "string", "format": "uuid", "description": "Identifier of an uploaded image file."},
+            "file": {"type": "string", "pattern": "^(?![/\\\\])(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*(^|/)\\.\\.(/|$))[^\\\\\\x00-\\x1f]+$", "description": "Path of an image file relative to the document, for the command-line tool only. Absolute paths, drive letters, backslashes and .. segments are refused."},
+            "alt": {"type": "string", "description": "Description of the image for people who cannot see it. Mutually exclusive with decorative."},
+            "decorative": {"const": true, "description": "True when the image carries no information and is hidden from assistive technology. Mutually exclusive with alt."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "text", "url"],
+          "description": "A paragraph that consists of one link.",
+          "properties": {
+            "type": {"const": "link", "description": "Block kind."},
+            "text": {"type": "string", "description": "Visible link text. Blank text is reported by the validator (code LINK_TEXT_EMPTY)."},
+            "url": {"$ref": "#/$defs/url", "description": "Link target (http, https or mailto)."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type"],
+          "description": "A page break.",
+          "properties": {"type": {"const": "pageBreak", "description": "Block kind."}}
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "height"],
+          "description": "Vertical space. Not announced by assistive technology.",
+          "properties": {
+            "type": {"const": "spacer", "description": "Block kind."},
+            "height": {"$ref": "#/$defs/length", "description": "Height of the space, for example 8mm."}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["type", "rows"],
+          "description": "Label and value pairs, for example the parties of an invoice.",
+          "properties": {
+            "type": {"const": "keyValue", "description": "Block kind."},
+            "rows": {"type": "array", "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}}, "description": "Pairs of [label, value]."}
+          }
+        }
+      ]
+    },
+    "footerBlock": {
+      "description": "A footer block: any block, or a page number that the renderer fills in on every page.",
+      "oneOf": [
+        {"$ref": "#/$defs/block"},
+        {
+          "type": "object", "additionalProperties": false, "required": ["type"],
+          "description": "The current page number.",
+          "properties": {"type": {"const": "pageNumber", "description": "Block kind."}}
+        }
+      ]
+    }
+  }
+}
