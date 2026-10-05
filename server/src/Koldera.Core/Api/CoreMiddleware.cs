@@ -96,3 +96,23 @@ internal sealed class SessionPolicyMiddleware(RequestDelegate next)
         await next(http);
     }
 }
+
+/// <summary>
+/// Every POST under /v1 takes JSON. A cross-site form can send text/plain without a CORS preflight, so a route that
+/// parsed such a body would be drivable from any web page on an instance without authentication. The signed upload
+/// PUT carries raw bytes and is not a POST, so it is unaffected.
+/// </summary>
+internal sealed class JsonContentTypeMiddleware(RequestDelegate next)
+{
+    public async Task InvokeAsync(HttpContext http)
+    {
+        if (HttpMethods.IsPost(http.Request.Method) && http.Request.Path.StartsWithSegments("/v1")
+            && !(System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(http.Request.ContentType, out var type)
+                 && string.Equals(type.MediaType, "application/json", StringComparison.OrdinalIgnoreCase)))
+        {
+            await Problems.Result(415, "UNSUPPORTED_MEDIA_TYPE", "Unsupported media type", "Send the body as application/json.").ExecuteAsync(http);
+            return;
+        }
+        await next(http);
+    }
+}
