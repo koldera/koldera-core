@@ -135,4 +135,17 @@ public sealed class ContractSchemaTests
         Assert.Contains(find, json);
         return json.Replace(find, replace, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("^a$", "a\n", false)] // ECMA: $ is the end of the text only, not before a final newline
+    [InlineData("^a$", "a", true)]
+    [InlineData("^[a$]+$", "a$", true)] // inside a class $ is a literal
+    [InlineData("^a\\$$", "a$", true)] // an escaped $ stays a literal
+    [InlineData("^a\\$$", "a\n", false)]
+    [InlineData("^(?!.*(^|/)x(/|$))[a-z/]+$", "ax/\n", false)]
+    public void PatternDollarMeansEndOfText(string pattern, string value, bool valid)
+    {
+        var schema = ContractSchema.FromText(System.Text.Json.JsonSerializer.Serialize(new { type = "string", pattern }));
+        Assert.Equal(valid, schema.Validate(System.Text.Json.JsonSerializer.Serialize(value)).Count == 0);
+    }
 }

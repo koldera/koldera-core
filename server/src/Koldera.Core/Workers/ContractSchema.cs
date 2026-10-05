@@ -67,6 +67,31 @@ public sealed class ContractSchema
         }
     }
 
+    /// <summary>
+    /// Schemas use ECMA-262 pattern syntax, where an unescaped "$" matches only at the very end of the
+    /// text; .NET also matches it before a final newline, which would let a newline-terminated value pass "^...$".
+    /// Rewrites each "$" outside a character class to "\z" (end of text).
+    /// </summary>
+    internal static string EcmaEndAnchor(string pattern)
+    {
+        var result = new System.Text.StringBuilder(pattern.Length + 4);
+        var inClass = false;
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            var c = pattern[i];
+            if (c == '\\' && i + 1 < pattern.Length)
+            {
+                result.Append(c).Append(pattern[++i]);
+                continue;
+            }
+            if (c == '[') inClass = true;
+            else if (c == ']') inClass = false;
+            if (c == '$' && !inClass) result.Append("\\z");
+            else result.Append(c);
+        }
+        return result.ToString();
+    }
+
     private sealed class Compiler(Dictionary<string, Node> defs)
     {
         public void CompileInto(Node node, JsonElement schema, string where)
@@ -142,7 +167,7 @@ public sealed class ContractSchema
                         node.MaxLength = value.GetInt32();
                         break;
                     case "pattern":
-                        node.Pattern = new Regex(value.GetString()!, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+                        node.Pattern = new Regex(EcmaEndAnchor(value.GetString()!), RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
                         break;
                     case "minItems":
                         node.MinItems = value.GetInt32();

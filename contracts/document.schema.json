@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["title", "language", "body"],
   "properties": {
-    "title": {"type": "string", "minLength": 1, "maxLength": 500, "description": "Document title. Written to the PDF title metadata and shown by viewers in the window title."},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500, "pattern": "\\S", "description": "Document title, at least one non-whitespace character. Written to the PDF title metadata and shown by viewers in the window title."},
     "language": {"type": "string", "description": "Primary language of the document as a BCP 47 tag, for example uk, en or en-US. Checked by the validator (code LANGUAGE_INVALID)."},
     "page": {
       "type": "object",
@@ -35,7 +35,7 @@
   },
   "$defs": {
     "length": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(mm|cm|in|pt)$", "description": "A non-negative length with a unit: mm, cm, in or pt, for example 8mm."},
-    "url": {"type": "string", "pattern": "^(https?://|mailto:)[^\\s]+$", "description": "A link target. Only http, https and mailto addresses are allowed."},
+    "url": {"type": "string", "pattern": "^(https?://|mailto:)[^\\s]+$", "description": "A link target. Only http, https and mailto addresses are allowed; whitespace, including a trailing newline, is refused."},
     "link": {
       "type": "object",
       "additionalProperties": false,
@@ -85,7 +85,7 @@
           "properties": {
             "type": {"const": "heading", "description": "Block kind."},
             "level": {"type": "integer", "minimum": 1, "maximum": 6, "description": "Heading level, 1 to 6."},
-            "text": {"type": "string", "minLength": 1, "description": "Heading text."}
+            "text": {"type": "string", "pattern": "\\S", "description": "Heading text, at least one non-whitespace character."}
           }
         },
         {
@@ -112,11 +112,11 @@
           "description": "A data table with a caption and at least one header row. Header cells are tagged as headers.",
           "properties": {
             "type": {"const": "table", "description": "Block kind."},
-            "caption": {"type": "string", "minLength": 1, "description": "What the table shows. Read by assistive technology before the table."},
-            "header": {"$ref": "#/$defs/cells", "description": "Header rows. At least one row with at least one non-blank cell (code TABLE_HEADER_EMPTY)."},
+            "caption": {"type": "string", "pattern": "\\S", "description": "What the table shows, at least one non-whitespace character. Read by assistive technology before the table."},
+            "header": {"$ref": "#/$defs/cells", "description": "Header rows. At least one row with at least one non-blank cell (code TABLE_HEADER_EMPTY). The first header row sets the column count: every other header row and every body row must have the same number of cells (code TABLE_ROW_LENGTH_MISMATCH)."},
             "rows": {"$ref": "#/$defs/cells", "description": "Body rows."},
             "rowHeaders": {"type": "boolean", "description": "True when the first cell of every body row is a row header. Default false."},
-            "columnAlign": {"type": "array", "items": {"type": "string", "enum": ["left", "center", "right"]}, "description": "Horizontal alignment per column, left to right. Missing entries mean left."}
+            "columnAlign": {"type": "array", "items": {"type": "string", "enum": ["left", "center", "right"]}, "description": "Horizontal alignment per column, left to right. Must have one entry per column when present (code TABLE_ROW_LENGTH_MISMATCH)."}
           }
         },
         {

@@ -13,6 +13,7 @@ public static class DocumentErrorCodes
     public const string ImageAltMissing = "IMAGE_ALT_MISSING";
     public const string HeadingLevelSkipped = "HEADING_LEVEL_SKIPPED";
     public const string TableHeaderEmpty = "TABLE_HEADER_EMPTY";
+    public const string TableRowLengthMismatch = "TABLE_ROW_LENGTH_MISMATCH";
     public const string LinkTextEmpty = "LINK_TEXT_EMPTY";
     public const string FontUnknown = "FONT_UNKNOWN";
     public const string LanguageInvalid = "LANGUAGE_INVALID";

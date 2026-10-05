@@ -14,7 +14,7 @@ public static class DocumentValidator
     private const string SchemaFile = "document.schema.json";
 
     // Shape check only: BCP 47 well-formedness without a registry lookup.
-    private static readonly Regex LanguageTag = new("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    private static readonly Regex LanguageTag = new("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly Lazy<ContractSchema> Schema = new(() => SchemaResources.Load(SchemaFile));
 
@@ -166,6 +166,31 @@ public static class DocumentValidator
         if (!usable)
         {
             errors.Add(new ValidationError(path + "/header", DocumentErrorCodes.TableHeaderEmpty, "A table needs at least one header row and every header row needs a non-blank cell."));
+        }
+        // The first header row sets the column count; with no header row there is nothing to compare to.
+        if (header.GetArrayLength() == 0 || header[0].GetArrayLength() == 0)
+        {
+            return;
+        }
+        var width = header[0].GetArrayLength();
+        RowWidths(header, path + "/header", width, errors);
+        RowWidths(table.GetProperty("rows"), path + "/rows", width, errors);
+        if (table.TryGetProperty("columnAlign", out var align) && align.GetArrayLength() != width)
+        {
+            errors.Add(new ValidationError(path + "/columnAlign", DocumentErrorCodes.TableRowLengthMismatch, $"columnAlign has {align.GetArrayLength()} entries but the table has {width} columns."));
+        }
+    }
+
+    private static void RowWidths(JsonElement rows, string path, int width, List<ValidationError> errors)
+    {
+        var i = 0;
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.GetArrayLength() != width)
+            {
+                errors.Add(new ValidationError($"{path}/{i}", DocumentErrorCodes.TableRowLengthMismatch, $"Row has {row.GetArrayLength()} cells but the first header row has {width}."));
+            }
+            i++;
         }
     }
 
