@@ -11,6 +11,7 @@
     "jobId": {"type": "string", "format": "uuid"},
     "inputPath": {"const": "/work/in/source.html"},
     "outputDirectory": {"const": "/work/out"},
+    "policy": {"type": "object", "additionalProperties": false, "properties": {"chromiumSandbox": {"type": "boolean", "default": false, "description": "Start Chromium with its own sandbox (needs unprivileged user namespaces on the host). Absent or false: Playwright's default, which runs Chromium with --no-sandbox, as required in AWS Lambda and default Docker."}}},
     "limits": {
       "type": "object", "additionalProperties": false,
       "properties": {

@@ -23,6 +23,7 @@
       "required": ["allowHttp"],
       "properties": {
         "allowHttp": {"type": "boolean"},
+        "chromiumSandbox": {"type": "boolean", "default": false, "description": "Start Chromium with its own sandbox (needs unprivileged user namespaces). Absent or false: Playwright's default (--no-sandbox)."},
         "proxyServer": {"type": ["string", "null"], "description": "Egress proxy URL enforced at connection time; app-layer checks alone are insufficient."}
       }
     }

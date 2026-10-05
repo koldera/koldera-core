@@ -53,7 +53,7 @@ export async function collectSemantic(request: HtmlSemanticRequest, options: Sem
 }
 
 /** Collects from already vetted HTML (shared with the source-order fix, which re-checks its corrected copy). */
-export async function collectVetted(html: string, request: Pick<HtmlSemanticRequest, "jobId" | "limits">, sourceSha256: string): Promise<HtmlSemanticResult> {
+export async function collectVetted(html: string, request: Pick<HtmlSemanticRequest, "jobId" | "limits" | "policy">, sourceSha256: string): Promise<HtmlSemanticResult> {
   const budgetMs = budgetFromSeconds(request.limits?.timeoutSeconds);
   const deadline = Date.now() + budgetMs;
   const remaining = () => Math.max(1, deadline - Date.now());
@@ -75,7 +75,7 @@ export async function collectVetted(html: string, request: Pick<HtmlSemanticRequ
   });
   try {
     const work = (async () => {
-      session = await openIsolated(html, remaining());
+      session = await openIsolated(html, remaining(), request.policy?.chromiumSandbox ?? false);
       engineVersion = session.engineVersion;
       // Requests the page attempts are aborted by the deny-all route; the DOM is collected as rendered without them.
       const { elements, truncated } = await collectElements(session.page, Math.min(limitOf(request.limits?.maxNodes), Number.MAX_SAFE_INTEGER));

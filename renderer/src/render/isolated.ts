@@ -24,10 +24,12 @@ export interface IsolatedSession {
  * resolver that answers nothing and no remote fonts. Shared by render, the semantic collector and
  * the source-order fix so all three see the same page.
  */
-export async function openIsolated(html: string, timeoutMs: number): Promise<IsolatedSession> {
+export async function openIsolated(html: string, timeoutMs: number, chromiumSandbox = false): Promise<IsolatedSession> {
   let blocked = 0;
+  // chromiumSandbox is explicit: false (default) keeps --no-sandbox, true needs unprivileged user namespaces.
   const browser = await chromium.launch({
     headless: true,
+    chromiumSandbox,
     args: ["--disable-extensions", "--disable-background-networking", "--disable-sync", "--no-first-run", "--disable-remote-fonts", "--host-resolver-rules=MAP * ~NOTFOUND"],
   });
   try {

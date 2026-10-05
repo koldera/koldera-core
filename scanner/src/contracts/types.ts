@@ -22,7 +22,7 @@ export interface WebWorkerRequest {
   outputDirectory: "/work/out";
   /** Every limit is optional; an absent limit is not enforced. */
   limits?: { timeoutSeconds?: number; maxResponseBytes?: number; maxRequests?: number };
-  policy: { allowHttp: boolean; proxyServer?: string | null };
+  policy: { allowHttp: boolean; proxyServer?: string | null; chromiumSandbox?: boolean };
 }
 
 export type FindingKind = "violation" | "incomplete";

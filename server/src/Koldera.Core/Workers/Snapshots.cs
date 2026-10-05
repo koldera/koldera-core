@@ -131,22 +131,22 @@ public static class Snapshots
     }
 
     /// <summary>Like <see cref="ProbeSemanticAsync"/> but null when the collector is missing or writes nothing.</summary>
-    public static async Task<SemanticResult?> TryProbeSemanticAsync(IWorkerProcess probe, ILogger? log, string scratch, Guid jobId, SemanticLimits? limits, TimeSpan timeout, CancellationToken ct)
+    public static async Task<SemanticResult?> TryProbeSemanticAsync(IWorkerProcess probe, ILogger? log, string scratch, Guid jobId, SemanticLimits? limits, TimeSpan timeout, CancellationToken ct, ChromiumPolicy? policy = null)
     {
         var requestPath = Path.Combine(scratch, "semantic-request.json");
         var resultPath = Path.Combine(scratch, "semantic-result.json");
-        await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeSemanticRequest(new SemanticRequest(OrderWorkerContracts.SpecVersion, jobId, SemanticRequest.CanonicalInputPath, limits)), ct);
+        await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeSemanticRequest(new SemanticRequest(OrderWorkerContracts.SpecVersion, jobId, SemanticRequest.CanonicalInputPath, limits, policy)), ct);
         return await RunOptionalAsync(probe, "semantic collector", log, scratch, requestPath, resultPath, timeout, ct)
             ? OrderWorkerContracts.ParseSemantic(await File.ReadAllTextAsync(resultPath, ct), jobId)
             : null;
     }
 
     /// <summary>Runs the renderer's <c>semantic</c> verb on <c>&lt;scratch&gt;/in/source.html</c>.</summary>
-    public static async Task<SemanticResult> ProbeSemanticAsync(IWorkerProcess probe, string scratch, Guid jobId, SemanticLimits? limits, TimeSpan timeout, CancellationToken ct)
+    public static async Task<SemanticResult> ProbeSemanticAsync(IWorkerProcess probe, string scratch, Guid jobId, SemanticLimits? limits, TimeSpan timeout, CancellationToken ct, ChromiumPolicy? policy = null)
     {
         var requestPath = Path.Combine(scratch, "semantic-request.json");
         var resultPath = Path.Combine(scratch, "semantic-result.json");
-        await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeSemanticRequest(new SemanticRequest(OrderWorkerContracts.SpecVersion, jobId, SemanticRequest.CanonicalInputPath, limits)), ct);
+        await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeSemanticRequest(new SemanticRequest(OrderWorkerContracts.SpecVersion, jobId, SemanticRequest.CanonicalInputPath, limits, policy)), ct);
         var run = await probe.RunAsync(scratch, requestPath, resultPath, timeout, ct);
         if (run.TimedOut) throw new TimeoutException("semantic collector exceeded its time budget");
         if (!File.Exists(resultPath))

@@ -11,6 +11,7 @@ public sealed record Limits(
     long? WebMaxResponseBytes,
     int? WebMaxRequests);
 
+/// <param name="ChromiumSandbox">KOLDERA_CHROMIUM_SANDBOX (default false): start the renderer's and scanner's Chromium with its own sandbox. Needs unprivileged user namespaces; AWS Lambda and default Docker need false.</param>
 /// <param name="CorsOrigins">KOLDERA_CORS_ORIGINS: exact origins (comma separated). A literal * is not supported and allows nothing (fails safe).</param>
 /// <param name="PublicUrl">
 /// KOLDERA_PUBLIC_URL: the externally visible base URL used in signed upload/download URLs. Behind a TLS-terminating proxy
@@ -30,7 +31,8 @@ public sealed record CoreOptions(
     string? WebProxy,
     bool WebAllowHttp,
     Limits Limits,
-    string TypstCommand = CoreOptions.DefaultTypstCommand)
+    string TypstCommand = CoreOptions.DefaultTypstCommand,
+    bool ChromiumSandbox = false)
 {
     public const string DefaultTypstCommand = "/opt/typst/typst";
 
@@ -79,6 +81,10 @@ public sealed record CoreOptions(
         if (allowHttp is not null && !bool.TryParse(allowHttp, out _))
             throw new InvalidOperationException("KOLDERA_WEB_ALLOW_HTTP: expected true or false");
 
+        var chromiumSandbox = Text("CHROMIUM_SANDBOX");
+        if (chromiumSandbox is not null && !bool.TryParse(chromiumSandbox, out _))
+            throw new InvalidOperationException("KOLDERA_CHROMIUM_SANDBOX: expected true or false");
+
         var auth = Text("AUTH")?.ToLowerInvariant();
         if (auth is not (null or "none"))
             throw new InvalidOperationException("KOLDERA_AUTH: only \"none\" is accepted (leave it unset for token authentication)");
@@ -109,7 +115,8 @@ public sealed record CoreOptions(
                 OptionalInt("JOB_TIMEOUT_SECONDS"),
                 Long("WEB_MAX_RESPONSE_BYTES"),
                 OptionalInt("WEB_MAX_REQUESTS")),
-            TypstCommand: Text("TYPST_CMD") ?? DefaultTypstCommand);
+            TypstCommand: Text("TYPST_CMD") ?? DefaultTypstCommand,
+            ChromiumSandbox: chromiumSandbox is not null && bool.Parse(chromiumSandbox));
     }
 
     // Secrets never appear in the printed form (logs, exception messages, test output).
@@ -118,7 +125,7 @@ public sealed record CoreOptions(
         $"RetentionHours = {RetentionHours}, Concurrency = {Concurrency}, QueueCapacity = {QueueCapacity}, " +
         $"Features = [{string.Join(", ", Features.Order())}], CorsOrigins = [{string.Join(", ", CorsOrigins)}], " +
         $"SigningKey = {(SigningKey is null ? "null" : "***")}, WebProxy = {(WebProxy is null ? "null" : "***")}, " +
-        $"WebAllowHttp = {WebAllowHttp}, Limits = {Limits} }}";
+        $"WebAllowHttp = {WebAllowHttp}, ChromiumSandbox = {ChromiumSandbox}, Limits = {Limits} }}";
 
     public void EnsureDataDirWritable()
     {

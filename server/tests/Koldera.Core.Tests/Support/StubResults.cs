@@ -31,8 +31,8 @@ public static class StubResults
             ["error"] = error,
         }.ToJsonString();
 
-    public static StubWorker PdfAnalyzeCompleted() =>
-        new(request => Result(request, "completed", "not_requested", null, [], []));
+    public static StubWorker PdfAnalyzeCompleted(Task? gate = null) =>
+        new(request => Result(request, "completed", "not_requested", null, [], [])) { Gate = gate };
 
     /// <summary>A fix that wrote a "remediated.pdf" with these bytes.</summary>
     public static StubWorker PdfFixApplied(byte[]? remediated = null)

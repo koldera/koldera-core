@@ -32,7 +32,7 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         var maxBytes = options.Limits.HtmlMaxBytes;
         var request = new HtmlRendererRequest(HtmlWorkerContracts.SpecVersion, job.Id, HtmlRendererRequest.CanonicalInputPath, HtmlRendererRequest.CanonicalOutputDirectory,
             maxBytes is null ? null : new HtmlRendererLimits(null, maxBytes, null, null, null),
-            new HtmlRendererPage("A4", true), HtmlRendererContent.For(job.ContentSelector));
+            new HtmlRendererPage("A4", true), HtmlRendererContent.For(job.ContentSelector), ChromiumPolicy.From(options));
         var requestPath = Path.Combine(scratch, "request.json");
         var resultPath = Path.Combine(scratch, "result.json");
         await File.WriteAllTextAsync(requestPath, HtmlWorkerContracts.SerializeRequest(request), ct);
@@ -79,7 +79,7 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         if (html.Semantic is not null)
         {
             var semantic = await Snapshots.TryProbeSemanticAsync(html.Semantic, log, scratch, job.Id,
-                maxBytes is null ? null : new SemanticLimits(null, maxBytes, null, null, null), timeout, ct);
+                maxBytes is null ? null : new SemanticLimits(null, maxBytes, null, null, null), timeout, ct, ChromiumPolicy.From(options));
             if (semantic?.Status == "completed")
             {
                 if (semantic.SourceSha256 != expectedSource)

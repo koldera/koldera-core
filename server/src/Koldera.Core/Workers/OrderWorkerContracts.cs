@@ -136,7 +136,8 @@ public sealed record SemanticRequest(
     [property: JsonPropertyName("specVersion")] string SpecVersion,
     [property: JsonPropertyName("jobId")] Guid JobId,
     [property: JsonPropertyName("inputPath")] string InputPath,
-    [property: JsonPropertyName("limits")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SemanticLimits? Limits)
+    [property: JsonPropertyName("limits")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SemanticLimits? Limits,
+    [property: JsonPropertyName("policy")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChromiumPolicy? Policy = null)
 {
     public const string CanonicalInputPath = "/work/in/source.html";
 }
@@ -172,7 +173,8 @@ public sealed record HtmlReorderRequest(
     [property: JsonPropertyName("orderedChildIndexes")] List<int> OrderedChildIndexes,
     [property: JsonPropertyName("limits")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] HtmlReorderLimits? Limits,
     [property: JsonPropertyName("page")] HtmlRendererPage Page,
-    [property: JsonPropertyName("content")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] HtmlRendererContent? Content = null);
+    [property: JsonPropertyName("content")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] HtmlRendererContent? Content = null,
+    [property: JsonPropertyName("policy")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChromiumPolicy? Policy = null);
 
 public sealed record HtmlReorderChecks(
     [property: JsonPropertyName("domSequenceMatchesApproved")] bool? DomSequenceMatchesApproved,

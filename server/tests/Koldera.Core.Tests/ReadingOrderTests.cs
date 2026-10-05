@@ -623,4 +623,47 @@ public class ReadingOrderTests
         var wrong = await Post(f, sourceId, Body(Sha(Fixtures.SmallHtml()), [p[2], p[1], p[0]]));
         Assert.Equal(HttpStatusCode.Conflict, wrong.StatusCode);
     }
+
+    [Fact]
+    public async Task A_remediation_honours_prefer_wait_and_returns_the_finished_job()
+    {
+        using var f = PdfFactory();
+        var (sourceId, snapshot) = await CompletedPdfJob(f);
+        var p = Ids(snapshot, "P");
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/v1/jobs/{sourceId}/reading-order/remediations") { Content = JsonContent.Create(Body(Sha(Fixtures.SmallPdf()), [p[2], p[1], p[0]])) };
+        req.Headers.Add("Prefer", "wait=30");
+        var r = await f.AuthorizedClient().SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("wait=30", r.Headers.GetValues("Preference-Applied").Single());
+        var job = await r.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("completed", job.GetProperty("state").GetString());
+        Assert.Equal("order_pdf", job.GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task The_chromium_sandbox_option_reaches_the_semantic_render_and_reorder_requests_only_when_set()
+    {
+        foreach (var sandbox in new[] { "true", null })
+        {
+            var render = StubResults.HtmlRenderCompleted();
+            var reorder = OrderStubs.HtmlReorderApplied(CorrectedHtml, Fixtures.OtherPdf());
+            var semantic = OrderStubs.SemanticTree(HtmlTexts);
+            using var f = CoreFactory.WithStubWorkers(OrderStubs.PdfEngine(), OrderStubs.StructureTree(PdfTexts), new() { ["KOLDERA_CHROMIUM_SANDBOX"] = sandbox },
+                htmlRender: render, inspect: OrderStubs.InspectEchoing(), semantic: semantic, htmlReorder: reorder);
+            var sourceId = await f.CreateHtmlJob();
+            await f.WaitForJob(sourceId);
+            var snapshot = await Get(f, sourceId);
+            var c = Ids(snapshot, "h1", "html_dom").Concat(Ids(snapshot, "p", "html_dom")).ToArray();
+            var id = await Accepted(await Post(f, sourceId, Body(Sha(Fixtures.SmallHtml()), [c[0], c[3], c[2], c[1]], target: "source_html")));
+            await f.WaitForJob(id);
+
+            var requests = new[] { render.Calls[0].RequestJson, semantic.Calls[0].RequestJson, reorder.Calls[0].RequestJson };
+            foreach (var json in requests)
+            {
+                var root = JsonDocument.Parse(json).RootElement;
+                if (sandbox is null) Assert.False(root.TryGetProperty("policy", out _), json);
+                else Assert.True(root.GetProperty("policy").GetProperty("chromiumSandbox").GetBoolean(), json);
+            }
+        }
+    }
 }

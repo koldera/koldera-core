@@ -77,7 +77,7 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
   let browser: Browser | undefined;
   const guard = new RequestGuard({ policy, resolver, maxRequests: request.limits?.maxRequests ?? Infinity, maxResponseBytes: request.limits?.maxResponseBytes ?? Infinity });
   try {
-    browser = await chromium.launch({ headless: true, args, ...(proxy ? { proxy } : {}) });
+    browser = await chromium.launch({ headless: true, chromiumSandbox: request.policy.chromiumSandbox ?? false, args, ...(proxy ? { proxy } : {}) });
     const version = engineVersion(browser.version());
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },

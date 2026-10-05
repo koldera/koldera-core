@@ -23,7 +23,8 @@ public sealed record WebWorkerLimits(
 
 public sealed record WebWorkerPolicy(
     [property: JsonPropertyName("allowHttp")] bool AllowHttp,
-    [property: JsonPropertyName("proxyServer")] string? ProxyServer);
+    [property: JsonPropertyName("proxyServer")] string? ProxyServer,
+    [property: JsonPropertyName("chromiumSandbox")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? ChromiumSandbox = null);
 
 public sealed record WebWorkerFinding(
     [property: JsonPropertyName("ruleId")] string RuleId,
