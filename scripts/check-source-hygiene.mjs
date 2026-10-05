@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 const RULES = [
   ["milestone", /\b(M[1-5][ab]?|UF-\d+)\b/],
   ["owner-decision", /owner decision|plan 20\d\d-/i],
-  ["internal-doc", /docs\/superpowers|claudedocs|docs\/1\d-|docs\/m\d-/],
+  // Numbered documents (docs/04, docs/13-...) are private; the public docs have names.
+  ["internal-doc", /docs\/superpowers|claudedocs|docs\/\d{2}(?![\w.])|docs\/\d{2}-|docs\/m\d-/],
+  // "the platform" is the private hosted product; here it is the server, core or the caller.
+  ["private-product", /\bthe platform\b/i],
   ["hosted-host", /koldera-accessibility\.vercel\.app|railway\.app|supabase\.co|r2\.cloudflarestorage|ap_sk_|ap_pk_/i],
   ["claim-word", /\b(compliant|compliance|certified)\b|100\s*%\s*accessible/i],
   ["claim-word", /\bcertificates?\b/i, /\.md$/],

@@ -5,7 +5,7 @@ namespace Koldera.Core.Workers;
 
 // Wire types of the reading-order worker contracts: the Java `structure` / `reorder` verbs
 // and the Node `semantic` / `reorder` verbs. Every document is validated against the
-// schema before any field is trusted; the `private` blocks never leave the platform.
+// schema before any field is trusted; the `private` blocks never leave the server.
 
 public sealed record StructureBox([property: JsonPropertyName("x")] double X, [property: JsonPropertyName("y")] double Y, [property: JsonPropertyName("width")] double Width, [property: JsonPropertyName("height")] double Height);
 

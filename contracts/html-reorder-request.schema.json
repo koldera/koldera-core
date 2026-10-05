@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.koldera-core.invalid/html-reorder-request.v1.json",
   "title": "HtmlReorderRequestV1",
-  "description": "One explicitly approved permutation of the element children of ONE parent in a static HTML source (docs/13, source HTML fix). The platform resolves the reviewer's opaque node ids to parentPath / orderedChildIndexes. The renderer reorders the DOM siblings on a copy, removes only the siblings' own inline `order` declarations when they merely encoded the approved visual order, re-renders, and refuses anything ambiguous.",
+  "description": "One explicitly approved permutation of the element children of ONE parent in a static HTML source (source HTML fix). The server resolves the reviewer's opaque node ids to parentPath / orderedChildIndexes. The renderer reorders the DOM siblings on a copy, removes only the siblings' own inline `order` declarations when they merely encoded the approved visual order, re-renders, and refuses anything ambiguous.",
   "type": "object", "additionalProperties": false,
   "required": ["specVersion", "jobId", "inputPath", "outputDirectory", "baseSha256", "parentPath", "orderedChildIndexes", "page"],
   "properties": {

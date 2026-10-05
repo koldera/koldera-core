@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.koldera-core.invalid/pdf-structure-result.v1.json",
   "title": "PdfStructureResultV1",
-  "description": "Read-only structure snapshot of a PDF (`structure` verb): the logical structure tree in its stored order with verified marked-content references, per-page invariants used by the order-repair gate, and the annotation (focus) sequence. Evidence, never a verdict. The `private` block of each node is for the platform's own mapping and is never published to clients.",
+  "description": "Read-only structure snapshot of a PDF (`structure` verb): the logical structure tree in its stored order with verified marked-content references, per-page invariants used by the order-repair gate, and the annotation (focus) sequence. Evidence, never a verdict. The `private` block of each node is for the server's own mapping and is never published to clients.",
   "type": "object", "additionalProperties": false,
   "required": ["specVersion", "status", "sha256", "bytes", "engineVersion", "document", "nodes", "focusOrderNodeIds", "focusOrderMeasured", "findings", "error"],
   "properties": {

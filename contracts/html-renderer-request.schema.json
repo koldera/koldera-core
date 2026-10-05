@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.koldera-core.invalid/html-renderer-request.v1.json",
   "title": "HtmlRendererRequestV1",
-  "description": "One bounded static-HTML-to-PDF render. The source is a file the platform already verified (size, hash, text/html ticket); the renderer preflights its content again and refuses anything that would need a network, a script or a host file.",
+  "description": "One bounded static-HTML-to-PDF render. The source is a file the server already verified (size, hash, text/html ticket); the renderer preflights its content again and refuses anything that would need a network, a script or a host file.",
   "type": "object",
   "additionalProperties": false,
   "required": ["specVersion", "jobId", "inputPath", "outputDirectory", "page"],

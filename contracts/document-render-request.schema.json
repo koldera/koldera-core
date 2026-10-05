@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.koldera-core.invalid/document-render-request.v1.json",
   "title": "DocumentRenderRequestV1",
-  "description": "One bounded structured-document-to-PDF render by the Typst template. The document is a file the platform already validated against document.schema.json; the renderer checks it again and refuses anything unexpected. Images are files the caller placed in imagesDirectory.",
+  "description": "One bounded structured-document-to-PDF render by the Typst template. The document is a file the server already validated against document.schema.json; the renderer checks it again and refuses anything unexpected. Images are files the caller placed in imagesDirectory.",
   "type": "object", "additionalProperties": false,
   "required": ["specVersion", "jobId", "documentPath", "imagesDirectory", "outputDirectory", "typstCommand"],
   "properties": {

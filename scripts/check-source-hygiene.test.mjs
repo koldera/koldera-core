@@ -89,3 +89,13 @@ test("missing path exits 2 with a message", () => {
   assert.equal(r.status, 2);
   assert.match(r.stderr, /no\/such\/path: not found/);
 });
+
+test("flags numbered pointers into private documents and the private-product wording", () => {
+  assert.deepEqual(rulesOf("a.json", '"description": "one permutation (docs/13). x"'), ["internal-doc"]);
+  assert.deepEqual(rulesOf("squid.conf", '# Egress proxy (docs/05 "SSRF controls")'), ["internal-doc"]);
+  assert.deepEqual(rulesOf("a.java", "// part of the reason format (docs/04, web fix summary)"), ["internal-doc"]);
+  assert.deepEqual(rulesOf("a.cs", "// the private blocks never leave the platform."), ["private-product"]);
+  assert.deepEqual(rulesOf("a.json", '"The platform resolves the ids"'), ["private-product"]);
+  assert.deepEqual(rulesOf("README.md", "See [docs/fixtures.md](docs/fixtures.md) and docs/api.md."), []);
+  assert.deepEqual(rulesOf("a.md", "Runs on every platform; a cross-platform build."), []);
+});
