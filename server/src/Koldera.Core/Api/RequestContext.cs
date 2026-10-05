@@ -3,8 +3,9 @@ namespace Koldera.Core;
 /// <summary>Who is calling and what they may see; every owner-scoped route goes through here.</summary>
 public static class RequestContext
 {
-    // Server principals own what they create; session owners ("session:<sid>") arrive with sessions.
-    public static string Owner(HttpContext http) => "server";
+    // Server (and auth-disabled) principals share the owner "server"; each client session owns only what it created.
+    public static string Owner(HttpContext http) =>
+        http.GetCorePrincipal() is { Kind: "session" } s ? "session:" + s.SessionId : "server";
 
     public static bool Owns(HttpContext http, CoreJob job) => job.Owner == Owner(http);
 

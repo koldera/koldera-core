@@ -9,7 +9,8 @@ using Microsoft.Extensions.Options;
 namespace Koldera.Core;
 
 /// <summary>Who is calling. Kind is "server", "session" or "anonymous" (auth disabled, server rights).</summary>
-public sealed record CorePrincipal(string Kind, string? SessionId = null, string? AllowedOrigin = null, int? MaxJobs = null);
+public sealed record CorePrincipal(string Kind, string? SessionId = null, string? AllowedOrigin = null, int? MaxJobs = null,
+    IReadOnlyList<string>? Scopes = null, DateTimeOffset? ExpiresAt = null);
 
 public static class CorePrincipalExtensions
 {
@@ -109,7 +110,13 @@ internal sealed class BearerHandler(
 
         foreach (var resolver in resolvers)
             if (resolver.Resolve(token) is { } principal)
+            {
+                // A browser token only works from the origin it was minted for, and a browser always sends Origin.
+                if (principal.Kind == "session"
+                    && !string.Equals(Request.Headers.Origin.ToString().TrimEnd('/'), principal.AllowedOrigin, StringComparison.OrdinalIgnoreCase))
+                    return Task.FromResult(AuthenticateResult.Fail("Session token used from another origin."));
                 return Task.FromResult(Succeed(principal));
+            }
         return Task.FromResult(AuthenticateResult.Fail("Invalid bearer token."));
     }
 

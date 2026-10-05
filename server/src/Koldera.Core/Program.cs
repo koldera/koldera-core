@@ -19,6 +19,10 @@ builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp => new DataStore(sp.GetRequiredService<CoreOptions>().DataDir, sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new UrlSigner(SigningKeys.Resolve(sp.GetRequiredService<CoreOptions>()), sp.GetRequiredService<TimeProvider>()));
 
+builder.Services.AddSingleton(sp => new ClientSessionTokens(SigningKeys.Resolve(sp.GetRequiredService<CoreOptions>()), sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<ITokenResolver>(sp => sp.GetRequiredService<ClientSessionTokens>());
+builder.Services.AddSingleton(sp => new SessionBudgets(sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp => new Idempotency(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new JobQueue(sp.GetRequiredService<CoreOptions>().QueueCapacity));
 builder.Services.AddSingleton<JobRunner>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<JobRunner>());
@@ -77,13 +81,18 @@ app.Services.GetRequiredService<UrlSigner>(); // fails fast on a bad signing key
 app.Services.GetRequiredService<ArtifactIndex>(); // rebuilds the artifact lookup from the data directory
 app.Services.GetRequiredService<ServerTokens>(); // resolves (and, if needed, generates and logs) the tokens at startup
 
+// CORS first so preflights and error responses carry its headers; the policy and idempotency layers need the principal.
+app.UseMiddleware<CorsMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<SessionPolicyMiddleware>();
+app.UseMiddleware<IdempotencyMiddleware>();
 
 app.MapGet("/healthz", () => Results.Json(new { status = "ok" }));
 // Every /v1 route requires authorization by default.
 var v1 = app.MapGroup("/v1").RequireAuthorization();
 v1.MapInfoEndpoints();
+v1.MapClientSessionEndpoints();
 v1.MapUploadEndpoints();
 v1.MapJobEndpoints();
 v1.MapDocumentEndpoints();

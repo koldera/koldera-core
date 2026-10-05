@@ -148,9 +148,16 @@ public static partial class JobEndpoints
     /// <summary>Saves the job as queued before enqueueing it, so a runner that picks it up at once finds it; a full queue removes it again.</summary>
     internal static async Task<IResult> AcceptAsync(CoreJob job, HttpContext http, DataStore store, JobQueue queue)
     {
-        await store.SaveJobAsync(job);
+        // A session may start only maxJobs jobs; the reservation is given back if the job is not accepted after all.
+        var principal = http.GetCorePrincipal();
+        var budgets = principal.Kind == "session" ? http.RequestServices.GetRequiredService<SessionBudgets>() : null;
+        if (budgets is not null && !budgets.TryReserve(principal))
+            return Problems.Result(429, "SESSION_JOB_LIMIT", "Session job limit reached", "This client session has used its job budget; mint a new session.");
+        try { await store.SaveJobAsync(job); }
+        catch { budgets?.Release(principal); throw; }
         if (!queue.TryEnqueue(job.Id))
         {
+            budgets?.Release(principal);
             store.DeleteJob(job.Id);
             http.Response.Headers.RetryAfter = "30";
             return Problems.Result(503, "QUEUE_FULL", "Job queue is full", "Try again shortly.");
