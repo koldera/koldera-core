@@ -53,6 +53,15 @@ builder.Services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRe
     sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IJobExecutor>(sp => new PdfJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
     sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp =>
+{
+    var w = sp.GetRequiredService<WorkerOptions>();
+    return new OrderWorkers(SubprocessWorker.ForRequestResult(w.PdfReorderCommand), SubprocessWorker.ForNodeVerb(w.HtmlReorderCommand, w.ContractsDir));
+});
+builder.Services.AddSingleton<IJobExecutor>(sp => new OrderPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
+    sp.GetRequiredService<OrderWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<IJobExecutor>(sp => new OrderHtmlExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
+    sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<OrderWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new ArtifactIndex(sp.GetRequiredService<DataStore>()));
 
 var app = builder.Build();
@@ -71,6 +80,7 @@ v1.MapInfoEndpoints();
 v1.MapUploadEndpoints();
 v1.MapJobEndpoints();
 v1.MapJobReadEndpoints();
+v1.MapReadingOrderEndpoints();
 app.Run();
 
 public partial class Program;

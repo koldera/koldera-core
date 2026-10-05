@@ -13,13 +13,13 @@ public static class StubResults
         ["failedRules"] = new JsonArray(failed.Select(f => (JsonNode)new JsonObject { ["ruleId"] = f.Rule, ["count"] = f.Count }).ToArray()),
     };
 
-    private static string Result(string request, string status, string remediation, JsonObject? final, JsonArray actions, JsonArray artifacts, JsonObject? error = null) =>
+    internal static string Result(string request, string status, string remediation, JsonObject? final, JsonArray actions, JsonArray artifacts, JsonObject? error = null, string? originalSha256 = null) =>
         new JsonObject
         {
             ["specVersion"] = "1.0",
             ["jobId"] = JsonNode.Parse(request)!["jobId"]!.GetValue<string>(),
             ["status"] = status,
-            ["originalSha256"] = Fixtures.Sha256(Fixtures.SmallPdf()),
+            ["originalSha256"] = originalSha256 ?? Fixtures.Sha256(Fixtures.SmallPdf()),
             ["engineVersion"] = "stub-engine",
             ["baseline"] = Validation("failed", ("7.1-3", 2)),
             ["finalValidation"] = final,

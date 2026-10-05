@@ -54,7 +54,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
 
     /// <summary>A server (token "t") whose PDF engine processes are the given stubs; the structure probe is off unless one is given.</summary>
     public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null,
-        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null, IWorkerProcess? web = null, string? features = null)
+        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null, IWorkerProcess? web = null, string? features = null, IWorkerProcess? pdfReorder = null, IWorkerProcess? htmlReorder = null)
     {
         var values = new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "t" };
         foreach (var (k, v) in env ?? []) values[k] = v;
@@ -68,6 +68,10 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             s.RemoveAll<HtmlWorkers>();
             s.AddSingleton(new HtmlWorkers(htmlRender ?? new StubWorker(_ => throw new InvalidOperationException("no html render stub")),
                 inspect ?? new StubWorker(_ => throw new InvalidOperationException("no inspect stub")), semantic));
+            // Likewise for the reorder verbs: a remediation without its stub must not spawn a process.
+            s.RemoveAll<OrderWorkers>();
+            s.AddSingleton(new OrderWorkers(pdfReorder ?? new StubWorker(_ => throw new InvalidOperationException("no pdf reorder stub")),
+                htmlReorder ?? new StubWorker(_ => throw new InvalidOperationException("no html reorder stub"))));
             // Without a web stub a scan would start a real process; fail loudly if a test forgot it.
             s.RemoveAll<WebWorkers>();
             s.AddSingleton(new WebWorkers(web ?? new StubWorker(_ => throw new InvalidOperationException("no web stub"))));

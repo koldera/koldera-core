@@ -108,3 +108,10 @@ public sealed record CoreSnapshot
     public string EngineVersion { get; init; } = "";
     public DateTimeOffset CreatedAt { get; init; }
 }
+
+/// <summary>What a reading-order correction changes: the HTML source of an HTML-to-PDF job or the structure tags of a PDF.</summary>
+public static class RemediationTarget
+{
+    public const string SourceHtml = "source_html";
+    public const string PdfTags = "pdf_tags";
+}

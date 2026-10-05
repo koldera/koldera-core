@@ -169,12 +169,12 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
             run.BaselineValidationJson, run.FinalValidationJson, findings, run.Actions, [generated, .. run.Artifacts], snapshots, structure.Pages);
     }
 
-    private static string DescribeMissingTags(InspectStructure? s) => s is null
+    internal static string DescribeMissingTags(InspectStructure? s) => s is null
         ? "the file could not be inspected"
         : $"MarkInfo/Marked={s.MarkInfoMarked.ToString().ToLowerInvariant()}, StructTreeRoot={s.StructTreeRoot.ToString().ToLowerInvariant()}, structureElements={s.StructureElements}, contentReferences={s.ContentReferences}";
 
-    private static string DescribeRoles(InspectStructure s) =>
+    internal static string DescribeRoles(InspectStructure s) =>
         s.Roles.Count == 0 ? "none" : string.Join(", ", s.Roles.Take(12).Select(r => $"{r.Role}x{r.Count}"));
 
-    private static string Truncate(string value) => value.Length <= EngineVersionMaxLength ? value : value[..EngineVersionMaxLength];
+    internal static string Truncate(string value) => value.Length <= EngineVersionMaxLength ? value : value[..EngineVersionMaxLength];
 }
