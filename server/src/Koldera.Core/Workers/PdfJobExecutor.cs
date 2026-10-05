@@ -7,7 +7,7 @@ public sealed record PdfWorkers(IWorkerProcess Process, IWorkerProcess? Structur
 /// Runs the PDF engine on an upload: worker <c>completed</c> means job completed, <c>unsupported</c> or
 /// <c>failed</c> means job failed. A completed run is followed by the structure probe when one is configured.
 /// </summary>
-public sealed class PdfJobExecutor(DataStore store, PdfWorkers workers, CoreOptions options, TimeProvider clock) : IJobExecutor
+public sealed class PdfJobExecutor(DataStore store, PdfWorkers workers, CoreOptions options, TimeProvider clock, Microsoft.Extensions.Logging.ILogger? log = null) : IJobExecutor
 {
     public string Kind => CoreJobKind.Pdf;
 
@@ -30,15 +30,16 @@ public sealed class PdfJobExecutor(DataStore store, PdfWorkers workers, CoreOpti
             var subject = job.Mode == "fix" ? run.Artifacts.FirstOrDefault(a => a.Kind == "remediated") : null;
             var subjectPath = subject is null ? Path.Combine(scratch, "in", "document.pdf") : Path.Combine(outDir, subject.FileName);
             if (!File.Exists(subjectPath)) throw new WorkerContractException("tagged copy missing on disk for the structure probe");
-            var structure = await Snapshots.ProbeStructureAsync(workers.StructureProbe, scratch, subjectPath, timeout, ct);
-            if (structure.Status == "inspected")
+            // Evidence only: a probe that is missing or writes nothing leaves the job without a snapshot.
+            var structure = await Snapshots.TryProbeStructureAsync(workers.StructureProbe, log, scratch, subjectPath, timeout, ct);
+            if (structure?.Status == "inspected")
             {
                 if (structure.Sha256 != (subject?.Sha256 ?? upload.Sha256.ToLowerInvariant()))
                     throw new WorkerContractException("structure probe reported a different SHA-256 than the artifact it was given");
                 snapshots.Add(Snapshots.FromStructure(structure, clock.GetUtcNow()));
                 findings = [.. findings, .. Snapshots.FindingsFromStructure(structure)];
             }
-            pages = structure.Document?.Pages;
+            pages = structure?.Document?.Pages;
         }
         return new JobOutcome(run.State, run.ResultStatus, run.ErrorCode, run.ErrorMessage, run.RemediationStatus, run.EngineVersion,
             run.BaselineValidationJson, run.FinalValidationJson, findings, run.Actions, run.Artifacts, snapshots, pages);

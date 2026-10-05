@@ -21,7 +21,14 @@ public static class CliApp
 
     /// <summary>No arguments, <c>serve</c> or only host options (<c>--urls</c> and the like) start the server; anything else is a CLI invocation.</summary>
     public static bool StartsServer(string[] args) =>
-        args.Length == 0 || args[0] == "serve" || (args[0].StartsWith("--") && args[0] is not ("--help" or "--version"));
+        args.Length == 0 || args[0] == "serve" || IsHostArgument(args[0]);
+
+    private static readonly string[] HostOptions = ["--urls", "--environment", "--contentRoot", "--applicationName", "--port"];
+
+    /// <summary>A host option or a configuration argument (<c>Key=value</c>, <c>/Key</c>, <c>Section:Key</c>); any other leading option is the CLI's to refuse.</summary>
+    private static bool IsHostArgument(string arg) =>
+        HostOptions.Any(o => arg.Equals(o, StringComparison.OrdinalIgnoreCase) || arg.StartsWith(o + "=", StringComparison.OrdinalIgnoreCase))
+        || arg.Contains('=') || arg.StartsWith('/') || arg.Contains(':');
 
     /// <param name="env">Environment lookup for KOLDERA_* settings (default: the process environment).</param>
     /// <param name="tempRoot">Where the temporary data directory is created (default: the system temp directory).</param>
@@ -41,13 +48,13 @@ public static class CliApp
         }
         if (!CliOptions.Commands.Contains(args[0]))
             return await UsageError(stderr, args[0] == "serve" ? "serve starts the HTTP server and takes no job" : $"unknown command: {args[0]}", "");
-        if (args.Skip(1).Any(a => a is "--help" or "-h"))
+        var command = CliOptions.Parse(args, out var parseError);
+        if (command is null) return await UsageError(stderr, parseError!, args[0]);
+        if (command.Help)
         {
             await stdout.WriteLineAsync(CliOptions.HelpOf(args[0]));
             return Summary.Ok;
         }
-        var command = CliOptions.Parse(args, out var parseError);
-        if (command is null) return await UsageError(stderr, parseError!, args[0]);
 
         env ??= Environment.GetEnvironmentVariable;
         CoreOptions options;
@@ -73,6 +80,12 @@ public static class CliApp
             await stderr.WriteLineAsync("koldera: interrupted");
             return Interrupted;
         }
+        catch (Exception e)
+        {
+            // Last resort: one line, no stack trace (the message may name a path, which is the user's own).
+            await stderr.WriteLineAsync($"koldera: unexpected error ({e.GetType().Name}): {e.Message}");
+            return Summary.JobFailed;
+        }
         finally
         {
             try { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); }
@@ -94,6 +107,7 @@ public static class CliApp
         var services = new ServiceCollection()
             .AddSingleton(clock).AddSingleton(options).AddSingleton(store)
             .AddSingleton(workers.Pdf()).AddSingleton(workers.Html()).AddSingleton(workers.Web()).AddSingleton(workers.Document())
+            .AddSingleton<ILoggerFactory>(new StderrLoggerFactory(stderr))
             .AddExecutors();
         await using var provider = services.BuildServiceProvider();
         var queue = new JobQueue(options.QueueCapacity);
@@ -120,7 +134,7 @@ public static class CliApp
         {
             written = await WriteArtifactsAsync(finished, store, command.OutDir ?? Directory.GetCurrentDirectory(), stem, ct);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             await stderr.WriteLineAsync("koldera: could not write the output: " + e.Message);
             return Summary.JobFailed;
@@ -328,35 +342,63 @@ public static class CliApp
     // ---- output ----
 
     /// <summary>Copies every artifact to <paramref name="outDir"/> as <c>stem.kind.ext</c>; an existing file is never overwritten (-1, -2, ... before the extension).</summary>
-    private static async Task<List<WrittenArtifact>> WriteArtifactsAsync(CoreJob job, DataStore store, string outDir, string stem, CancellationToken ct)
+    internal static async Task<List<WrittenArtifact>> WriteArtifactsAsync(CoreJob job, DataStore store, string outDir, string stem, CancellationToken ct)
     {
+        const int MaxCollisions = 1000;
         var written = new List<WrittenArtifact>();
         if (job.Artifacts.Count == 0) return written;
-        Directory.CreateDirectory(outDir);
-        foreach (var artifact in job.Artifacts)
+        try
         {
-            var source = Path.Combine(store.JobDir(job.Id), "out", artifact.FileName);
-            var extension = Path.GetExtension(artifact.FileName);
-            var baseName = $"{stem}.{SafeName(artifact.Kind)}";
-            for (var n = 0; ; n++)
+            Directory.CreateDirectory(outDir);
+            foreach (var artifact in job.Artifacts)
             {
-                var path = Path.GetFullPath(Path.Combine(outDir, n == 0 ? baseName + extension : $"{baseName}-{n}{extension}"));
+                // The source is opened first, so a missing artifact fails before any target exists.
+                await using var from = File.OpenRead(Path.Combine(store.JobDir(job.Id), "out", artifact.FileName));
+                var extension = Path.GetExtension(artifact.FileName);
+                var baseName = $"{stem}.{SafeName(artifact.Kind)}";
+                var (path, target) = CreateNew(outDir, baseName, extension, MaxCollisions);
                 try
                 {
-                    // CreateNew refuses an existing file, also when another process creates it between a check and the write.
-                    await using var target = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                    await using var from = File.OpenRead(source);
-                    await from.CopyToAsync(target, ct);
+                    await using (target) await from.CopyToAsync(target, ct);
                 }
-                catch (IOException) when (File.Exists(path))
+                catch
                 {
-                    continue;
+                    TryDelete(path); // never leave a partial file behind
+                    throw;
                 }
                 written.Add(new WrittenArtifact(artifact, path));
-                break;
             }
         }
+        catch
+        {
+            foreach (var w in written) TryDelete(w.Path); // all or nothing for this run's files
+            throw;
+        }
         return written;
+    }
+
+    /// <summary>Creates <c>name.ext</c>, else <c>name-1.ext</c>, ... Only an existing target counts as a collision; any other error is raised.</summary>
+    private static (string Path, FileStream Stream) CreateNew(string outDir, string baseName, string extension, int maxCollisions)
+    {
+        for (var n = 0; n <= maxCollisions; n++)
+        {
+            var path = Path.GetFullPath(Path.Combine(outDir, n == 0 ? baseName + extension : $"{baseName}-{n}{extension}"));
+            try
+            {
+                // CreateNew refuses an existing file, also when another process creates it between a check and the write.
+                return (path, new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None));
+            }
+            catch (IOException) when (File.Exists(path))
+            {
+            }
+        }
+        throw new IOException($"too many existing files named {baseName}*{extension} in {outDir}");
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     private static string SafeName(string name)
@@ -371,6 +413,13 @@ public static class CliApp
         await stderr.WriteLineAsync($"koldera: {message}");
         await stderr.WriteLineAsync(CliOptions.UsageOf(command));
         return Summary.Usage;
+    }
+
+    private sealed class StderrLoggerFactory(TextWriter stderr) : ILoggerFactory
+    {
+        public ILogger CreateLogger(string categoryName) => new StderrLogger<object>(stderr);
+        public void AddProvider(ILoggerProvider provider) { }
+        public void Dispose() { }
     }
 
     /// <summary>Runner log lines go to stderr, so stdout stays clean for <c>--json</c>.</summary>

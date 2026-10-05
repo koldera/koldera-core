@@ -19,15 +19,17 @@ internal static class Summary
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    /// 0 completed with no failed machine rule, 2 completed with failed rules (a document whose generated PDF
-    /// fails veraPDF counts as 2), 3 failed or unsupported.
+    /// 0 only when the machine verdict is "passed"; 2 when it is "failed" or rules failed (a document whose generated PDF
+    /// fails veraPDF counts as 2); 3 for a failed job and for a completed one without a verdict (not_run, error, missing).
     /// </summary>
     public static int ExitCode(CoreJob job)
     {
         if (job.State != CoreJobState.Completed)
             return job.ErrorCode == DocumentExecutor.ValidationFailed ? FailedRules : JobFailed;
         var v = JobResponse.From(job).Validation;
-        return v is not null && (v.Status == "failed" || v.FailedRules.Length > 0) ? FailedRules : Ok;
+        if (v is null) return JobFailed;
+        if (v.Status == "failed" || v.FailedRules.Length > 0) return FailedRules;
+        return v.Status == "passed" ? Ok : JobFailed;
     }
 
     /// <summary>The <c>--json</c> document: the API shapes, with a local path instead of a download URL on each artifact.</summary>
