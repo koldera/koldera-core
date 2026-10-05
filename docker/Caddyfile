@@ -1,0 +1,6 @@
+# TLS example: replace example.com with your host name (DNS must point at this machine, ports 80 and 443 reachable).
+# Caddy obtains and renews the certificate itself. Mount this file over /etc/caddy/Caddyfile and publish 80 and 443.
+# Set KOLDERA_PUBLIC_URL=https://example.com on the core service so signed upload and download URLs use it.
+example.com {
+	reverse_proxy core:8080
+}

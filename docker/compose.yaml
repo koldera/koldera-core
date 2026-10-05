@@ -1,0 +1,72 @@
+# Hardened single-host deployment. Only `front` publishes a port; `core` sits on an internal network and
+# can reach the internet solely through the `egress` proxy, which refuses private and metadata addresses.
+
+#   KOLDERA_TOKEN=<long random secret> docker compose -f docker/compose.yaml up -d
+#   curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info
+
+# `front` speaks plain HTTP here. For TLS use docker/Caddyfile, and for single sign-on docker/compose.sso.yaml.
+
+name: koldera
+
+services:
+  front:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [public, internal]
+    depends_on:
+      core:
+        condition: service_healthy
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]   # the caddy binary carries this file capability; without it exec is refused
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 128
+
+  core:
+    image: ${KOLDERA_IMAGE:-ghcr.io/koldera/core:latest}
+    restart: unless-stopped
+    environment:
+      KOLDERA_TOKEN: ${KOLDERA_TOKEN:?set KOLDERA_TOKEN to a long random secret}
+      # The scanner's only way out; the proxy enforces the public-destination rule at connection time.
+      KOLDERA_WEB_PROXY: http://egress:3128
+    volumes:
+      - data:/data
+    networks: [internal]
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 4g
+    pids_limit: 512
+
+  egress:
+    build:
+      context: ./egress-proxy
+    restart: unless-stopped
+    networks: [internal, outbound]
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]   # Squid starts as root and drops to its proxy user
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 128
+
+networks:
+  # internal: no gateway, so containers here have no route out except through `egress`.
+  internal:
+    internal: true
+  public: {}
+  outbound: {}
+
+volumes:
+  data: {}
+  caddy_data: {}
+  caddy_config: {}
