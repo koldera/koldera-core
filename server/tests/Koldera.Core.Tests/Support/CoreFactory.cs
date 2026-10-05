@@ -53,7 +53,8 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>A server (token "t") whose PDF engine processes are the given stubs; the structure probe is off unless one is given.</summary>
-    public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null)
+    public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null,
+        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null)
     {
         var values = new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "t" };
         foreach (var (k, v) in env ?? []) values[k] = v;
@@ -62,14 +63,23 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
         {
             s.RemoveAll<PdfWorkers>();
             s.AddSingleton(new PdfWorkers(pdf, structureProbe));
+            // Without HTML stubs a render would start a real process; fail loudly if a test forgot them.
+            s.RemoveAll<HtmlWorkers>();
+            s.AddSingleton(new HtmlWorkers(htmlRender ?? new StubWorker(_ => throw new InvalidOperationException("no html render stub")),
+                inspect ?? new StubWorker(_ => throw new InvalidOperationException("no inspect stub"))));
         };
         return factory;
     }
 
     /// <summary>Uploads <paramref name="bytes"/> as a PDF and returns the completed upload's id.</summary>
-    public async Task<Guid> CompletedUpload(byte[] bytes)
+    public async Task<Guid> CompletedUpload(byte[] bytes) => await CompletedUpload(bytes, "report.pdf", "application/pdf");
+
+    /// <summary>Uploads <paramref name="bytes"/> as an HTML document and returns the completed upload's id.</summary>
+    public async Task<Guid> CompletedHtmlUpload(byte[]? bytes = null) => await CompletedUpload(bytes ?? Fixtures.SmallHtml(), "page.html", "text/html");
+
+    private async Task<Guid> CompletedUpload(byte[] bytes, string fileName, string contentType)
     {
-        var (id, url) = await Declare(bytes);
+        var (id, url) = await Declare(bytes, fileName, contentType);
         var put = await CreateClient().PutAsync(url, new ByteArrayContent(bytes));
         put.EnsureSuccessStatusCode();
         return id;
@@ -78,9 +88,9 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     /// <summary>Declares an upload without sending its content.</summary>
     public async Task<Guid> UploadTicket(byte[] bytes) => (await Declare(bytes)).Id;
 
-    private async Task<(Guid Id, string Url)> Declare(byte[] bytes)
+    private async Task<(Guid Id, string Url)> Declare(byte[] bytes, string fileName = "report.pdf", string contentType = "application/pdf")
     {
-        var r = await AuthorizedClient().PostAsJsonAsync("/v1/uploads", new { fileName = "report.pdf", sizeBytes = bytes.Length, sha256 = Fixtures.Sha256(bytes), contentType = "application/pdf" });
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/uploads", new { fileName, sizeBytes = bytes.Length, sha256 = Fixtures.Sha256(bytes), contentType });
         r.EnsureSuccessStatusCode();
         var ticket = await r.Content.ReadFromJsonAsync<JsonElement>();
         return (ticket.GetProperty("uploadId").GetGuid(), ticket.GetProperty("uploadUrl").GetString()!);
@@ -90,6 +100,14 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     {
         var upload = await CompletedUpload(Fixtures.SmallPdf());
         var r = await AuthorizedClient().PostAsJsonAsync("/v1/pdf/jobs", new { uploadId = upload, mode, profile = "ua1", explicitTitle, explicitLanguage });
+        Assert.Equal(System.Net.HttpStatusCode.Accepted, r.StatusCode);
+        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    public async Task<Guid> CreateHtmlJob(string mode = "generate_analyze", string? contentSelector = null, byte[]? html = null)
+    {
+        var upload = await CompletedHtmlUpload(html);
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/html-to-pdf/jobs", new { uploadId = upload, mode, profile = "ua1", contentSelector });
         Assert.Equal(System.Net.HttpStatusCode.Accepted, r.StatusCode);
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }

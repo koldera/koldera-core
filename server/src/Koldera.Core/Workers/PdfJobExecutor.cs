@@ -45,7 +45,7 @@ public sealed class PdfJobExecutor(DataStore store, PdfWorkers workers, CoreOpti
     }
 
     /// <summary>Only configured caps are sent; with none configured the request carries no limits at all.</summary>
-    private static WorkerLimits? LimitsFrom(Limits l) =>
+    internal static WorkerLimits? LimitsFrom(Limits l) =>
         l.PdfMaxBytes is null && l.PdfMaxPages is null && l.JobTimeoutSeconds is null
             ? null
             : new WorkerLimits(l.PdfMaxBytes, l.PdfMaxPages, l.JobTimeoutSeconds);

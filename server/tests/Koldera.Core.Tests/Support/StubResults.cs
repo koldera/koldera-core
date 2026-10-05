@@ -72,4 +72,69 @@ public static class StubResults
         }.ToJsonString();
         return StubWorker.Fixed(json);
     }
+
+    /// <summary>The renderer's result for a request; <paramref name="artifacts"/> are declared as is.</summary>
+    private static string RenderResult(string request, string status, JsonArray diagnostics, JsonArray artifacts, JsonObject? error) =>
+        new JsonObject
+        {
+            ["specVersion"] = "1.0",
+            ["jobId"] = JsonNode.Parse(request)!["jobId"]!.GetValue<string>(),
+            ["status"] = status,
+            ["sourceSha256"] = null,
+            ["engineVersion"] = "stub-renderer",
+            ["taggedRequested"] = true,
+            ["pages"] = status == "completed" ? 1 : null,
+            ["blockedRequests"] = 0,
+            ["diagnostics"] = diagnostics,
+            ["artifacts"] = artifacts,
+            ["manualReviewRequired"] = true,
+            ["error"] = error,
+        }.ToJsonString();
+
+    private static JsonObject Diagnostic(string code, bool blocking) => new()
+    {
+        ["code"] = code, ["message"] = "advisory from the renderer", ["blocking"] = blocking, ["line"] = 1, ["element"] = "html",
+    };
+
+    /// <summary>A render that wrote "generated.pdf" (the small PDF, so the PDF stub's original hash matches) with one advisory diagnostic.</summary>
+    public static StubWorker HtmlRenderCompleted()
+    {
+        var bytes = Fixtures.SmallPdf();
+        var artifact = new JsonObject { ["kind"] = "generated_pdf", ["path"] = "/work/out/generated.pdf", ["sha256"] = Fixtures.Sha256(bytes), ["bytes"] = bytes.Length };
+        return new StubWorker(
+            request => RenderResult(request, "completed", new JsonArray(Diagnostic("HTML_LANG_MISSING", false)), new JsonArray(artifact), null),
+            new Dictionary<string, byte[]> { ["generated.pdf"] = bytes });
+    }
+
+    /// <summary>The renderer refuses the source with a blocking diagnostic and the given error code.</summary>
+    public static StubWorker HtmlRenderUnsupported(string errorCode = "UNSUPPORTED_CONTENT") =>
+        new(request => RenderResult(request, "unsupported", new JsonArray(Diagnostic("HTML_NOT_A_DOCUMENT", true)), [],
+            new JsonObject { ["code"] = errorCode, ["message"] = "cannot be rendered" }));
+
+    /// <summary>The inspect probe for the generated PDF: with usable tags, or without any.</summary>
+    public static StubWorker InspectResult(string sha256, bool usableTags = true) =>
+        StubWorker.Fixed(new JsonObject
+        {
+            ["specVersion"] = "1.0",
+            ["status"] = "inspected",
+            ["sha256"] = sha256,
+            ["bytes"] = 100,
+            ["engineVersion"] = "stub-inspect",
+            ["structure"] = new JsonObject
+            {
+                ["pages"] = 2, ["encrypted"] = false, ["markInfoMarked"] = usableTags, ["structTreeRoot"] = usableTags,
+                ["structureElements"] = usableTags ? 5 : 0, ["contentReferences"] = usableTags ? 5 : 0, ["usableTags"] = usableTags,
+                ["roles"] = new JsonArray(new JsonObject { ["role"] = "P", ["count"] = 3 }), ["language"] = "en", ["title"] = "Page",
+            },
+            ["error"] = null,
+        }.ToJsonString());
+
+    /// <summary>The PDF engine's analyze result with arbitrary changes, for the fail-closed checks.</summary>
+    public static StubWorker PdfCustom(Action<JsonObject> mutate, IReadOnlyDictionary<string, byte[]>? outputs = null) =>
+        new(request =>
+        {
+            var result = JsonNode.Parse(Result(request, "completed", "not_requested", null, [], []))!.AsObject();
+            mutate(result);
+            return result.ToJsonString();
+        }, outputs);
 }

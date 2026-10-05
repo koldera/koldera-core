@@ -30,6 +30,9 @@ public sealed class StubWorker : IWorkerProcess
     public static StubWorker Fixed(string resultJson, IReadOnlyDictionary<string, byte[]>? outputs = null, int exitCode = 0) =>
         new(_ => resultJson, outputs, exitCode);
 
+    /// <summary>The result document this stub would write for the request, so another stub can reuse a declaration.</summary>
+    public string ResultFor(string requestJson) => _result(requestJson);
+
     public async Task<WorkerRun> RunAsync(string scratchRoot, string requestPath, string resultPath, TimeSpan timeout, CancellationToken ct)
     {
         var request = await File.ReadAllTextAsync(requestPath, ct);

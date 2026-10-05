@@ -4,6 +4,8 @@ namespace Koldera.Core;
 
 public sealed record PdfJobRequest(Guid UploadId, string? Mode, string? Profile, string? ExplicitLanguage, string? ExplicitTitle = null);
 
+public sealed record HtmlJobRequest(Guid UploadId, string? Mode, string? Profile, string? ContentSelector, string? ExplicitLanguage = null, string? ExplicitTitle = null);
+
 public static partial class JobEndpoints
 {
     private static readonly byte[] PdfMagic = "%PDF-"u8.ToArray();
@@ -14,6 +16,7 @@ public static partial class JobEndpoints
     public static void MapJobEndpoints(this RouteGroupBuilder v1)
     {
         v1.MapPost("/pdf/jobs", CreatePdfAsync);
+        v1.MapPost("/html-to-pdf/jobs", CreateHtmlAsync);
     }
 
     private static async Task<IResult> CreatePdfAsync(PdfJobRequest request, HttpContext http, DataStore store, JobQueue queue, TimeProvider clock)
@@ -51,6 +54,70 @@ public static partial class JobEndpoints
             CreatedAt = now,
         };
         return await AcceptAsync(job, http, store, queue);
+    }
+
+    private static async Task<IResult> CreateHtmlAsync(HtmlJobRequest request, HttpContext http, CoreOptions options, DataStore store, JobQueue queue, TimeProvider clock)
+    {
+        if (!options.Features.Contains("html")) return RequestContext.NotFound();
+        if (request.Mode is not ("generate_analyze" or "generate_fix")) return Invalid("mode must be generate_analyze or generate_fix");
+        if (request.Profile != "ua1") return Invalid("profile must be ua1");
+        if (request.ExplicitLanguage is not null && !LanguageTag().IsMatch(request.ExplicitLanguage))
+            return Invalid("explicitLanguage must be a well-formed BCP 47 tag");
+        // Only Chromium can tell whether a selector is valid CSS; here it is bounded and printable.
+        var selector = request.ContentSelector?.Trim();
+        if (selector is not null && (selector.Length is 0 or > 200 || selector.Any(char.IsControl)))
+            return Invalid("contentSelector must be 1-200 printable characters (a CSS selector) or omitted");
+        var explicitTitle = TitleInput.Normalize(request.ExplicitTitle, out var titleError);
+        if (titleError is not null) return Invalid(titleError);
+
+        var upload = store.GetUpload(request.UploadId);
+        var now = clock.GetUtcNow();
+        if (upload is null || upload.Owner != RequestContext.Owner(http) || upload.ExpiresAt <= now && !upload.Completed)
+            return Invalid("uploadId is unknown or expired");
+        if (!upload.Completed)
+            return Problems.Result(409, "UPLOAD_INCOMPLETE", "Upload not completed", "Send the file to the upload URL first.");
+        if (upload.ContentType != "text/html")
+            return Invalid($"uploadId refers to a {upload.ContentType} upload; HTML-to-PDF jobs need a text/html upload");
+        if (await SniffHtmlAsync(store.UploadPath(upload.Id), http.RequestAborted) is { } unsupported)
+            return Problems.Result(415, "UNSUPPORTED_INPUT", "Unsupported input", unsupported);
+
+        var job = new CoreJob
+        {
+            Id = Guid.NewGuid(),
+            Kind = CoreJobKind.HtmlToPdf,
+            Mode = request.Mode,
+            State = CoreJobState.Queued,
+            Profile = request.Profile,
+            ExplicitLanguage = request.ExplicitLanguage,
+            ExplicitTitle = explicitTitle,
+            ContentSelector = selector,
+            SourceFileName = upload.FileName,
+            InputUploadId = upload.Id,
+            Owner = RequestContext.Owner(http),
+            CreatedAt = now,
+        };
+        return await AcceptAsync(job, http, store, queue);
+    }
+
+    /// <summary>Cheap shape check only (the renderer's preflight is the real boundary): no PDF, some markup, valid UTF-8; null when acceptable.</summary>
+    private static async Task<string?> SniffHtmlAsync(string path, CancellationToken ct)
+    {
+        var buffer = new byte[1024];
+        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var n = await fs.ReadAsync(buffer, ct);
+        var head = buffer.AsSpan(0, n);
+        if (head.IndexOf(PdfMagic) >= 0) return "uploaded file is a PDF, not an HTML document";
+        if (head.IndexOf((byte)'<') < 0) return "uploaded file does not look like an HTML document (no markup in the first kilobyte)";
+        try
+        {
+            // The window may cut a multi-byte sequence at its end; only earlier bytes must decode.
+            new System.Text.UTF8Encoding(false, true).GetCharCount(head[..Math.Max(0, head.Length - 4)]);
+        }
+        catch (System.Text.DecoderFallbackException)
+        {
+            return "uploaded file is not UTF-8 encoded";
+        }
+        return null;
     }
 
     /// <summary>Saves the job as queued before enqueueing it, so a runner that picks it up at once finds it; a full queue removes it again.</summary>

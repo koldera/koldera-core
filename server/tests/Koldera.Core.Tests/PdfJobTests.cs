@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Koldera.Core.Tests.Support;
 using Koldera.Core.Workers;
 using Microsoft.Extensions.DependencyInjection;
@@ -252,7 +253,11 @@ public class PdfJobTests
         await f.WaitForJob(id);
         var artifacts = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/artifacts");
         var url = artifacts.GetProperty("items")[0].GetProperty("downloadUrl").GetString()!;
-        Assert.Equal(HttpStatusCode.Forbidden, (await f.CreateClient().GetAsync(url[..^2] + "AA")).StatusCode);
+        // Change the first signature character to a different one; the old suffix trick could leave the URL unchanged.
+        var sig = url.IndexOf("sig=", StringComparison.Ordinal) + 4;
+        var tampered = url[..sig] + (url[sig] == 'A' ? 'B' : 'A') + url[(sig + 1)..];
+        Assert.NotEqual(url, tampered);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.CreateClient().GetAsync(tampered)).StatusCode);
         f.Clock.Advance(TimeSpan.FromMinutes(11));
         Assert.Equal(HttpStatusCode.Forbidden, (await f.CreateClient().GetAsync(url)).StatusCode);
     }
@@ -279,6 +284,77 @@ public class PdfJobTests
         Assert.True(rebuilt.TryFind(artifactId, out var jobId));
         Assert.Equal(id, jobId);
     }
+
+    // PdfWorkerRun fails closed: whatever the worker claims, the job fails as WORKER_CONTRACT and the upload stays as it was.
+    private static async Task AssertFailsClosed(StubWorker worker)
+    {
+        using var f = CoreFactory.WithStubWorkers(worker);
+        var pdf = Fixtures.SmallPdf();
+        var upload = await f.CompletedUpload(pdf);
+        var r = await f.AuthorizedClient().PostAsJsonAsync("/v1/pdf/jobs", new { uploadId = upload, mode = "fix", profile = "ua1" });
+        var id = (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var job = await f.WaitForJob(id);
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+        Assert.Equal("WORKER_CONTRACT", job.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(f.Store.GetJob(id)!.Artifacts);
+        Assert.Equal(pdf, await File.ReadAllBytesAsync(f.Store.UploadPath(upload)));
+    }
+
+    private static JsonObject Artifact(string kind, string path, string sha, long bytes) =>
+        new() { ["kind"] = kind, ["path"] = path, ["sha256"] = sha, ["bytes"] = bytes };
+
+    [Fact]
+    public async Task A_stored_input_that_no_longer_matches_its_recorded_hash_fails_the_job()
+    {
+        var worker = StubResults.PdfAnalyzeCompleted();
+        using var f = CoreFactory.WithStubWorkers(worker);
+        // An upload whose record claims another hash than its bytes: the copy into scratch must be re-hashed.
+        var id = Guid.NewGuid();
+        var pdf = Fixtures.SmallPdf();
+        var now = f.Clock.GetUtcNow();
+        f.Store.CreateUpload(new UploadRecord(id, "report.pdf", pdf.Length, new string('c', 64), "application/pdf", "server", now, now.AddHours(1), true));
+        await File.WriteAllBytesAsync(f.Store.UploadPath(id), pdf);
+        var jobId = Guid.NewGuid();
+        await f.Store.SaveJobAsync(new CoreJob { Id = jobId, Kind = CoreJobKind.Pdf, Mode = "analyze", Profile = "ua1", InputUploadId = id, Owner = "server", CreatedAt = now });
+        Assert.True(f.Services.GetRequiredService<JobQueue>().TryEnqueue(jobId));
+        var job = await f.WaitForJob(jobId);
+        Assert.Equal("WORKER_CONTRACT", job.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(worker.Calls);
+        Assert.Equal(pdf, await File.ReadAllBytesAsync(f.Store.UploadPath(id)));
+    }
+
+    [Fact]
+    public Task A_worker_that_reports_another_original_hash_fails_the_job() =>
+        AssertFailsClosed(StubResults.PdfCustom(r => r["originalSha256"] = new string('b', 64)));
+
+    [Fact]
+    public Task A_worker_original_artifact_with_another_hash_fails_the_job() =>
+        AssertFailsClosed(StubResults.PdfCustom(r => r["artifacts"] = new JsonArray(Artifact("original", "/work/out/original.pdf", new string('b', 64), Fixtures.SmallPdf().Length))));
+
+    [Fact]
+    public Task A_worker_original_artifact_with_another_size_fails_the_job() =>
+        AssertFailsClosed(StubResults.PdfCustom(r => r["artifacts"] = new JsonArray(Artifact("original", "/work/out/original.pdf", Fixtures.Sha256(Fixtures.SmallPdf()), Fixtures.SmallPdf().Length + 1))));
+
+    [Fact]
+    public Task An_artifact_whose_bytes_do_not_match_its_declared_hash_fails_the_job() =>
+        AssertFailsClosed(StubResults.PdfCustom(
+            r => r["artifacts"] = new JsonArray(Artifact("remediated", "/work/out/remediated.pdf", new string('b', 64), Fixtures.OtherPdf().Length)),
+            new Dictionary<string, byte[]> { ["remediated.pdf"] = Fixtures.OtherPdf() }));
+
+    [Fact]
+    public Task An_artifact_whose_size_does_not_match_its_declaration_fails_the_job() =>
+        AssertFailsClosed(StubResults.PdfCustom(
+            r => r["artifacts"] = new JsonArray(Artifact("remediated", "/work/out/remediated.pdf", Fixtures.Sha256(Fixtures.OtherPdf()), Fixtures.OtherPdf().Length + 1)),
+            new Dictionary<string, byte[]> { ["remediated.pdf"] = Fixtures.OtherPdf() }));
+
+    [Theory]
+    [InlineData("/work/out/../remediated.pdf")]
+    [InlineData("/work/out/sub/remediated.pdf")]
+    [InlineData("/work/out/..")]
+    public Task An_artifact_path_that_leaves_the_output_directory_fails_the_job(string path) =>
+        AssertFailsClosed(StubResults.PdfCustom(
+            r => r["artifacts"] = new JsonArray(Artifact("remediated", path, Fixtures.Sha256(Fixtures.OtherPdf()), Fixtures.OtherPdf().Length)),
+            new Dictionary<string, byte[]> { ["remediated.pdf"] = Fixtures.OtherPdf() }));
 
     private sealed class BlockingWorker : IWorkerProcess
     {
