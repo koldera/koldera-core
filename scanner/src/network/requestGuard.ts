@@ -19,6 +19,8 @@ export interface GuardOptions {
 
 const STRIPPED_HEADERS = new Set(["cookie", "authorization", "referer", "proxy-authorization", "x-forwarded-for"]);
 const MAX_REDIRECT_HOPS = 10;
+/** Set by the scanner's egress gate on every refusal (lower case: Playwright reports header names that way). */
+export const PROXY_REFUSED_HEADER = "x-koldera-egress-refused";
 
 /**
  * Per-request gate on the browser context. Playwright does not route a redirect chain's follow-ups,
@@ -33,6 +35,12 @@ export class RequestGuard {
 
   async install(context: BrowserContext): Promise<void> {
     await context.route("**/*", (route) => this.handle(route));
+    // `route` never sees WebSockets. A routed socket that is never connected to its server stays a local mock, so
+    // closing it refuses every WebSocket (a page could otherwise reach loopback or private hosts this way).
+    await context.routeWebSocket(() => true, async (ws) => {
+      this.stats.blocked += 1;
+      await ws.close({ code: 1008, reason: "blocked by the scanner" }).catch(() => undefined);
+    });
   }
 
   private async handle(route: Route): Promise<void> {
@@ -53,7 +61,7 @@ export class RequestGuard {
       let currentUrl = request.url();
       let response: APIResponse = await route.fetch({ headers, maxRedirects: 0 });
       let hops = 0;
-      while (isRedirect(response.status()) && response.headers()["location"] !== undefined) {
+      while (!this.refusedByProxy(response, isNavigation) && isRedirect(response.status()) && response.headers()["location"] !== undefined) {
         hops += 1;
         if (hops > MAX_REDIRECT_HOPS) {
           this.block(isNavigation, "too many redirects");
@@ -74,6 +82,10 @@ export class RequestGuard {
         }
         currentUrl = target;
         response = await route.fetch({ url: target, headers, maxRedirects: 0 });
+      }
+      if (this.refusedByProxy(response, isNavigation)) {
+        await route.abort("blockedbyclient");
+        return;
       }
 
       const body = await response.body();
@@ -112,6 +124,25 @@ export class RequestGuard {
       this.block(isNavigation, e instanceof BlockedDestinationError ? e.reason : "blocked");
       return false;
     }
+  }
+
+  /**
+   * A proxy that refuses a CONNECT answers with its own error page, and the proxy agent hands that page back as if the
+   * site had sent it. Squid marks it with X-Squid-Error, the scanner's own gate with X-Koldera-Egress-Refused; such a
+   * page is a refused destination, never something to scan.
+   */
+  private refusedByProxy(response: APIResponse, isNavigation: boolean): boolean {
+    const h = response.headers();
+    if (h[PROXY_REFUSED_HEADER] === undefined && !(this.options.policy.resolveViaProxy && h["x-squid-error"] !== undefined)) {
+      return false;
+    }
+    this.block(isNavigation, "the egress proxy refused the destination");
+    return true;
+  }
+
+  /** A connection the egress gate refused (outside the route, so not tied to a navigation). */
+  countBlocked(): void {
+    this.stats.blocked += 1;
   }
 
   private block(isNavigation: boolean, reason: string): void {

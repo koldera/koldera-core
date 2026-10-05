@@ -39,16 +39,28 @@ Application layer (`src/network`):
 
 - https only unless the request policy sets `allowHttp`; no credentials in the URL; default ports only.
 - Reserved hostnames (`localhost`, `*.local`, `*.internal`, metadata names, single labels) are refused.
-- Literal IPs and every DNS answer must be globally routable (private, loopback, link-local and CGNAT IPv4
-  ranges and unique-local, link-local, mapped, NAT64, 6to4 and documentation IPv6 ranges are refused).
-- The target host is pinned to the vetted address with `--host-resolver-rules`.
+- Literal IPs must be globally routable (private, loopback, link-local and CGNAT IPv4 ranges and unique-local,
+  link-local, mapped, NAT64, 6to4 and documentation IPv6 ranges are refused). Without a proxy every DNS answer
+  must be globally routable too.
 - Every request and every redirect hop is fetched by the guard with redirects disabled and re-checked
   before it is followed; cookies, authorization and referer are stripped; request and response-byte
   budgets apply to real bodies.
+- WebSockets are refused (`routeWebSocket`), `RTCPeerConnection`, `RTCDataChannel` and `WebTransport` are
+  removed before page script runs, and Chromium starts with `--disable-quic` and WebRTC limited to proxied
+  connections, so no UDP leaves the browser.
 
-Connection-time layer: the application checks cannot see what a resolver answers the browser. Run the
-scanner behind an egress proxy or firewall that denies private and reserved destinations and ports other
-than 80 and 443, and pass it as `policy.proxyServer`.
+Connection-time layer: Chromium always talks through a proxy, so nothing it opens itself (a redirect's follow-up,
+a worker's WebSocket, WebRTC over TCP) bypasses the rules.
+
+- **With `policy.proxyServer`** (the compose setup): the proxy resolves names and enforces the destinations. The
+  scanner then does not resolve host names itself, because a network that only reaches out through a proxy often
+  has no DNS; the syntax, reserved-name and IP-literal checks still run first. A page the proxy refused (Squid's
+  `X-Squid-Error`) is reported as `BLOCKED_DESTINATION`, never scanned. Use a proxy that denies private and
+  reserved destinations and ports other than 80 and 443, as `docker/egress-proxy` does.
+- **Without a proxy** (`docker run`, the CLI, Lambda): the scanner starts its own loopback gate and points
+  Chromium at it. The gate applies the same checks to every connection and connects to the address it vetted,
+  so a second DNS answer cannot rebind a host. It is an application-level control in the same process; a
+  network-level egress filter is still the stronger setup.
 
 The environment variable `KOLDERA_SCANNER_ALLOW_LOOPBACK_FOR_TESTS=1` admits `127.0.0.1` for the test
 suite's fixture server. Never set it in a deployment.
