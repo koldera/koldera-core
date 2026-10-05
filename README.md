@@ -47,6 +47,10 @@ docker run -d --name koldera -p 8080:8080 -v koldera-data:/data \
 curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info
 ```
 
+Web scans run page JavaScript. In this quick start the scanner refuses private destinations itself (see
+[scanner/README.md](scanner/README.md#request-safety)); for anything beyond a trial use the compose setup with its
+egress proxy ([docs/deployment.md](docs/deployment.md)), or switch scans off with `-e KOLDERA_FEATURES=pdf,html,document`.
+
 Check a PDF and download a fixed copy (needs `curl`, `jq`, `sha256sum`):
 
 ```bash

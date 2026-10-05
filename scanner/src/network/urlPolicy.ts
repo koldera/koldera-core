@@ -13,6 +13,12 @@ export interface DestinationPolicy {
   allowHttp: boolean;
   /** Test-only: permit 127.0.0.1 (never localhost by name, never other loopback/private space). */
   allowLoopbackForTests?: boolean;
+  /**
+   * An egress proxy carries every request. The proxy resolves names itself and refuses private destinations at
+   * connection time, and a network that only reaches out through a proxy often has no DNS of its own, so host names are
+   * then not resolved locally. Syntax, reserved names and IP literals are still checked here.
+   */
+  resolveViaProxy?: boolean;
 }
 
 export interface Resolver {
@@ -186,10 +192,16 @@ export function checkUrlSyntax(raw: string, policy: DestinationPolicy): CheckedU
   return { url, hostname, literalIp: null };
 }
 
-/** Resolves a hostname and requires EVERY answer to be public (mixed answers are rejected). */
+/**
+ * Resolves a hostname and requires EVERY answer to be public (mixed answers are rejected). With
+ * `resolveViaProxy` a name gives no addresses (the proxy resolves and enforces); a literal IP gives itself.
+ */
 export async function resolvePublic(checked: CheckedUrl, resolver: Resolver, policy: DestinationPolicy): Promise<string[]> {
   if (checked.literalIp) {
     return [checked.literalIp];
+  }
+  if (policy.resolveViaProxy) {
+    return [];
   }
   let addresses: string[];
   try {

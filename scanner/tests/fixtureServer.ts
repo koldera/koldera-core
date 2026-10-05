@@ -6,13 +6,16 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Loopback HTTP server standing in for a public site: fixture pages (/missing-label.html,
- * /labelled.html), /redirect?to=<url>, /slow?ms=<n>, /many.html (60 subresources) and
- * /big?bytes=<n>.
+ * Loopback HTTP server standing in for a public site: fixture pages, /redirect?to=<url>, /slow?ms=<n>,
+ * /many.html (60 subresources), /big?bytes=<n> and /ws-probe.html?port=<n>&wport=<n>, which opens a
+ * WebSocket to 127.0.0.1:port from the page and to 127.0.0.2:wport from a worker, then reports via
+ * /report?... which real-time APIs exist. `seen` lists every request path with its query.
  */
-export async function startFixtureServer(): Promise<{ server: Server; url: string; close: () => Promise<void> }> {
+export async function startFixtureServer(): Promise<{ server: Server; url: string; seen: string[]; close: () => Promise<void> }> {
+  const seen: string[] = [];
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    seen.push(url.pathname + url.search);
     const send = (status: number, body: string, type = "text/html; charset=utf-8", headers: Record<string, string> = {}) => {
       res.writeHead(status, { "content-type": type, "content-length": Buffer.byteLength(body), ...headers });
       res.end(body);
@@ -32,6 +35,19 @@ export async function startFixtureServer(): Promise<{ server: Server; url: strin
     } else if (url.pathname === "/big") {
       const n = Number(url.searchParams.get("bytes") ?? "1000000");
       send(200, `<html lang='en'><head><title>big</title></head><body>${"a".repeat(Math.max(0, n - 60))}</body></html>`);
+    } else if (url.pathname === "/ws-probe.html") {
+      // The image is part of the load event, so its report has arrived before the scan analyses the page.
+      const port = Number(url.searchParams.get("port") ?? "9");
+      const wport = Number(url.searchParams.get("wport") ?? "9");
+      const script =
+        `var ws='none';try{new WebSocket('ws://127.0.0.1:${port}/');ws='created'}catch(e){ws='threw'}` +
+        // A worker has its own WebSocket that page-level hooks do not reach.
+        `try{new Worker(URL.createObjectURL(new Blob(["new WebSocket('ws://127.0.0.2:${wport}/')"],{type:'text/javascript'})))}catch(e){}` +
+        "var q='ws='+ws+'&rtc='+typeof RTCPeerConnection+'&wrtc='+typeof webkitRTCPeerConnection+'&wt='+typeof WebTransport;" +
+        "var i=new Image();i.alt='';i.src='/report?'+q;document.body.appendChild(i);";
+      send(200, `<html lang='en'><head><title>ws</title></head><body><main><h1>probe</h1></main><script>${script}</script></body></html>`);
+    } else if (url.pathname === "/report") {
+      send(200, "ok", "text/plain");
     } else if (url.pathname === "/echo-headers") {
       send(200, `<html lang='en'><head><title>h</title></head><body><pre id="h">${JSON.stringify(req.headers)}</pre></body></html>`);
     } else {
@@ -41,5 +57,5 @@ export async function startFixtureServer(): Promise<{ server: Server; url: strin
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
-  return { server, url: `http://127.0.0.1:${port}`, close: () => new Promise((resolve) => server.close(() => resolve())) };
+  return { server, url: `http://127.0.0.1:${port}`, seen, close: () => new Promise((resolve) => server.close(() => resolve())) };
 }

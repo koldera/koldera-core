@@ -11,6 +11,7 @@ type AxeBuilderCtor = new (opts: { page: Page }) => AxeBuilderInstance;
 const axeModule = createRequire(import.meta.url)("@axe-core/playwright") as { default?: AxeBuilderCtor } & AxeBuilderCtor;
 const AxeBuilder: AxeBuilderCtor = axeModule.default ?? axeModule;
 import { engineVersion, type WebFinding, type WebWorkerRequest, type WebWorkerResult, type WorkerErrorCode } from "../contracts/types.js";
+import { startEgressGate, type EgressGate } from "../network/egressGate.js";
 import { RequestGuard } from "../network/requestGuard.js";
 import { BlockedDestinationError, checkUrlSyntax, redactUrl, resolvePublic, systemResolver, type DestinationPolicy, type Resolver } from "../network/urlPolicy.js";
 
@@ -27,11 +28,39 @@ const SNIPPET_LIMIT = 300;
 const MAX_NODES_PER_RULE = 25;
 
 /**
+ * Chromium flags for a scan. QUIC and non-proxied WebRTC UDP would leave the browser outside both the request route
+ * and the proxy, so both are off. Everything Chromium opens over TCP goes through a proxy (see `scan`).
+ */
+export function scannerLaunchArgs(): string[] {
+  return [
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--no-first-run",
+    "--disable-sync",
+    "--disable-quic",
+    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+    "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+  ];
+}
+
+/** Runs before any page script: removes the APIs that open connections the request route cannot intercept. */
+const REMOVE_REALTIME_APIS = `(() => {
+  for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection", "RTCDataChannel", "RTCRtpSender", "RTCRtpReceiver", "RTCIceCandidate", "RTCSessionDescription", "WebTransport"]) {
+    try { delete globalThis[name]; } catch {}
+    try { Object.defineProperty(globalThis, name, { value: undefined, configurable: false, writable: false }); } catch {}
+  }
+})();`;
+
+/**
  * Scans exactly one URL with an isolated Chromium and axe-core. The result is a machine finding
  * list — never a conformance verdict — and `manualReviewRequired` is always true.
  */
 export async function scan(request: WebWorkerRequest, options: ScanOptions): Promise<WebWorkerResult> {
-  const policy: DestinationPolicy = { allowHttp: request.policy.allowHttp, allowLoopbackForTests: options.allowLoopbackForTests ?? false };
+  const policy: DestinationPolicy = {
+    allowHttp: request.policy.allowHttp,
+    allowLoopbackForTests: options.allowLoopbackForTests ?? false,
+    resolveViaProxy: Boolean(request.policy.proxyServer),
+  };
   const resolver = options.resolver ?? systemResolver;
   const requestedUrl = redactUrl(request.url);
   const base = (status: WebWorkerResult["status"], error: WebWorkerResult["error"], extra: Partial<WebWorkerResult> = {}): WebWorkerResult => ({
@@ -49,11 +78,9 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
     ...extra,
   });
 
-  let addresses: string[];
-  let checked;
   try {
-    checked = checkUrlSyntax(request.url, policy);
-    addresses = await resolvePublic(checked, resolver, policy);
+    // Refuse early, before a browser starts; the guard and the proxy check every request again.
+    await resolvePublic(checkUrlSyntax(request.url, policy), resolver, policy);
   } catch (e) {
     if (e instanceof BlockedDestinationError) {
       return base("unsupported", { code: e.code, message: e.reason });
@@ -66,18 +93,18 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
   const deadline = Date.now() + timeoutMs;
   const remaining = () => Math.max(1000, deadline - Date.now());
 
-  // Pin the target host to the addresses we vetted so Chromium cannot be re-bound to another
-  // answer mid-scan; subresource hosts are re-checked per request by the guard and by the proxy.
-  const args = ["--disable-extensions", "--disable-background-networking", "--no-first-run", "--disable-sync"];
-  if (!checked.literalIp) {
-    args.push(`--host-resolver-rules=MAP ${checked.hostname} ${addresses[0]}`);
-  }
-  const proxy = request.policy.proxyServer ? { server: request.policy.proxyServer } : undefined;
-
   let browser: Browser | undefined;
+  let gate: EgressGate | undefined;
   const guard = new RequestGuard({ policy, resolver, maxRequests: request.limits?.maxRequests ?? Infinity, maxResponseBytes: request.limits?.maxResponseBytes ?? Infinity });
   try {
-    browser = await chromium.launch({ headless: true, chromiumSandbox: request.policy.chromiumSandbox ?? false, args, ...(proxy ? { proxy } : {}) });
+    // Chromium opens some connections itself (a redirect's follow-up, a worker's WebSocket, WebRTC over TCP), and the
+    // guard's own fetches use the browser's proxy too. With an egress proxy that proxy enforces the destinations; without
+    // one a loopback gate applies the same policy, so no connection leaves unchecked. Playwright also proxies loopback.
+    if (!request.policy.proxyServer) {
+      gate = await startEgressGate(policy, resolver, () => guard.countBlocked());
+    }
+    const proxy = { server: request.policy.proxyServer ?? gate!.url };
+    browser = await chromium.launch({ headless: true, chromiumSandbox: request.policy.chromiumSandbox ?? false, args: scannerLaunchArgs(), proxy });
     const version = engineVersion(browser.version());
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
@@ -88,6 +115,8 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
       serviceWorkers: "block",
     });
     await guard.install(context);
+    // The route above never sees peer-to-peer or UDP channels, so a scanned page must not get them at all.
+    await context.addInitScript(REMOVE_REALTIME_APIS);
     const page = await context.newPage();
 
     let response;
@@ -133,6 +162,7 @@ export async function scan(request: WebWorkerRequest, options: ScanOptions): Pro
     return finish(base, engineVersion(browser?.version() ?? "not-launched"), guard, e);
   } finally {
     await browser?.close().catch(() => undefined);
+    await gate?.close();
   }
 }
 
