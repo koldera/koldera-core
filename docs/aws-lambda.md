@@ -119,7 +119,7 @@ const OUT_BUCKET = process.env.OUT_BUCKET; // optional: a separate bucket for th
 export const handler = async (event) => {
   for (const record of event.Records) {
     const bucket = record.s3.bucket.name;
-    const key = decodeURIComponent(record.s3.object.key.replace(/+/g, " "));
+    const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, " "));
     if (key.startsWith(OUT_PREFIX)) continue; // never process our own output
     const work = "/tmp/job";
     const out = "/tmp/out";
@@ -147,7 +147,7 @@ export const handler = async (event) => {
       const result = JSON.parse(stdout);
 
       const target = OUT_BUCKET ?? bucket;
-      const prefix = OUT_PREFIX + key.replace(/.pdf$/i, "");
+      const prefix = OUT_PREFIX + key.replace(/\.pdf$/i, "");
       await s3.send(new PutObjectCommand({ Bucket: target, Key: `${prefix}.koldera.json`, Body: stdout, ContentType: "application/json" }));
       for (const artifact of result.artifacts ?? []) {
         await s3.send(new PutObjectCommand({ Bucket: target, Key: `${prefix}.${path.basename(artifact.path)}`, Body: await readFile(artifact.path) }));
