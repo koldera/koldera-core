@@ -195,6 +195,8 @@ export interface DocumentRenderRequest {
   imagesDirectory: "/work/in/images";
   outputDirectory: "/work/out";
   typstCommand: string;
+  /** Accept image blocks with a `file` source. Absent or false: only uploads. The server never sets it. */
+  allowFileImages?: boolean;
 }
 
 export type DocumentErrorCode = "INVALID_INPUT" | "DOCUMENT_REFUSED" | "TIMEOUT" | "WORKER_ERROR";

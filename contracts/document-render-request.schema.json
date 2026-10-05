@@ -11,6 +11,7 @@
     "documentPath": {"const": "/work/in/document.json"},
     "imagesDirectory": {"const": "/work/in/images"},
     "outputDirectory": {"const": "/work/out"},
-    "typstCommand": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Path or name of the Typst executable. Passed in the request because the worker environment is cleared."}
+    "typstCommand": {"type": "string", "minLength": 1, "maxLength": 1024, "description": "Path or name of the Typst executable. Passed in the request because the worker environment is cleared."},
+    "allowFileImages": {"type": "boolean", "description": "Accept image blocks that name a file in imagesDirectory (the file source). Default false: only uploads. Set by a standalone caller that placed the files itself; the server never sets it."}
   }
 }
