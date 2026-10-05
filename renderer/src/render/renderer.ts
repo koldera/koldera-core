@@ -135,7 +135,7 @@ export interface VettedRenderOutcome {
  */
 export async function renderVetted(
   html: string,
-  request: Pick<HtmlRendererRequest, "jobId" | "outputDirectory" | "limits" | "page" | "content">,
+  request: Pick<HtmlRendererRequest, "jobId" | "outputDirectory" | "limits" | "page" | "content" | "policy">,
   options: {
     workRoot: string;
     budgetMs: number;
@@ -168,7 +168,7 @@ export async function renderVetted(
   });
   try {
     const work = (async () => {
-      session = await openIsolated(html, remaining());
+      session = await openIsolated(html, remaining(), request.policy?.chromiumSandbox ?? false);
       engineVersion = session.engineVersion;
       const page = session.page;
       // Number the images preflight reports as HTML_IMAGE_ALT_MISSING before any DOM step, to say later what became of each.

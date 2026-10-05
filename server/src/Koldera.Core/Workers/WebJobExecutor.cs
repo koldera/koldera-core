@@ -26,7 +26,7 @@ public sealed class WebJobExecutor(DataStore store, WebWorkers web, CoreOptions 
             ? null
             : new WebWorkerLimits(l.JobTimeoutSeconds, l.WebMaxResponseBytes, l.WebMaxRequests);
         var request = new WebWorkerRequest(WebWorkerContracts.SpecVersion, job.Id, job.TargetUrl, WebWorkerRequest.CanonicalOutputDirectory, limits,
-            new WebWorkerPolicy(options.WebAllowHttp, string.IsNullOrWhiteSpace(options.WebProxy) ? null : options.WebProxy));
+            new WebWorkerPolicy(options.WebAllowHttp, string.IsNullOrWhiteSpace(options.WebProxy) ? null : options.WebProxy, options.ChromiumSandbox ? true : null));
         var requestPath = Path.Combine(scratch, "request.json");
         var resultPath = Path.Combine(scratch, "result.json");
         await File.WriteAllTextAsync(requestPath, WebWorkerContracts.SerializeRequest(request), ct);

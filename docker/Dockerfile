@@ -124,6 +124,8 @@ COPY --from=node /src/scanner/node_modules /app/scanner/node_modules
 COPY --from=node /src/scanner/package.json /app/scanner/package.json
 COPY --from=server /out/server /app/server
 COPY contracts /app/contracts
+# `koldera pdf|html|scan|document ...` runs the command-line tool from inside the container (the ENTRYPOINT does the same).
+RUN printf '%s\n' '#!/bin/sh' 'exec dotnet /app/server/Koldera.Core.dll "$@"' > /usr/local/bin/koldera && chmod 0755 /usr/local/bin/koldera
 
 # Residual risk: Playwright starts Chromium with --no-sandbox (Docker's default seccomp profile blocks the user
 # namespaces its sandbox needs). The compensating controls are in docs/deployment.md, "Browser sandbox".

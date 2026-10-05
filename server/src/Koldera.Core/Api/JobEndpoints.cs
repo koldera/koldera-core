@@ -134,6 +134,19 @@ public static class JobEndpoints
             return Problems.Result(503, "QUEUE_FULL", "Job queue is full", "Try again shortly.");
         }
         http.Response.Headers.Location = $"/v1/jobs/{job.Id}";
+        if (PreferWait.Parse(http.Request.Headers["Prefer"].ToString()) is { } wait)
+        {
+            var finished = false;
+            try { finished = await http.RequestServices.GetRequiredService<JobRunner>().WaitForCompletionAsync(job.Id, wait, http.RequestAborted); }
+            catch (OperationCanceledException) when (http.RequestAborted.IsCancellationRequested)
+            {
+                // The caller went away: the job keeps running and stays reachable under its Location.
+                return Results.Json(JobResponse.From(job), statusCode: 202);
+            }
+            // The wait was performed (also when it ran out): the preference was honoured, the answer says whether the job finished.
+            http.Response.Headers["Preference-Applied"] = $"wait={(int)wait.TotalSeconds}";
+            if (finished && store.GetJob(job.Id) is { } done) return Results.Json(JobResponse.From(done), statusCode: 200);
+        }
         return Results.Json(JobResponse.From(job), statusCode: 202);
     }
 

@@ -9,6 +9,7 @@
     "specVersion": {"const": "1.0"},
     "jobId": {"type": "string", "format": "uuid"},
     "inputPath": {"const": "/work/in/source.html"},
+    "policy": {"type": "object", "additionalProperties": false, "properties": {"chromiumSandbox": {"type": "boolean", "default": false, "description": "Start Chromium with its own sandbox (needs unprivileged user namespaces on the host). Absent or false: Playwright's default, which runs Chromium with --no-sandbox, as required in AWS Lambda and default Docker."}}},
     "limits": {"type": "object", "additionalProperties": false, "properties": {"timeoutSeconds": {"type": "integer", "minimum": 5}, "maxBytes": {"type": "integer", "minimum": 1}, "maxNodes": {"type": "integer", "minimum": 1}, "maxInlineImageBytes": {"type": "integer", "minimum": 1}, "maxTotalInlineImageBytes": {"type": "integer", "minimum": 1}}}
   }
 }

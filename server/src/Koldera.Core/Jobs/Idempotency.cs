@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Koldera.Core;
 
-public sealed record StoredResponse(int Status, string? ContentType, string? Location, byte[] Body);
+public sealed record StoredResponse(int Status, string? ContentType, string? Location, byte[] Body, string? PreferenceApplied = null);
 
 public enum IdempotencyOutcome { Miss, Hit, Conflict }
 
@@ -120,6 +120,7 @@ internal sealed class IdempotencyMiddleware(RequestDelegate next, Idempotency st
                 http.Response.StatusCode = stored!.Status;
                 if (stored.ContentType is not null) http.Response.ContentType = stored.ContentType;
                 if (stored.Location is not null) http.Response.Headers.Location = stored.Location;
+                if (stored.PreferenceApplied is not null) http.Response.Headers["Preference-Applied"] = stored.PreferenceApplied;
                 http.Response.Headers["Idempotent-Replayed"] = "true";
                 await http.Response.Body.WriteAsync(stored.Body, http.RequestAborted);
                 return;
@@ -134,7 +135,8 @@ internal sealed class IdempotencyMiddleware(RequestDelegate next, Idempotency st
         var status = http.Response.StatusCode;
         if (status is >= 200 and < 300)
             store.Store(principalKey, key, hash, new StoredResponse(status, http.Response.ContentType,
-                http.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null, capture.ToArray()));
+                http.Response.Headers.Location.ToString() is { Length: > 0 } loc ? loc : null, capture.ToArray(),
+                http.Response.Headers["Preference-Applied"].ToString() is { Length: > 0 } applied ? applied : null));
         capture.Position = 0;
         await capture.CopyToAsync(original, http.RequestAborted);
     }

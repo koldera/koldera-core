@@ -25,6 +25,8 @@ export interface HtmlRendererRequest {
   page: { format: "A4" | "Letter"; printBackground?: boolean };
   /** Only the outermost elements matching this CSS selector are printed (see the contract's description). */
   content?: ContentSelection;
+  /** Start Chromium with its own sandbox; absent or false keeps Playwright's default (--no-sandbox). */
+  policy?: { chromiumSandbox?: boolean };
 }
 
 export interface ContentSelection {
@@ -95,6 +97,8 @@ export interface HtmlSemanticRequest {
   inputPath: "/work/in/source.html";
   /** Every limit is optional; an absent limit is not enforced. */
   limits?: { timeoutSeconds?: number; maxBytes?: number; maxNodes?: number; maxInlineImageBytes?: number; maxTotalInlineImageBytes?: number };
+  /** Start Chromium with its own sandbox; absent or false keeps Playwright's default (--no-sandbox). */
+  policy?: { chromiumSandbox?: boolean };
 }
 
 export interface SemanticNodePrivate {
@@ -155,6 +159,8 @@ export interface HtmlReorderRequest {
   limits?: { timeoutSeconds?: number; maxBytes?: number; maxPages?: number; maxInlineImageBytes?: number; maxTotalInlineImageBytes?: number; maxVisualDiffRatio?: number };
   page: { format: "A4" | "Letter"; printBackground?: boolean };
   content?: ContentSelection;
+  /** Start Chromium with its own sandbox; absent or false keeps Playwright's default (--no-sandbox). */
+  policy?: { chromiumSandbox?: boolean };
 }
 
 export type ReorderErrorCode = "INVALID_INPUT" | "ORDER_FIX_UNSUPPORTED" | "ORDER_FIX_REGRESSION" | RendererErrorCode;

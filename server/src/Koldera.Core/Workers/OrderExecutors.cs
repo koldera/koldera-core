@@ -209,7 +209,7 @@ public sealed class OrderHtmlExecutor(DataStore store, HtmlWorkers html, PdfWork
         var l = options.Limits;
         var request = new HtmlReorderRequest(OrderWorkerContracts.SpecVersion, job.Id, "/work/in/source.html", "/work/out", plan.BaseArtifactSha256, plan.HtmlParentPath, plan.OrderedIndexes,
             new HtmlReorderLimits(null, l.HtmlMaxBytes, l.PdfMaxPages, null, null, MaxVisualDiffRatio),
-            new HtmlRendererPage("A4", true), HtmlRendererContent.For(job.ContentSelector));
+            new HtmlRendererPage("A4", true), HtmlRendererContent.For(job.ContentSelector), ChromiumPolicy.From(options));
         var requestPath = Path.Combine(scratch, "reorder-request.json");
         var resultPath = Path.Combine(scratch, "reorder-result.json");
         await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeHtmlReorderRequest(request), ct);
@@ -264,7 +264,7 @@ public sealed class OrderHtmlExecutor(DataStore store, HtmlWorkers html, PdfWork
             var probeScratch = Path.Combine(scratch, "semantic");
             Directory.CreateDirectory(Path.Combine(probeScratch, "in"));
             File.Copy(Path.Combine(outDir, corrected.FileName), Path.Combine(probeScratch, "in", "source.html"));
-            var semantic = await Snapshots.ProbeSemanticAsync(html.Semantic, probeScratch, job.Id, maxBytes is null ? null : new SemanticLimits(null, maxBytes, null, null, null), timeout, ct);
+            var semantic = await Snapshots.ProbeSemanticAsync(html.Semantic, probeScratch, job.Id, maxBytes is null ? null : new SemanticLimits(null, maxBytes, null, null, null), timeout, ct, ChromiumPolicy.From(options));
             if (semantic.Status == "completed")
             {
                 if (semantic.SourceSha256 != corrected.Sha256)

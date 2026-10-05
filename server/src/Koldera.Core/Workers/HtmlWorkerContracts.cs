@@ -14,7 +14,8 @@ public sealed record HtmlRendererRequest(
     [property: JsonPropertyName("outputDirectory")] string OutputDirectory,
     [property: JsonPropertyName("limits")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] HtmlRendererLimits? Limits,
     [property: JsonPropertyName("page")] HtmlRendererPage Page,
-    [property: JsonPropertyName("content")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] HtmlRendererContent? Content = null)
+    [property: JsonPropertyName("content")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] HtmlRendererContent? Content = null,
+    [property: JsonPropertyName("policy")] [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChromiumPolicy? Policy = null)
 {
     public const string CanonicalInputPath = "/work/in/source.html";
     public const string CanonicalOutputDirectory = "/work/out";
@@ -134,4 +135,14 @@ public static class HtmlWorkerContracts
         }
         return result;
     }
+}
+
+/// <summary>
+/// The request's <c>policy</c> block for workers that start Chromium. Sent only when the server was configured with
+/// KOLDERA_CHROMIUM_SANDBOX=true (workers run with a cleared environment, so the server passes the choice in the request);
+/// absent means false, Playwright's default.
+/// </summary>
+public sealed record ChromiumPolicy([property: JsonPropertyName("chromiumSandbox")] bool ChromiumSandbox)
+{
+    public static ChromiumPolicy? From(CoreOptions options) => options.ChromiumSandbox ? new ChromiumPolicy(true) : null;
 }

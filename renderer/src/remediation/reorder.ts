@@ -112,7 +112,7 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   }
 
   // 2. Facts about the group as rendered (CSS order, focus) from the untouched source.
-  const before = await collectVetted(checked.html, { jobId: request.jobId, limits: { maxNodes: 20000, ...definedOnly({ timeoutSeconds: request.limits?.timeoutSeconds, maxBytes: request.limits?.maxBytes, maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) } }, request.baseSha256);
+  const before = await collectVetted(checked.html, { jobId: request.jobId, ...(request.policy ? { policy: request.policy } : {}), limits: { maxNodes: 20000, ...definedOnly({ timeoutSeconds: request.limits?.timeoutSeconds, maxBytes: request.limits?.maxBytes, maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) } }, request.baseSha256);
   engineVersion = before.engineVersion;
   if (before.status !== "completed") {
     return base("failed", before.error?.code ?? "RENDER_FAILED", before.error?.message ?? "the source could not be collected");
@@ -164,19 +164,19 @@ export async function reorderSource(request: HtmlReorderRequest, options: Reorde
   // 4. Render both, compare screenshots, and verify the corrected copy independently.
   const maxVisualDiffRatio = request.limits?.maxVisualDiffRatio ?? DEFAULT_MAX_VISUAL_DIFF_RATIO;
   const budgetMs = budgetFromSeconds(request.limits?.timeoutSeconds);
-  const original = await renderVetted(checked.html, { jobId: request.jobId, outputDirectory: request.outputDirectory, limits: definedOnly({ ...request.limits }), page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: ".original.pdf", screenshot: true });
+  const original = await renderVetted(checked.html, { jobId: request.jobId, ...(request.policy ? { policy: request.policy } : {}), outputDirectory: request.outputDirectory, limits: definedOnly({ ...request.limits }), page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: ".original.pdf", screenshot: true });
   if (original.status !== "completed" || !original.screenshot) {
     return base("failed", original.error?.code ?? "RENDER_FAILED", "the original could not be rendered for comparison");
   }
   await safeUnlink(path.join(options.workRoot, "out", ".original.pdf"));
-  const rendered = await renderVetted(corrected, { jobId: request.jobId, outputDirectory: request.outputDirectory, limits: definedOnly({ ...request.limits }), page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: PDF_NAME, screenshot: true });
+  const rendered = await renderVetted(corrected, { jobId: request.jobId, ...(request.policy ? { policy: request.policy } : {}), outputDirectory: request.outputDirectory, limits: definedOnly({ ...request.limits }), page: request.page, ...(request.content ? { content: request.content } : {}) }, { workRoot: options.workRoot, budgetMs, outputName: PDF_NAME, screenshot: true });
   engineVersion = rendered.engineVersion;
   if (rendered.status !== "completed" || !rendered.screenshot) {
     await safeUnlink(path.join(options.workRoot, "out", PDF_NAME));
     return base("failed", rendered.error?.code ?? "RENDER_FAILED", rendered.error?.message ?? "the corrected copy could not be rendered");
   }
   const diff = pixelDiffRatio(original.screenshot, rendered.screenshot);
-  const after = await collectVetted(corrected, { jobId: request.jobId, limits: { maxNodes: 20000, ...definedOnly({ timeoutSeconds: request.limits?.timeoutSeconds, maxBytes: request.limits?.maxBytes, maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) } }, correctedSha256);
+  const after = await collectVetted(corrected, { jobId: request.jobId, ...(request.policy ? { policy: request.policy } : {}), limits: { maxNodes: 20000, ...definedOnly({ timeoutSeconds: request.limits?.timeoutSeconds, maxBytes: request.limits?.maxBytes, maxInlineImageBytes: request.limits?.maxInlineImageBytes, maxTotalInlineImageBytes: request.limits?.maxTotalInlineImageBytes }) } }, correctedSha256);
   const afterGroup = children.map((_, i) => nodeAtPath(after, `${request.parentPath}/${i}`));
   const domMatches = after.status === "completed" && afterGroup.every((node, i) => node !== undefined && same(node, groupNodes[order[i]!]!));
   const focusIds = afterGroup.filter((n): n is SemanticNode => n !== undefined).flatMap((n) => descendantsOf(after, n).filter((d) => d.private.focusable).map((d) => d.nodeId));

@@ -16,6 +16,9 @@ public sealed class StubWorker : IWorkerProcess
 
     public List<(string RequestJson, TimeSpan Timeout)> Calls { get; } = [];
 
+    /// <summary>When set, a run waits for this task before it writes its result (a job that stays running until the test lets it go).</summary>
+    public Task? Gate { get; init; }
+
     /// <param name="result">Builds the result JSON from the request JSON (so it can echo the job id).</param>
     /// <param name="outputs">File name (inside the scratch "out" directory) to bytes.</param>
     public StubWorker(Func<string, string> result, IReadOnlyDictionary<string, byte[]>? outputs = null, int exitCode = 0, bool timedOut = false, string stderr = "")
@@ -37,6 +40,7 @@ public sealed class StubWorker : IWorkerProcess
     {
         var request = await File.ReadAllTextAsync(requestPath, ct);
         Calls.Add((request, timeout));
+        if (Gate is not null) await Gate.WaitAsync(ct);
         if (_timedOut) return new WorkerRun(-1, true, _stderr);
         var outDir = Path.Combine(scratchRoot, "out");
         Directory.CreateDirectory(outDir);

@@ -34,3 +34,17 @@ Compensating controls in the supplied setup:
 
 If you run the image outside this setup, apply the same controls. A custom seccomp profile that allows user
 namespaces would let Chromium sandbox itself, but that weakens the container boundary and is not done here.
+
+### `KOLDERA_CHROMIUM_SANDBOX`
+
+The server passes the choice to the renderer and the scanner in each request's `policy` block as
+`chromiumSandbox` (their process environment is cleared, so an environment variable alone would not reach them).
+Playwright's `chromiumSandbox` launch option is always set explicitly:
+
+| `KOLDERA_CHROMIUM_SANDBOX` | `policy.chromiumSandbox` | Chromium |
+| --- | --- | --- |
+| unset or `false` (default) | absent (false) | started with `--no-sandbox`, as described above |
+| `true` | `true` | uses its own sandbox; only works where unprivileged user namespaces are allowed |
+
+AWS Lambda and Docker's default seccomp profile do not allow those namespaces, so leave it at the default there; a
+value of `true` makes Chromium fail to start on such hosts. See [aws-lambda.md](aws-lambda.md) for running on Lambda.
