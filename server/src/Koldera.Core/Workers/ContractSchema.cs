@@ -47,7 +47,7 @@ public sealed class ContractSchema
         return new ContractSchema(rootNode);
     }
 
-    /// <summary>Error messages as "&lt;json path&gt;: &lt;problem&gt;", at most 20, empty when the document is valid.</summary>
+    /// <summary>Error messages as "&lt;json path&gt;: &lt;problem&gt;", at most 20, empty when the document is valid. Never quotes a value or a property name of the document: the messages reach clients.</summary>
     public IReadOnlyList<string> Validate(string json)
     {
         JsonDocument document;
@@ -55,9 +55,9 @@ public sealed class ContractSchema
         {
             document = JsonDocument.Parse(json);
         }
-        catch (JsonException e)
+        catch (JsonException)
         {
-            return ["not valid JSON: " + e.Message];
+            return ["not valid JSON"]; // the parser's message quotes input
         }
         using (document)
         {
@@ -284,7 +284,7 @@ public sealed class ContractSchema
                 }
                 else if (AdditionalProperties == false)
                 {
-                    errors.Add($"{path}: unexpected property '{property.Name}'");
+                    errors.Add($"{path}: unexpected property"); // the name is worker output, not echoed
                 }
             }
         }
@@ -346,11 +346,11 @@ public sealed class ContractSchema
             }
             if (Minimum is { } min && number < min)
             {
-                errors.Add($"{path}: {value.GetRawText()} is below the minimum {min.ToString(CultureInfo.InvariantCulture)}");
+                errors.Add($"{path}: below the minimum {min.ToString(CultureInfo.InvariantCulture)}");
             }
             if (Maximum is { } max && number > max)
             {
-                errors.Add($"{path}: {value.GetRawText()} is above the maximum {max.ToString(CultureInfo.InvariantCulture)}");
+                errors.Add($"{path}: above the maximum {max.ToString(CultureInfo.InvariantCulture)}");
             }
         }
 

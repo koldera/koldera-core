@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -20,7 +19,8 @@ public class DataStore
 
     private readonly string _root;
     private readonly TimeProvider _clock;
-    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _locks = new();
+    // One gate per upload while a PUT is in flight; counted so the entry is dropped after any outcome, never while someone waits.
+    private readonly Dictionary<Guid, (SemaphoreSlim Gate, int Users)> _locks = new();
 
     public DataStore(string root, TimeProvider? clock = null)
     {
@@ -30,13 +30,15 @@ public class DataStore
         Directory.CreateDirectory(JobsDir);
     }
 
+    internal int LockCount { get { lock (_locks) return _locks.Count; } }
+
     private string UploadsDir => Path.Combine(_root, "uploads");
     private string JobsDir => Path.Combine(_root, "jobs");
     private string RecordPath(Guid id) => Path.Combine(UploadsDir, id.ToString("N") + ".json");
 
     public string UploadPath(Guid id) => Path.Combine(UploadsDir, id.ToString("N"));
 
-    public string JobDir(Guid id)
+    public virtual string JobDir(Guid id)
     {
         var dir = Path.Combine(JobsDir, id.ToString("N"));
         Directory.CreateDirectory(dir);
@@ -53,23 +55,21 @@ public class DataStore
 
     public async Task CompleteUploadAsync(Guid id, Stream body, CancellationToken ct)
     {
-        var gate = _locks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(ct);
-        var terminal = false;
+        SemaphoreSlim gate;
+        lock (_locks)
+        {
+            var (g, users) = _locks.TryGetValue(id, out var entry) ? entry : (new SemaphoreSlim(1, 1), 0);
+            _locks[id] = (g, users + 1);
+            gate = g;
+        }
+        var acquired = false;
         try
         {
-            UploadRecord rec;
-            try
-            {
-                rec = GetUpload(id) ?? throw new UploadException("UPLOAD_NOT_FOUND");
-                if (rec.Completed) throw new UploadException("UPLOAD_ALREADY_COMPLETED");
-                if (_clock.GetUtcNow() > rec.ExpiresAt) throw new UploadException("UPLOAD_EXPIRED");
-            }
-            catch (UploadException)
-            {
-                terminal = true;
-                throw;
-            }
+            await gate.WaitAsync(ct);
+            acquired = true;
+            var rec = GetUpload(id) ?? throw new UploadException("UPLOAD_NOT_FOUND");
+            if (rec.Completed) throw new UploadException("UPLOAD_ALREADY_COMPLETED");
+            if (_clock.GetUtcNow() > rec.ExpiresAt) throw new UploadException("UPLOAD_EXPIRED");
 
             var part = UploadPath(id) + ".part";
             try
@@ -108,13 +108,16 @@ public class DataStore
                 throw;
             }
             WriteJson(RecordPath(id), rec with { Completed = true });
-            terminal = true;
         }
         finally
         {
-            gate.Release();
-            // Completed (or unknown/expired) is terminal; later callers read the record and never need this gate.
-            if (terminal) _locks.TryRemove(id, out _);
+            if (acquired) gate.Release();
+            lock (_locks)
+            {
+                var (g, users) = _locks[id];
+                if (users == 1) _locks.Remove(id);
+                else _locks[id] = (g, users - 1);
+            }
         }
     }
 
@@ -179,6 +182,16 @@ public class DataStore
         }
     }
 
+    /// <summary>Job directories that have no job.json at all (a crash between writing files and saving the record), with their last write time.</summary>
+    public IEnumerable<(Guid Id, DateTimeOffset LastWrite)> OrphanJobDirs()
+    {
+        foreach (var dir in Directory.EnumerateDirectories(JobsDir))
+        {
+            if (File.Exists(Path.Combine(dir, "job.json")) || !Guid.TryParseExact(Path.GetFileName(dir), "N", out var id)) continue;
+            yield return (id, new DateTimeOffset(Directory.GetLastWriteTimeUtc(dir), TimeSpan.Zero));
+        }
+    }
+
     public IEnumerable<UploadRecord> AllUploads(Action<string, Exception>? onUnreadable = null)
     {
         foreach (var file in Directory.EnumerateFiles(UploadsDir, "*.json"))
@@ -199,7 +212,6 @@ public class DataStore
     {
         foreach (var path in new[] { UploadPath(id), UploadPath(id) + ".part", RecordPath(id), RecordPath(id) + ".tmp" })
             TryDeleteFile(path);
-        _locks.TryRemove(id, out _);
     }
 
     /// <summary>Removes the job's directory (record and artifacts) without recreating it.</summary>

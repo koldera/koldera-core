@@ -19,6 +19,10 @@ public sealed class RetentionService(DataStore store, int retentionHours, ILogge
         foreach (var job in jobs)
             if (job.CreatedAt < cutoff && job.State is CoreJobState.Completed or CoreJobState.Failed)
                 store.DeleteJob(job.Id);
+        // Not yet visible as a job, so only a stale one is an orphan; a corrupt record is not (it is skipped above).
+        foreach (var (id, lastWrite) in store.OrphanJobDirs().ToList())
+            if (lastWrite < cutoff)
+                store.DeleteJob(id);
         foreach (var upload in store.AllUploads(Corrupt).ToList())
             if (upload.CreatedAt < cutoff && !inUse.Contains(upload.Id))
                 store.DeleteUpload(upload.Id);

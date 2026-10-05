@@ -77,4 +77,29 @@ public class ContentTypeTests
         var upload = await f.CompletedUpload(Fixtures.SmallPdf()); // PUT of application/octet-stream style bytes
         Assert.NotEqual(Guid.Empty, upload);
     }
+
+    [Theory]
+    [MemberData(nameof(Routes))]
+    public async Task An_empty_json_body_reaches_the_route_instead_of_being_a_415(bool authNone, string path)
+    {
+        using var f = Server(authNone);
+        var c = authNone ? f.CreateClient() : f.AuthorizedClient();
+        var content = new ByteArrayContent([]);
+        content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+        var r = await c.PostAsync(path, content);
+        // The route's own validation answers (400 for a missing required body, 422 for a field rule), never the media-type refusal.
+        Assert.NotEqual(HttpStatusCode.UnsupportedMediaType, r.StatusCode);
+        Assert.InRange((int)r.StatusCode, 400, 499);
+    }
+
+    [Theory]
+    [InlineData("application/jsonx")]
+    [InlineData("application/json-patch+json")]
+    [InlineData("xapplication/json")]
+    public async Task A_media_type_that_only_starts_like_json_is_a_415(string contentType)
+    {
+        using var f = Server(false);
+        var r = await f.AuthorizedClient().SendAsync(Post("/v1/client-sessions", contentType));
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, r.StatusCode);
+    }
 }
