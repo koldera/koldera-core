@@ -19,12 +19,12 @@
 
     <!-- Pinned versions; verified against Maven Central metadata on 2026-09-17. -->
     <pdfbox.version>3.0.8</pdfbox.version>
-    <bouncycastle.version>1.84</bouncycastle.version>
-    <jackson.version>2.22.2</jackson.version>
+    <bouncycastle.version>1.86</bouncycastle.version>
+    <jackson.version>2.22.3</jackson.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
     <junit.version>5.14.4</junit.version>
     <commons-logging.version>1.4.0</commons-logging.version>
-    <slf4j.version>2.0.19</slf4j.version>
+    <slf4j.version>2.0.20</slf4j.version>
 
     <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
     <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
