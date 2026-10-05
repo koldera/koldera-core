@@ -286,4 +286,47 @@ public sealed class JobRunnerTests : IDisposable
         Assert.Equal(2, max);
         Assert.All(ids, id => Assert.Equal("completed", _store.GetJob(id)!.State));
     }
+
+    /// <summary>Opens the job's record with the sharing the store's own reads use; the caller closes it.</summary>
+    private FileStream HoldRecordOpen(Guid id) =>
+        new(Path.Combine(_root, "jobs", id.ToString("N"), "job.json"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+    [Fact]
+    public async Task A_reader_holding_the_record_while_the_outcome_is_saved_does_not_lose_the_outcome()
+    {
+        // Windows refuses to replace a file while any handle is open on it (here: a waiter or an API read of the
+        // same job, elsewhere a virus scanner). The outcome save must wait for the reader instead of failing.
+        Task? release = null;
+        var (runner, queue) = Runner(new LambdaExecutor("pdf", (job, _, _, _) =>
+        {
+            var reader = HoldRecordOpen(job.Id);
+            release = Task.Run(async () => { await Task.Delay(300); reader.Dispose(); });
+            return Task.FromResult(Done());
+        }));
+        var id = await QueueJob(queue);
+        await runner.StartAsync(CancellationToken.None);
+        _started.Add(runner);
+        await runner.WaitIdleAsync();
+        await release!;
+
+        // A waiter arriving after the runner's signal relies on the stored record alone.
+        Assert.True(await runner.WaitForCompletionAsync(id, TimeSpan.FromSeconds(5), CancellationToken.None));
+        Assert.Equal("completed", _store.GetJob(id)!.State);
+        Assert.DoesNotContain(_log.Lines, l => l.Contains(id.ToString()));
+    }
+
+    [Fact]
+    public async Task Saving_a_job_waits_for_a_reader_that_briefly_holds_the_record()
+    {
+        var job = new CoreJob { Id = Guid.NewGuid(), Kind = "pdf", State = CoreJobState.Queued, Owner = "server", CreatedAt = DateTimeOffset.UtcNow };
+        await _store.SaveJobAsync(job);
+        var reader = HoldRecordOpen(job.Id);
+        var release = Task.Run(async () => { await Task.Delay(300); reader.Dispose(); });
+
+        job.State = CoreJobState.Completed;
+        await _store.SaveJobAsync(job);
+        await release;
+
+        Assert.Equal("completed", _store.GetJob(job.Id)!.State);
+    }
 }
