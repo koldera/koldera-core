@@ -1,0 +1,705 @@
+openapi: 3.1.0
+info:
+  title: koldera-core HTTP API
+  version: 0.1.0
+  summary: Machine checks for PDF/UA-1 (veraPDF) and WCAG 2.2 AA automated rules (axe-core), fixed PDF copies, HTML and structured documents to tagged PDF.
+  description: |
+    Every result is a machine check. `manualReviewRequired` stays `true`: a person still has to review what the
+    checks cannot decide. The API makes no conformance claim.
+
+    Jobs are asynchronous. A job-creating POST answers `202` with a `Location` header; add `Prefer: wait=N` (1 to 900
+    seconds) to hold the request until the job finishes (`200`) or the wait runs out (`202`). Jobs, uploads,
+    idempotency keys and client-session budgets are kept in memory or in the data directory of one instance;
+    they are lost on restart and not shared between instances.
+  license:
+    name: AGPL-3.0-only
+    identifier: AGPL-3.0-only
+servers:
+  - url: http://localhost:8080
+    description: Default address of the container image
+security:
+  - bearer: []
+tags:
+  - name: Service
+  - name: Client sessions
+  - name: Uploads
+  - name: Jobs
+  - name: Results
+  - name: Reading order
+paths:
+  /healthz:
+    get:
+      tags: [Service]
+      operationId: getHealth
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, const: ok}
+  /v1/info:
+    get:
+      tags: [Service]
+      operationId: getInfo
+      summary: Version and enabled features
+      description: Open to server tokens and to every client session, whatever its scopes.
+      responses:
+        "200":
+          description: Version information.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Info"}
+        "401": {$ref: "#/components/responses/Problem"}
+  /v1/client-sessions:
+    post:
+      tags: [Client sessions]
+      operationId: createClientSession
+      summary: Mint a short-lived token for a browser
+      description: |
+        Server tokens only. The token works only from `allowedOrigin`, only for the listed scopes, and only until it
+        expires or its job and upload budgets are used up. Budgets are counted in memory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ClientSessionRequest"}
+      responses:
+        "201":
+          description: Session created.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ClientSession"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+  /v1/uploads:
+    post:
+      tags: [Uploads]
+      operationId: createUpload
+      summary: Declare an upload and get a signed upload URL
+      description: Declare the file name, size, SHA-256 and content type, then send the bytes with `PUT` to `uploadUrl`.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/UploadRequest"}
+      responses:
+        "201":
+          description: Upload declared. The URL is valid for ten minutes, the upload record for one hour.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/UploadTicket"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+        "429": {$ref: "#/components/responses/Problem"}
+  /v1/uploads/{id}/content:
+    put:
+      tags: [Uploads]
+      operationId: putUploadContent
+      summary: Send the file bytes
+      description: |
+        No bearer token: the signed query (`exp`, `sig`) of `uploadUrl` is the credential. The body must match the
+        declared size and SHA-256.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: exp, in: query, required: true, schema: {type: string}}
+        - {name: sig, in: query, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/pdf: {schema: {type: string, format: binary}}
+          text/html: {schema: {type: string, format: binary}}
+          image/png: {schema: {type: string, format: binary}}
+          image/jpeg: {schema: {type: string, format: binary}}
+          image/svg+xml: {schema: {type: string, format: binary}}
+      responses:
+        "204": {description: Stored.}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+        "410": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+  /v1/pdf/jobs:
+    post:
+      tags: [Jobs]
+      operationId: createPdfJob
+      summary: Analyze a PDF, or analyze and write a fixed copy
+      description: |
+        `analyze` runs the veraPDF PDF/UA-1 profile. `fix` additionally writes a repaired copy as a `remediated`
+        artifact; the original is never modified, and a copy that fails a gate is discarded (`rolled_back`).
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+        - {$ref: "#/components/parameters/Prefer"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PdfJobRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/JobFinished"}
+        "202": {$ref: "#/components/responses/JobAccepted"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+        "429": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/QueueFull"}
+  /v1/html-to-pdf/jobs:
+    post:
+      tags: [Jobs]
+      operationId: createHtmlToPdfJob
+      summary: Render one static HTML file to a tagged PDF and check it
+      description: Needs the `html` feature. Scripts are off and nothing is fetched from the network.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+        - {$ref: "#/components/parameters/Prefer"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/HtmlJobRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/JobFinished"}
+        "202": {$ref: "#/components/responses/JobAccepted"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+        "429": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/QueueFull"}
+  /v1/web/jobs:
+    post:
+      tags: [Jobs]
+      operationId: createWebJob
+      summary: Scan one web page with axe-core
+      description: |
+        Needs the `web` feature. One public https URL per job (http only with `KOLDERA_WEB_ALLOW_HTTP`). Private,
+        loopback and metadata destinations are refused. Query strings and fragments are dropped and never echoed.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+        - {$ref: "#/components/parameters/Prefer"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WebJobRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/JobFinished"}
+        "202": {$ref: "#/components/responses/JobAccepted"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+        "429": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/QueueFull"}
+  /v1/documents/jobs:
+    post:
+      tags: [Jobs]
+      operationId: createDocumentJob
+      summary: Render a structured document to a tagged PDF and check it
+      description: |
+        Needs the `document` feature. The body is the document itself (`contracts/document.schema.json`, see
+        docs/documents.md). Images reference uploads by `uploadId`. A validation failure answers `422` with one entry
+        per problem in `errors`.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+        - {$ref: "#/components/parameters/Prefer"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Document"}
+      responses:
+        "200": {$ref: "#/components/responses/JobFinished"}
+        "202": {$ref: "#/components/responses/JobAccepted"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+        "429": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/QueueFull"}
+  /v1/jobs/{jobId}:
+    get:
+      tags: [Results]
+      operationId: getJob
+      summary: Job status and machine validation
+      description: A job that is still `queued` or `running` carries `Retry-After`.
+      parameters:
+        - {$ref: "#/components/parameters/JobId"}
+      responses:
+        "200":
+          description: The job.
+          headers:
+            Retry-After: {description: Seconds to wait before polling again; present while the job is not finished., schema: {type: integer}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Job"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/jobs/{jobId}/findings:
+    get:
+      tags: [Results]
+      operationId: listFindings
+      summary: Findings of a job
+      parameters:
+        - {$ref: "#/components/parameters/JobId"}
+      responses:
+        "200":
+          description: Findings ordered by rule id, then page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/Finding"}}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/jobs/{jobId}/actions:
+    get:
+      tags: [Results]
+      operationId: listActions
+      summary: Repairs the engine applied, skipped or rolled back
+      parameters:
+        - {$ref: "#/components/parameters/JobId"}
+      responses:
+        "200":
+          description: Actions in the engine's run order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/Action"}}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/jobs/{jobId}/artifacts:
+    get:
+      tags: [Results]
+      operationId: listArtifacts
+      summary: Files a job produced, with signed download URLs
+      description: Each `downloadUrl` is valid for ten minutes. Artifacts are removed after `KOLDERA_RETENTION_HOURS`.
+      parameters:
+        - {$ref: "#/components/parameters/JobId"}
+      responses:
+        "200":
+          description: Unexpired artifacts, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/Artifact"}}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/artifacts/{artifactId}/content:
+    get:
+      tags: [Results]
+      operationId: downloadArtifact
+      summary: Download an artifact
+      description: "No bearer token: the signed query (`exp`, `sig`) of `downloadUrl` is the credential."
+      security: []
+      parameters:
+        - {name: artifactId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: exp, in: query, required: true, schema: {type: string}}
+        - {name: sig, in: query, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: The file, sent as an attachment with `X-Content-Type-Options` set to `nosniff`.
+          content:
+            application/pdf: {schema: {type: string, format: binary}}
+            text/html: {schema: {type: string, format: binary}}
+            application/json: {schema: {type: string, format: binary}}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/jobs/{jobId}/reading-order:
+    get:
+      tags: [Reading order]
+      operationId: getReadingOrder
+      summary: Reading-order evidence of a job
+      description: |
+        Evidence for a person to review, bound to the SHA-256 of the artifact it describes. It is never a verdict:
+        `readingOrderReview` is always `needs_review`. Answers `404` when the job has no snapshot.
+      parameters:
+        - {$ref: "#/components/parameters/JobId"}
+      responses:
+        "200":
+          description: The merged snapshot.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ReadingOrderSnapshot"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/jobs/{jobId}/reading-order/remediations:
+    post:
+      tags: [Reading order]
+      operationId: createReadingOrderRemediation
+      summary: Apply one approved reordering of one sibling group
+      description: |
+        Queues an `order_pdf` or `order_html` job. The ids must be the complete sibling group of exactly one parent in
+        a new order. The worker applies it to a copy and rolls back on any regression. `acknowledged` states that a
+        person checked the approved order.
+      parameters:
+        - {$ref: "#/components/parameters/JobId"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+        - {$ref: "#/components/parameters/Prefer"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ReadingOrderRemediationRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/JobFinished"}
+        "202": {$ref: "#/components/responses/JobAccepted"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+        "429": {$ref: "#/components/responses/Problem"}
+        "503": {$ref: "#/components/responses/QueueFull"}
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: A server token (`KOLDERA_TOKEN`) or a client-session token from `POST /v1/client-sessions`. Not needed when `KOLDERA_AUTH=none`.
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: 1 to 255 printable characters. A retry with the same key and body replays the stored 2xx answer and sets `Idempotent-Replayed`; the same key with another body is `409 IDEMPOTENCY_KEY_REUSED`. Keys live 24 hours, in memory.
+      schema: {type: string, minLength: 1, maxLength: 255}
+    Prefer:
+      name: Prefer
+      in: header
+      required: false
+      description: "`wait=N`, N from 1 to 900. The server holds the request until the job finishes or N seconds pass and sets `Preference-Applied: wait=N`. A missing or malformed value is ignored."
+      schema: {type: string, examples: ["wait=60"]}
+  headers:
+    Location:
+      description: Where to poll the job.
+      schema: {type: string, examples: ["/v1/jobs/3f1c8d5e-0f0e-4f0e-9d2c-5c1d6f9b7a10"]}
+    PreferenceApplied:
+      description: Set when the server waited.
+      schema: {type: string, examples: ["wait=60"]}
+    IdempotentReplayed:
+      description: "`true` when the stored answer of an earlier request was replayed."
+      schema: {type: string}
+  responses:
+    JobFinished:
+      description: The job finished within the wait (`state` is `completed` or `failed`).
+      headers:
+        Location: {$ref: "#/components/headers/Location"}
+        Preference-Applied: {$ref: "#/components/headers/PreferenceApplied"}
+        Idempotent-Replayed: {$ref: "#/components/headers/IdempotentReplayed"}
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Job"}
+    JobAccepted:
+      description: The job is queued or running; poll `Location`.
+      headers:
+        Location: {$ref: "#/components/headers/Location"}
+        Preference-Applied: {$ref: "#/components/headers/PreferenceApplied"}
+        Idempotent-Replayed: {$ref: "#/components/headers/IdempotentReplayed"}
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Job"}
+    QueueFull:
+      description: The job queue is full (`QUEUE_FULL`); retry after `Retry-After` seconds.
+      headers:
+        Retry-After: {schema: {type: integer}}
+      content:
+        application/problem+json:
+          schema: {$ref: "#/components/schemas/Problem"}
+    Problem:
+      description: An error. `code` is stable; `detail` is for people.
+      content:
+        application/problem+json:
+          schema: {$ref: "#/components/schemas/Problem"}
+  schemas:
+    Info:
+      type: object
+      required: [features]
+      properties:
+        version: {type: [string, "null"]}
+        engineVersion: {type: [string, "null"]}
+        features:
+          type: array
+          items: {type: string, enum: [document, html, pdf, web]}
+    ClientSessionRequest:
+      type: object
+      required: [allowedOrigin]
+      properties:
+        allowedOrigin: {type: string, description: "Absolute http(s) origin without a path, for example https://app.example."}
+        scopes:
+          type: array
+          description: Default is both scopes.
+          items: {type: string, enum: ["jobs:create", "jobs:read"]}
+        maxJobs: {type: integer, minimum: 1, maximum: 1000, default: 10}
+        maxUploads: {type: integer, minimum: 1, maximum: 10000, description: "Default is ten per job, at most 10000."}
+        ttlSeconds: {type: integer, minimum: 1, maximum: 3600, default: 900}
+    ClientSession:
+      type: object
+      required: [sessionToken, expiresAt]
+      properties:
+        sessionToken: {type: string}
+        expiresAt: {type: string, format: date-time}
+        publishableKey: {type: [string, "null"], description: Always null in koldera-core.}
+    UploadRequest:
+      type: object
+      required: [fileName, sizeBytes, sha256, contentType]
+      properties:
+        fileName: {type: string, minLength: 1, maxLength: 255}
+        sizeBytes: {type: integer, minimum: 1}
+        sha256: {type: string, pattern: "^[0-9a-f]{64}$"}
+        contentType: {type: string, enum: [application/pdf, text/html, image/png, image/jpeg, image/svg+xml]}
+    UploadTicket:
+      type: object
+      required: [uploadId, method, uploadUrl, expiresAt]
+      properties:
+        uploadId: {type: string, format: uuid}
+        method: {type: string, const: PUT}
+        uploadUrl: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+        maxBytes: {type: [integer, "null"], description: The configured size limit for this content type, if any.}
+    PdfJobRequest:
+      type: object
+      required: [uploadId, mode, profile]
+      properties:
+        uploadId: {type: string, format: uuid}
+        mode: {type: string, enum: [analyze, fix]}
+        profile: {type: string, const: ua1}
+        explicitLanguage: {type: string, description: BCP 47 tag used when the document has none.}
+        explicitTitle: {type: string, minLength: 1, maxLength: 500, description: Title to write; replaces an existing one.}
+    HtmlJobRequest:
+      type: object
+      required: [uploadId, mode, profile]
+      properties:
+        uploadId: {type: string, format: uuid}
+        mode: {type: string, enum: [generate_analyze, generate_fix]}
+        profile: {type: string, const: ua1}
+        contentSelector: {type: string, description: Render only the element matching this CSS selector.}
+        explicitLanguage: {type: string}
+        explicitTitle: {type: string, minLength: 1, maxLength: 500}
+    WebJobRequest:
+      type: object
+      required: [url]
+      properties:
+        url: {type: string, format: uri}
+    Document:
+      type: object
+      description: A structured document. The complete schema is `contracts/document.schema.json`; the validator adds the checks a schema cannot express.
+      required: [title, language, body]
+      properties:
+        title: {type: string}
+        language: {type: string}
+        page: {type: object}
+        theme: {type: object}
+        header: {type: array, items: {type: object}}
+        footer: {type: array, items: {type: object}}
+        body: {type: array, items: {type: object}}
+    ReadingOrderRemediationRequest:
+      type: object
+      required: [baseArtifactSha256, snapshotVersion, target, orderedNodeIds, acknowledged]
+      properties:
+        baseArtifactSha256: {type: string, pattern: "^[0-9a-f]{64}$"}
+        snapshotVersion: {type: integer}
+        target: {type: string, enum: [source_html, pdf_tags]}
+        orderedNodeIds: {type: array, minItems: 2, uniqueItems: true, items: {type: string, minLength: 1}}
+        acknowledged: {type: boolean, const: true}
+        reviewer: {type: string, minLength: 1, maxLength: 200, description: Audit label asserted by the caller, not authenticated.}
+    MachineValidation:
+      type: object
+      required: [profile, status, failedRules]
+      properties:
+        profile: {type: string}
+        status: {type: string, enum: [passed, failed, error, not_run]}
+        failedRules:
+          type: array
+          items:
+            type: object
+            required: [ruleId, count]
+            properties:
+              ruleId: {type: string}
+              count: {type: integer}
+    Job:
+      type: object
+      required: [id, kind, state, createdAt, manualReviewRequired]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [pdf, html_to_pdf, document_to_pdf, web, order_pdf, order_html]}
+        mode: {type: [string, "null"]}
+        state: {type: string, enum: [queued, running, completed, failed]}
+        createdAt: {type: string, format: date-time}
+        startedAt: {type: [string, "null"], format: date-time}
+        finishedAt: {type: [string, "null"], format: date-time}
+        validation:
+          oneOf: [{$ref: "#/components/schemas/MachineValidation"}, {type: "null"}]
+          description: The final validation when there is one, else the baseline.
+        baselineValidation: {oneOf: [{$ref: "#/components/schemas/MachineValidation"}, {type: "null"}]}
+        finalValidation: {oneOf: [{$ref: "#/components/schemas/MachineValidation"}, {type: "null"}]}
+        remediationStatus: {type: [string, "null"], enum: [not_requested, no_applicable_fix, applied, skipped, rolled_back, null]}
+        manualReviewRequired: {type: boolean, description: Always true.}
+        engineVersion: {type: [string, "null"]}
+        error: {oneOf: [{$ref: "#/components/schemas/JobError"}, {type: "null"}]}
+        targetUrl: {type: [string, "null"], description: Web jobs only, without query or fragment.}
+        contentSelector: {type: [string, "null"]}
+    JobError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: "Why the job failed, for example WORKER_TIMEOUT, WORKER_ERROR, LIMIT_EXCEEDED, INVALID_INPUT, UNSUPPORTED_CONTENT, DOCUMENT_VALIDATION_FAILED or TAGGED_OUTPUT_UNAVAILABLE. These are not problem codes."
+        message: {type: string}
+    Finding:
+      type: object
+      required: [source, ruleId, message, needsHumanReview]
+      properties:
+        source: {type: string, enum: [pdf, html, web]}
+        ruleId: {type: string}
+        message: {type: string}
+        pageNumber: {type: [integer, "null"]}
+        selector: {type: [string, "null"]}
+        needsHumanReview: {type: boolean}
+        resolution: {type: [string, "null"], enum: [fixed_in_copy, still_failing, null], description: Set only on machine checks of a job whose fix was applied.}
+    Action:
+      type: object
+      required: [ruleId, outcome, reason]
+      properties:
+        ruleId: {type: string}
+        outcome: {type: string, enum: [applied, skipped, failed, rolled_back]}
+        reason: {type: string}
+        before: {type: [string, "null"]}
+        after: {type: [string, "null"]}
+    Artifact:
+      type: object
+      required: [id, kind, sha256, sizeBytes, downloadUrl, expiresAt]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [original, remediated, baseline_report, final_report, generated_pdf, source_html, web_report, reordered]}
+        sha256: {type: string}
+        sizeBytes: {type: integer}
+        downloadUrl: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+    ReadingOrderNode:
+      type: object
+      required: [nodeId, role, logicalIndex, origin]
+      properties:
+        nodeId: {type: string}
+        parentId: {type: [string, "null"]}
+        role: {type: string}
+        logicalIndex: {type: integer}
+        pageNumber: {type: [integer, "null"]}
+        origin: {type: string, enum: [pdf_structure, html_dom]}
+        textPreview: {type: [string, "null"]}
+        boundingBox: {type: [object, "null"]}
+    ReadingOrderSnapshot:
+      type: object
+      required: [jobId, sourceArtifactSha256, snapshotVersion, nodes, reviewRequired, readingOrderReview, focusOrderReview, focusOrderNodeIds, visualOrderCandidateNodeIds, artifactHashes]
+      properties:
+        jobId: {type: string, format: uuid}
+        sourceArtifactSha256: {type: string}
+        snapshotVersion: {type: integer}
+        nodes: {type: array, items: {$ref: "#/components/schemas/ReadingOrderNode"}}
+        reviewRequired: {type: boolean, const: true}
+        readingOrderReview: {type: string, const: needs_review}
+        focusOrderReview: {type: string, enum: [needs_review, not_run]}
+        focusOrderNodeIds: {type: array, items: {type: string}}
+        visualOrderCandidateNodeIds: {type: array, items: {type: string}}
+        artifactHashes:
+          type: object
+          description: SHA-256 of the artifact each snapshot origin describes.
+          additionalProperties: {type: string}
+    ValidationError:
+      type: object
+      required: [path, code, message]
+      properties:
+        path: {type: string, description: JSON Pointer (RFC 6901) to the offending value; empty for the document itself.}
+        code:
+          type: string
+          enum: [SCHEMA, IMAGE_ALT_MISSING, HEADING_LEVEL_SKIPPED, TABLE_HEADER_EMPTY, TABLE_ROW_LENGTH_MISMATCH, LINK_TEXT_EMPTY, FONT_UNKNOWN, LANGUAGE_INVALID, FILE_IMAGE_NOT_ALLOWED, IMAGE_UPLOAD_INVALID]
+        message: {type: string}
+    Problem:
+      type: object
+      description: RFC 9457 problem details. Also described by `contracts/problem.schema.json`.
+      required: [type, title, status, code]
+      properties:
+        type: {type: string, examples: ["about:blank"]}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code:
+          type: string
+          description: Stable machine-readable code.
+          enum:
+            # problem-codes:begin
+            - ARTIFACT_EXPIRED
+            - CHECKSUM_MISMATCH
+            - FILE_IMAGE_NOT_ALLOWED
+            - FILE_TOO_LARGE
+            - FORBIDDEN
+            - IDEMPOTENCY_KEY_REUSED
+            - IMAGE_UPLOAD_INVALID
+            - INSUFFICIENT_SCOPE
+            - INVALID_JSON
+            - NOT_FOUND
+            - ORDER_FIX_UNSUPPORTED
+            - QUEUE_FULL
+            - SESSION_JOB_LIMIT
+            - SESSION_UPLOAD_LIMIT
+            - SIGNATURE_INVALID
+            - SIZE_MISMATCH
+            - STALE_READING_ORDER_SNAPSHOT
+            - UNAUTHORIZED
+            - UNSUPPORTED_INPUT
+            - UNSUPPORTED_MEDIA_TYPE
+            - UPLOAD_ALREADY_COMPLETED
+            - UPLOAD_CONFLICT
+            - UPLOAD_EXPIRED
+            - UPLOAD_INCOMPLETE
+            - UPLOAD_NOT_FOUND
+            - VALIDATION_ERROR
+            # problem-codes:end
+        errors:
+          type: array
+          description: Present on `VALIDATION_ERROR` for a structured document, one entry per problem.
+          items: {$ref: "#/components/schemas/ValidationError"}
