@@ -98,6 +98,8 @@ public static class JobReadEndpoints
             var kind = DownloadKinds.Contains(artifact.Kind) ? artifact.Kind : "artifact";
             http.Response.Headers.ContentDisposition = $"attachment; filename=\"{kind}{extension}\"";
             http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            // A source_html artifact is caller markup served from the API origin: opened directly, it runs no script and loads nothing.
+            http.Response.Headers.ContentSecurityPolicy = "sandbox; default-src 'none'";
             return Results.File(path, contentType);
         }).AllowAnonymous();
     }
