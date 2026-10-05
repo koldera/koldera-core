@@ -1,0 +1,21 @@
+# Used by compose.sso.yaml: every request is checked by oauth2-proxy first (401 sends the browser to sign in).
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	handle /oauth2/* {
+		reverse_proxy oauth2-proxy:4180
+	}
+	handle /healthz {
+		reverse_proxy core:8080
+	}
+	handle {
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			copy_headers X-Auth-Request-User X-Auth-Request-Email
+		}
+		reverse_proxy core:8080
+	}
+}

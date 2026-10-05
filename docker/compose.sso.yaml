@@ -1,0 +1,49 @@
+# Single sign-on example: Caddy asks oauth2-proxy before forwarding anything to core. Use it as an override:
+
+#   docker compose -f docker/compose.yaml -f docker/compose.sso.yaml up -d
+
+# Every value marked change-me is a placeholder; supply real ones through your environment or an
+# untracked .env file, never commit them. The provider settings below are for a generic OIDC issuer.
+
+# Core still requires its own bearer token on /v1: oauth2-proxy proves who the person is, it does not
+# replace KOLDERA_TOKEN. Browser users reach the UI or SDK through the proxy, trusted backends use the token.
+
+services:
+  front:
+    # Replace the plain-HTTP front with Caddy plus a forward_auth check against oauth2-proxy.
+    ports:
+      - "8080:8080"
+    volumes: !override
+      - ./Caddyfile.sso:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [public, internal]
+    depends_on:
+      - oauth2-proxy
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.9.0
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=oidc
+      - --oidc-issuer-url=${OIDC_ISSUER_URL:-https://change-me.example/}
+      - --email-domain=${SSO_EMAIL_DOMAIN:-change-me.example}
+      - --upstream=static://202
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --cookie-secure=true
+    environment:
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:-change-me}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-change-me}
+      # 32 random bytes, base64: openssl rand -base64 32 | tr -- '+/' '-_'
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET:-change-me-change-me-change-me-32b=}
+      OAUTH2_PROXY_REDIRECT_URL: ${OIDC_REDIRECT_URL:-https://change-me.example/oauth2/callback}
+    # The identity provider is outside, so this one needs the outbound network as well.
+    networks: [internal, outbound]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 128
