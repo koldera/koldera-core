@@ -1,10 +1,10 @@
 version: 2
-# Policy (2026-10-05): no semver-major bumps until a planned upgrade; at most 5 open PRs per entry; weekly grouped minor/patch.
+# Policy (2026-10-05): no semver-major bumps until a planned upgrade; at most 3 open PRs per entry; monthly grouped minor/patch.
 updates:
   - package-ecosystem: maven
     directory: /engine
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       maven-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -12,8 +12,8 @@ updates:
         update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /renderer
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       npm-renderer-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -21,8 +21,8 @@ updates:
         update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /scanner
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       npm-scanner-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -30,8 +30,8 @@ updates:
         update-types: ["version-update:semver-major"]
   - package-ecosystem: nuget
     directory: /server
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       nuget-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -39,8 +39,8 @@ updates:
         update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       actions-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -48,8 +48,8 @@ updates:
         update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /docker
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       docker-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -70,8 +70,8 @@ updates:
   # Images pinned in docker/compose*.yaml (caddy, oauth2-proxy); the docker entry only reads Dockerfiles.
   - package-ecosystem: docker-compose
     directory: /docker
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       docker-compose-minor-patch: { update-types: [minor, patch] }
     ignore:
@@ -91,8 +91,8 @@ updates:
         versions: [">=11"]
   - package-ecosystem: docker
     directory: /docker/egress-proxy
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 3
     groups:
       docker-egress-minor-patch: { update-types: [minor, patch] }
     ignore:
