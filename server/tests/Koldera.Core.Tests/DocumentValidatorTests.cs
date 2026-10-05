@@ -31,6 +31,26 @@ public class DocumentValidatorTests
         Assert.Contains(errors, e => e.Code == code && e.Path == path);
     }
 
+    [Theory]
+    [InlineData("""{"title":"T","language":"en","body":[],"extra":1}""", "/extra")]
+    [InlineData("""{"title":"T","language":"en","theme":{"colour":"red"},"body":[]}""", "/theme/colour")]
+    [InlineData("""{"title":"T","language":"en","page":{"sise":"A4"},"body":[]}""", "/page/sise")]
+    [InlineData("""{"title":"T","language":"en","body":[],"a/b":1}""", "/a~1b")]
+    public void An_unknown_property_in_the_callers_own_document_is_located_and_named(string json, string path)
+    {
+        var errors = DocumentValidator.Validate(JsonDocument.Parse(json).RootElement);
+        var error = Assert.Single(errors, e => e.Path == path);
+        Assert.Equal("SCHEMA", error.Code);
+        Assert.Contains("unexpected property '" + path[(path.LastIndexOf('/') + 1)..].Replace("~1", "/") + "'", error.Message);
+    }
+
+    [Fact]
+    public void Values_are_still_not_echoed_in_schema_errors()
+    {
+        var errors = DocumentValidator.Validate(JsonDocument.Parse("""{"title":"T","language":"uk","body":[{"type":"spacer","height":"SECRETVALUE"}]}""").RootElement);
+        Assert.DoesNotContain(errors, e => e.Message.Contains("SECRETVALUE"));
+    }
+
     [Fact]
     public void Unknown_font_and_bad_language_are_reported()
     {
@@ -84,7 +104,7 @@ public class DocumentValidatorTests
     [Theory]
     [InlineData("""{"title":"","language":"en","body":[]}""", "/title")]
     [InlineData("""{"title":"T","body":[]}""", "")]
-    [InlineData("""{"title":"T","language":"en","body":[],"extra":1}""", "")]
+    [InlineData("""{"title":"T","language":"en","body":[],"extra":1}""", "/extra")]
     [InlineData("""{"title":"T","language":"en","body":[{"type":"heading","level":7,"text":"A"}]}""", "/body/0")]
     [InlineData("""{"title":"T","language":"en","body":[{"type":"nope"}]}""", "/body/0")]
     [InlineData("""{"title":"T","language":"en","body":[{"type":"link","text":"a","url":"javascript:alert(1)"}]}""", "/body/0")]

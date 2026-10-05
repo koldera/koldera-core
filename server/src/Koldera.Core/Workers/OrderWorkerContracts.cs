@@ -264,7 +264,7 @@ public static class OrderWorkerContracts
         var errors = SchemaResources.Validate(schema, json);
         if (errors.Count > 0)
         {
-            throw new WorkerContractException(what + " violates schema: " + string.Join("; ", errors));
+            throw SchemaResources.Violation(schema, json, what);
         }
         var result = JsonSerializer.Deserialize<T>(json, Json) ?? throw new WorkerContractException(what + " is empty");
         var spec = typeof(T).GetProperty("SpecVersion")?.GetValue(result) as string;

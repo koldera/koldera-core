@@ -45,6 +45,30 @@ public class WorkerContractMessageTests
     }
 
     [Fact]
+    public async Task The_log_names_the_unexpected_property_and_the_pointer_but_never_a_value_while_the_client_message_stays_redacted()
+    {
+        var worker = new StubWorker(request =>
+        {
+            var result = JsonNode.Parse(StubResults.PdfAnalyzeCompleted().ResultFor(request))!.AsObject();
+            result["leakyField"] = Leak + " " + LeakText;
+            result["findings"]![0]!["extraThing"] = LeakText;
+            return result.ToJsonString();
+        });
+        using var f = CoreFactory.WithStubWorkers(worker);
+        var job = await f.WaitForJob(await f.CreatePdfJob());
+
+        var message = job.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.DoesNotContain("leakyField", message);
+        Assert.DoesNotContain("extraThing", message);
+        AssertNoLeak(message);
+
+        var line = Assert.Single(f.Logs, l => l.Contains("violated the worker contract"));
+        Assert.Contains("unexpected property 'leakyField'", line);
+        Assert.Contains("$.findings[0]: unexpected property 'extraThing'", line);
+        AssertNoLeak(line);
+    }
+
+    [Fact]
     public async Task A_value_in_an_invalid_field_is_not_echoed()
     {
         var message = await MessageFor(r =>

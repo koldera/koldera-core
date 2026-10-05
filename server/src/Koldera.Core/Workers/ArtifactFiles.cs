@@ -3,7 +3,11 @@ using System.Security.Cryptography;
 namespace Koldera.Core.Workers;
 
 /// <summary>Thrown by executors when the worker's output is malformed or lies; terminal, never retried.</summary>
-public sealed class WorkerContractException(string message) : Exception(message);
+public sealed class WorkerContractException(string message, string? logDetail = null) : Exception(message)
+{
+    /// <summary>What the operator log gets: the same problem with more location detail (never values); Message is what clients see.</summary>
+    public string LogDetail { get; } = logDetail ?? message;
+}
 
 /// <summary>Shared verify-then-keep step: a worker artifact is kept only if its bytes match its declaration.</summary>
 public static class ArtifactFiles
