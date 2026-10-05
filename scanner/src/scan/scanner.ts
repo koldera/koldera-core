@@ -176,6 +176,9 @@ function finish(
   if (guard.stats.navigationBlockReason) {
     return base("unsupported", { code: "BLOCKED_DESTINATION", message: guard.stats.navigationBlockReason }, extra);
   }
+  if (guard.stats.navigationFailReason) {
+    return base("failed", { code: "NAVIGATION_FAILED", message: guard.stats.navigationFailReason }, extra);
+  }
   if (guard.stats.limitExceeded) {
     return base("failed", { code: "LIMIT_EXCEEDED", message: "request or response budget exceeded" }, extra);
   }
