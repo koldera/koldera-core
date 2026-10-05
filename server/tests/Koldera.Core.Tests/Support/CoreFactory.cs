@@ -1,4 +1,8 @@
 using System.Collections.Concurrent;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Koldera.Core.Workers;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +23,7 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
 
     private readonly Dictionary<string, string?> _env;
     private readonly string? _tempDir;
+    private Action<IServiceCollection>? _services;
 
     public ConcurrentQueue<string> Logs { get; } = new();
 
@@ -47,6 +52,56 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
         return new CoreFactory(values, temp);
     }
 
+    /// <summary>A server (token "t") whose PDF engine processes are the given stubs; the structure probe is off unless one is given.</summary>
+    public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null)
+    {
+        var values = new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "t" };
+        foreach (var (k, v) in env ?? []) values[k] = v;
+        var factory = Create(values);
+        factory._services = s =>
+        {
+            s.RemoveAll<PdfWorkers>();
+            s.AddSingleton(new PdfWorkers(pdf, structureProbe));
+        };
+        return factory;
+    }
+
+    /// <summary>Uploads <paramref name="bytes"/> as a PDF and returns the completed upload's id.</summary>
+    public async Task<Guid> CompletedUpload(byte[] bytes)
+    {
+        var (id, url) = await Declare(bytes);
+        var put = await CreateClient().PutAsync(url, new ByteArrayContent(bytes));
+        put.EnsureSuccessStatusCode();
+        return id;
+    }
+
+    /// <summary>Declares an upload without sending its content.</summary>
+    public async Task<Guid> UploadTicket(byte[] bytes) => (await Declare(bytes)).Id;
+
+    private async Task<(Guid Id, string Url)> Declare(byte[] bytes)
+    {
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/uploads", new { fileName = "report.pdf", sizeBytes = bytes.Length, sha256 = Fixtures.Sha256(bytes), contentType = "application/pdf" });
+        r.EnsureSuccessStatusCode();
+        var ticket = await r.Content.ReadFromJsonAsync<JsonElement>();
+        return (ticket.GetProperty("uploadId").GetGuid(), ticket.GetProperty("uploadUrl").GetString()!);
+    }
+
+    public async Task<Guid> CreatePdfJob(string mode = "analyze", string? explicitTitle = null, string? explicitLanguage = null)
+    {
+        var upload = await CompletedUpload(Fixtures.SmallPdf());
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/pdf/jobs", new { uploadId = upload, mode, profile = "ua1", explicitTitle, explicitLanguage });
+        Assert.Equal(System.Net.HttpStatusCode.Accepted, r.StatusCode);
+        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Waits for the job to finish (real time limit of 30 seconds) and returns its job resource.</summary>
+    public async Task<JsonElement> WaitForJob(Guid id)
+    {
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        Assert.True(await Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(id, TimeSpan.FromSeconds(30), limit.Token), "the job did not finish");
+        return await AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}");
+    }
+
     /// <summary>Client carrying the first configured KOLDERA_TOKEN as bearer (no header when none is set).</summary>
     public HttpClient AuthorizedClient()
     {
@@ -61,7 +116,11 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(_env));
-        builder.ConfigureServices(s => s.AddSingleton<TimeProvider>(Clock));
+        builder.ConfigureServices(s =>
+        {
+            s.AddSingleton<TimeProvider>(Clock);
+            _services?.Invoke(s);
+        });
         builder.ConfigureLogging(l => l.AddProvider(new CapturingProvider(Logs)));
     }
 

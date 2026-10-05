@@ -1,4 +1,5 @@
 using Koldera.Core;
+using Koldera.Core.Workers;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,9 +27,22 @@ builder.Services.AddSingleton(sp => new RetentionService(sp.GetRequiredService<D
 builder.Services.AddHostedService(sp => new RetentionWorker(sp.GetRequiredService<RetentionService>(), sp.GetRequiredService<TimeProvider>(),
     sp.GetRequiredService<ILoggerFactory>().CreateLogger<RetentionWorker>()));
 
+builder.Services.AddSingleton(builder.Configuration.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions());
+builder.Services.AddSingleton(sp =>
+{
+    var w = sp.GetRequiredService<WorkerOptions>();
+    return new PdfWorkers(
+        SubprocessWorker.ForPdfProcess(w.PdfCommand, w.VeraPdfCommand),
+        w.PdfStructureCommand.Length > 0 ? SubprocessWorker.ForProbe(w.PdfStructureCommand) : null);
+});
+builder.Services.AddSingleton<IJobExecutor>(sp => new PdfJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
+    sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp => new ArtifactIndex(sp.GetRequiredService<DataStore>()));
+
 var app = builder.Build();
 app.Services.GetRequiredService<CoreOptions>().EnsureDataDirWritable();
 app.Services.GetRequiredService<UrlSigner>(); // fails fast on a bad signing key
+app.Services.GetRequiredService<ArtifactIndex>(); // rebuilds the artifact lookup from the data directory
 app.Services.GetRequiredService<ServerTokens>(); // resolves (and, if needed, generates and logs) the tokens at startup
 
 app.UseAuthentication();
@@ -39,6 +53,8 @@ app.MapGet("/healthz", () => Results.Json(new { status = "ok" }));
 var v1 = app.MapGroup("/v1").RequireAuthorization();
 v1.MapInfoEndpoints();
 v1.MapUploadEndpoints();
+v1.MapJobEndpoints();
+v1.MapJobReadEndpoints();
 app.Run();
 
 public partial class Program;
