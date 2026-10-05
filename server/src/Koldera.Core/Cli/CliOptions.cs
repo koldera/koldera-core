@@ -10,7 +10,8 @@ internal sealed record CliCommand(
     string? Title,
     string? ContentSelector,
     string? OutDir,
-    bool Json);
+    bool Json,
+    bool Help = false);
 
 /// <summary>Hand-written argument parsing and help text (no argument-parsing dependency).</summary>
 internal static class CliOptions
@@ -94,8 +95,8 @@ internal static class CliOptions
               scan       scan a web page
               document   render a structured document to a tagged PDF
 
-            Exit codes: 0 no machine rule failed, 2 completed with failed machine rules,
-            3 job failed or unsupported, 64 usage error.
+            Exit codes: 0 machine check passed, 2 completed with failed machine rules,
+            3 job failed, unsupported or no machine verdict, 64 usage error.
             """,
     };
 
@@ -108,11 +109,15 @@ internal static class CliOptions
         string? target = null;
         bool fix = false, analyzeOnly = false, json = false;
         string? language = null, title = null, selector = null, outDir = null;
+        var optionsEnded = false;
 
         for (var i = 1; i < args.Length; i++)
         {
             var arg = args[i];
-            if (!arg.StartsWith('-'))
+            // A standalone help token asks for help; one consumed as a flag value (below) or after "--" does not.
+            if (!optionsEnded && arg is "--help" or "-h") return new CliCommand(name, "", false, false, null, null, null, null, false, Help: true);
+            if (!optionsEnded && arg == "--") { optionsEnded = true; continue; }
+            if (optionsEnded || !arg.StartsWith('-'))
             {
                 if (target is not null) { error = $"unexpected extra argument: {arg}"; return null; }
                 target = arg;
@@ -140,7 +145,10 @@ internal static class CliOptions
                 case "--language": language = value; break;
                 case "--title": title = value; break;
                 case "--content-selector": selector = value; break;
-                case "--out": outDir = value; break;
+                case "--out":
+                    if (string.IsNullOrWhiteSpace(value)) { error = "--out needs a non-empty directory"; return null; }
+                    outDir = value;
+                    break;
             }
         }
 

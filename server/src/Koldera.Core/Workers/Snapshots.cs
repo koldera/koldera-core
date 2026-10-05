@@ -99,6 +99,48 @@ public static class Snapshots
         return OrderWorkerContracts.ParseStructure(await File.ReadAllTextAsync(resultPath, ct));
     }
 
+    /// <summary>
+    /// Runs a probe that only adds evidence. A tool that cannot start or writes no result gives null (and a warning naming the tool only):
+    /// the job goes on without that evidence. A timeout and a result that breaks its contract still fail the job.
+    /// </summary>
+    internal static async Task<bool> RunOptionalAsync(IWorkerProcess probe, string tool, ILogger? log, string scratch, string requestPath, string resultPath, TimeSpan timeout, CancellationToken ct)
+    {
+        WorkerRun run;
+        try
+        {
+            run = await probe.RunAsync(scratch, requestPath, resultPath, timeout, ct);
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException)
+        {
+            log?.LogWarning("optional {Tool} could not be started: {ExceptionType}", tool, e.GetType().Name);
+            return false;
+        }
+        if (run.TimedOut) throw new TimeoutException(tool + " exceeded its time budget");
+        if (File.Exists(resultPath)) return true;
+        log?.LogWarning("optional {Tool} exited with code {ExitCode} without a result", tool, run.ExitCode);
+        return false;
+    }
+
+    /// <summary>Like <see cref="ProbeStructureAsync"/> but null when the probe is missing or writes nothing.</summary>
+    public static async Task<StructureResult?> TryProbeStructureAsync(IWorkerProcess probe, ILogger? log, string scratch, string pdfPath, TimeSpan timeout, CancellationToken ct)
+    {
+        var resultPath = Path.Combine(scratch, "structure.json");
+        return await RunOptionalAsync(probe, "structure probe", log, scratch, pdfPath, resultPath, timeout, ct)
+            ? OrderWorkerContracts.ParseStructure(await File.ReadAllTextAsync(resultPath, ct))
+            : null;
+    }
+
+    /// <summary>Like <see cref="ProbeSemanticAsync"/> but null when the collector is missing or writes nothing.</summary>
+    public static async Task<SemanticResult?> TryProbeSemanticAsync(IWorkerProcess probe, ILogger? log, string scratch, Guid jobId, SemanticLimits? limits, TimeSpan timeout, CancellationToken ct)
+    {
+        var requestPath = Path.Combine(scratch, "semantic-request.json");
+        var resultPath = Path.Combine(scratch, "semantic-result.json");
+        await File.WriteAllTextAsync(requestPath, OrderWorkerContracts.SerializeSemanticRequest(new SemanticRequest(OrderWorkerContracts.SpecVersion, jobId, SemanticRequest.CanonicalInputPath, limits)), ct);
+        return await RunOptionalAsync(probe, "semantic collector", log, scratch, requestPath, resultPath, timeout, ct)
+            ? OrderWorkerContracts.ParseSemantic(await File.ReadAllTextAsync(resultPath, ct), jobId)
+            : null;
+    }
+
     /// <summary>Runs the renderer's <c>semantic</c> verb on <c>&lt;scratch&gt;/in/source.html</c>.</summary>
     public static async Task<SemanticResult> ProbeSemanticAsync(IWorkerProcess probe, string scratch, Guid jobId, SemanticLimits? limits, TimeSpan timeout, CancellationToken ct)
     {

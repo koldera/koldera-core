@@ -17,9 +17,12 @@ public static class CoreServices
         services.AddSingleton<IJobExecutor>(sp => new WebJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<WebWorkers>(),
             sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
-            sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>(), Log<HtmlToPdfExecutor>(sp)));
         services.AddSingleton<IJobExecutor>(sp => new PdfJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
-            sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>(), Log<PdfJobExecutor>(sp)));
         return services;
     }
+
+    private static Microsoft.Extensions.Logging.ILogger? Log<T>(IServiceProvider sp) =>
+        sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>()?.CreateLogger<T>();
 }

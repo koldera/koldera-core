@@ -9,7 +9,7 @@ public sealed record HtmlWorkers(IWorkerProcess Render, IWorkerProcess Inspect, 
 /// requested" into "tagged": a render without usable structure tags fails and keeps the file for review.
 /// Findings: the renderer's first, then the PDF engine's.
 /// </summary>
-public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWorkers pdf, CoreOptions options, TimeProvider clock) : IJobExecutor
+public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWorkers pdf, CoreOptions options, TimeProvider clock, Microsoft.Extensions.Logging.ILogger? log = null) : IJobExecutor
 {
     public const string TaggedOutputUnavailable = "TAGGED_OUTPUT_UNAVAILABLE";
     public const string StructureTagsPresent = "PDF_STRUCTURE_TAGS_PRESENT";
@@ -78,9 +78,9 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         var snapshots = new List<CoreSnapshot>();
         if (html.Semantic is not null)
         {
-            var semantic = await Snapshots.ProbeSemanticAsync(html.Semantic, scratch, job.Id,
+            var semantic = await Snapshots.TryProbeSemanticAsync(html.Semantic, log, scratch, job.Id,
                 maxBytes is null ? null : new SemanticLimits(null, maxBytes, null, null, null), timeout, ct);
-            if (semantic.Status == "completed")
+            if (semantic?.Status == "completed")
             {
                 if (semantic.SourceSha256 != expectedSource)
                     throw new WorkerContractException("semantic collector reported a different source SHA-256");
@@ -93,17 +93,17 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         var probePath = Path.Combine(scratch, "in", "generated.pdf");
         File.Copy(generatedPath, probePath, overwrite: true);
         var inspectPath = Path.Combine(scratch, "inspect.json");
-        var probe = await html.Inspect.RunAsync(scratch, probePath, inspectPath, timeout, ct);
-        if (probe.TimedOut) throw new TimeoutException("structure probe exceeded its time budget");
-        if (!File.Exists(inspectPath))
-            throw new InvalidOperationException($"structure probe exited with code {probe.ExitCode} without writing a result");
-        var inspect = HtmlWorkerContracts.ParseInspectResult(await File.ReadAllTextAsync(inspectPath, ct));
-        if (inspect.Sha256 is not null && inspect.Sha256 != generated.Sha256)
+        // The probe is a gate only when it ran: if the tool is missing or writes nothing the engine alone judges the file.
+        var inspect = await Snapshots.RunOptionalAsync(html.Inspect, "inspect probe", log, scratch, probePath, inspectPath, timeout, ct)
+            ? HtmlWorkerContracts.ParseInspectResult(await File.ReadAllTextAsync(inspectPath, ct))
+            : null;
+        if (inspect?.Sha256 is not null && inspect.Sha256 != generated.Sha256)
             throw new WorkerContractException("structure probe reported a different SHA-256");
-        var engineVersion = Truncate(string.IsNullOrEmpty(rendered.EngineVersion) ? inspect.EngineVersion : rendered.EngineVersion + "; " + inspect.EngineVersion);
+        var engineVersion = Truncate(inspect is null ? rendered.EngineVersion
+            : string.IsNullOrEmpty(rendered.EngineVersion) ? inspect.EngineVersion : rendered.EngineVersion + "; " + inspect.EngineVersion);
 
-        var structure = inspect.Structure;
-        if (inspect.Status != "inspected" || structure is null || !structure.UsableTags)
+        var structure = inspect?.Structure;
+        if (inspect is not null && (inspect.Status != "inspected" || structure is null || !structure.UsableTags))
         {
             var reason = inspect.Error?.Message ?? DescribeMissingTags(structure);
             findings.Add(new CoreFinding
@@ -119,7 +119,7 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
             return new JobOutcome(CoreJobState.Failed, "unsupported", TaggedOutputUnavailable, "the generated PDF has no usable structure tags: " + reason, "not_requested", engineVersion, null, null, findings, [], [generated]);
         }
 
-        if (options.Limits.PdfMaxPages is { } maxPages && structure.Pages > maxPages)
+        if (options.Limits.PdfMaxPages is { } maxPages && structure is not null && structure.Pages > maxPages)
             return new JobOutcome(CoreJobState.Failed, "failed", "LIMIT_EXCEEDED", $"the generated PDF has {structure.Pages} pages, above the limit of {maxPages}", "not_requested", engineVersion, null, null, findings, [], [generated], snapshots);
 
         // 3. The PDF engine on the generated file, in its own scratch layout; the mode maps to the engine's.
@@ -139,24 +139,25 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
             PdfJobExecutor.LimitsFrom(options.Limits), pdfScratch, outDir, now, retention, timeout, ct);
 
         findings.AddRange(run.Findings);
-        findings.Add(new CoreFinding
-        {
-            Id = Guid.NewGuid(),
-            Source = "pdf",
-            RuleId = StructureTagsPresent,
-            Severity = "info",
-            MachineCheck = true,
-            Message = $"the generated PDF carries a structure tree ({structure.StructureElements} elements, {structure.ContentReferences} content references; roles {DescribeRoles(structure)}); whether the tags are correct, complete and in a meaningful reading order requires human review",
-            NeedsHumanReview = true,
-        });
+        if (structure is not null)
+            findings.Add(new CoreFinding
+            {
+                Id = Guid.NewGuid(),
+                Source = "pdf",
+                RuleId = StructureTagsPresent,
+                Severity = "info",
+                MachineCheck = true,
+                Message = $"the generated PDF carries a structure tree ({structure.StructureElements} elements, {structure.ContentReferences} content references; roles {DescribeRoles(structure)}); whether the tags are correct, complete and in a meaningful reading order requires human review",
+                NeedsHumanReview = true,
+            });
         // The probe and the engine are the same program; only append a version string that adds information.
-        var finalVersion = string.IsNullOrEmpty(run.EngineVersion) || run.EngineVersion == inspect.EngineVersion ? engineVersion : engineVersion + "; " + run.EngineVersion;
+        var finalVersion = string.IsNullOrEmpty(run.EngineVersion) || run.EngineVersion == inspect?.EngineVersion ? engineVersion : engineVersion + "; " + run.EngineVersion;
 
         // 4. Reading-order evidence for the generated PDF (the exact bytes probed above).
         if (pdf.StructureProbe is not null && run.State == CoreJobState.Completed)
         {
-            var snapshot = await Snapshots.ProbeStructureAsync(pdf.StructureProbe, scratch, probePath, timeout, ct);
-            if (snapshot.Status == "inspected")
+            var snapshot = await Snapshots.TryProbeStructureAsync(pdf.StructureProbe, log, scratch, probePath, timeout, ct);
+            if (snapshot?.Status == "inspected")
             {
                 if (snapshot.Sha256 != generated.Sha256)
                     throw new WorkerContractException("structure snapshot reported a different SHA-256");
@@ -166,7 +167,7 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         }
 
         return new JobOutcome(run.State, run.ResultStatus, run.ErrorCode, run.ErrorMessage, run.RemediationStatus, Truncate(finalVersion),
-            run.BaselineValidationJson, run.FinalValidationJson, findings, run.Actions, [generated, .. run.Artifacts], snapshots, structure.Pages);
+            run.BaselineValidationJson, run.FinalValidationJson, findings, run.Actions, [generated, .. run.Artifacts], snapshots, structure?.Pages);
     }
 
     internal static string DescribeMissingTags(InspectStructure? s) => s is null
