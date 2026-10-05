@@ -1,44 +1,112 @@
 version: 2
+# Policy (2026-10-05): no semver-major bumps until a planned upgrade; at most 5 open PRs per entry; weekly grouped minor/patch.
 updates:
   - package-ecosystem: maven
     directory: /engine
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       maven-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /renderer
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       npm-renderer-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /scanner
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       npm-scanner-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: nuget
     directory: /server
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       nuget-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       actions-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /docker
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       docker-minor-patch: { update-types: [minor, patch] }
-  # Images pinned in docker/compose.yaml and docker/compose.sso.yaml (caddy, oauth2-proxy); the docker entry above
-  # only reads Dockerfiles.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ubuntu"
+        versions: [">=25"]
+      - dependency-name: "eclipse-temurin"
+        versions: [">=22"]
+      - dependency-name: "node"
+        versions: [">=23"]
+      - dependency-name: "maven"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "dotnet/*"
+        versions: [">=11"]
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        versions: [">=11"]
+  # Images pinned in docker/compose*.yaml (caddy, oauth2-proxy); the docker entry only reads Dockerfiles.
   - package-ecosystem: docker-compose
     directory: /docker
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       docker-compose-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ubuntu"
+        versions: [">=25"]
+      - dependency-name: "eclipse-temurin"
+        versions: [">=22"]
+      - dependency-name: "node"
+        versions: [">=23"]
+      - dependency-name: "maven"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "dotnet/*"
+        versions: [">=11"]
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        versions: [">=11"]
   - package-ecosystem: docker
     directory: /docker/egress-proxy
     schedule: { interval: weekly }
+    open-pull-requests-limit: 5
     groups:
       docker-egress-minor-patch: { update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ubuntu"
+        versions: [">=25"]
+      - dependency-name: "eclipse-temurin"
+        versions: [">=22"]
+      - dependency-name: "node"
+        versions: [">=23"]
+      - dependency-name: "maven"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "dotnet/*"
+        versions: [">=11"]
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        versions: [">=11"]
