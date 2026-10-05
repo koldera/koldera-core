@@ -1,0 +1,9 @@
+# Plain-HTTP front used by compose.yaml (the port is published on the host; put your own TLS in front or use docker/Caddyfile).
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	reverse_proxy core:8080
+}

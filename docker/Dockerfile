@@ -16,7 +16,7 @@
 #   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is AGPL-3.0-only.
 
 # ---------- PDF engine jar ----------
-FROM maven:3.9-eclipse-temurin-21 AS engine
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
 WORKDIR /src
 COPY engine/pom.xml .
 RUN mvn -q -B dependency:go-offline
@@ -24,7 +24,7 @@ COPY engine/src ./src
 RUN mvn -q -B -DskipTests package
 
 # ---------- renderer and scanner: build, then keep production dependencies only ----------
-FROM node:22-bookworm AS node
+FROM node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7 AS node
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm install -g pnpm@10 --no-fund --no-audit
 # Each package has its own lockfile (no workspace), so each is installed, built and pruned on its own.
@@ -42,7 +42,7 @@ COPY scanner/src ./src
 RUN pnpm run build && pnpm prune --prod
 
 # ---------- ASP.NET server ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS server
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317 AS server
 WORKDIR /src
 COPY server/Directory.Build.props server/Directory.Packages.props ./server/
 COPY server/src ./server/src
@@ -50,7 +50,7 @@ COPY contracts ./contracts
 RUN dotnet publish server/src/Koldera.Core/Koldera.Core.csproj -c Release -o /out/server --no-self-contained -p:UseAppHost=false
 
 # ---------- veraPDF (unattended IzPack install) ----------
-FROM eclipse-temurin:21-jdk-noble AS verapdf
+FROM eclipse-temurin:21-jdk-noble@sha256:b468c3fc688b14450571494f588bd939378e7fd542ed5a73f8efc13f17872a87 AS verapdf
 ARG VERAPDF_VERSION=1.30.2
 ARG VERAPDF_URL=https://software.verapdf.org/releases/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip
 ARG VERAPDF_SHA256=6cc6341cb1af644044054b81f00a6590a7918abb18f762243de115258bcad838
@@ -65,7 +65,7 @@ RUN java -jar "verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${
     && /opt/verapdf/verapdf --version
 
 # ---------- Typst (static musl binary, checksum per architecture) ----------
-FROM debian:bookworm-slim AS typst
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS typst
 ARG TARGETARCH
 ARG TYPST_VERSION=v0.15.1
 ARG TYPST_SHA256_AMD64=a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
@@ -85,14 +85,14 @@ RUN case "${TARGETARCH:-amd64}" in \
     && /out/opt/typst/typst --version
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
-FROM eclipse-temurin:21-jre-noble AS jre
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS dotnet
-FROM node:22-bookworm-slim AS nodejs
+FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4 AS dotnet
+FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS nodejs
 
 # ---------- runtime ----------
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
 # WebKit too, and deleting them in a later layer would not make the image smaller.
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
@@ -125,6 +125,8 @@ COPY --from=node /src/scanner/package.json /app/scanner/package.json
 COPY --from=server /out/server /app/server
 COPY contracts /app/contracts
 
+# Residual risk: Playwright starts Chromium with --no-sandbox (Docker's default seccomp profile blocks the user
+# namespaces its sandbox needs). The compensating controls are in docs/deployment.md, "Browser sandbox".
 # The browser build must match the pinned playwright package, so the package's own CLI installs it. The
 # headless shell is what headless:true launches; --with-deps adds the system libraries it needs.
 RUN node /app/renderer/node_modules/playwright/cli.js install --with-deps --only-shell chromium \
@@ -140,6 +142,8 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50 -Djava.awt.headless=true"
 
+# HOME is a tmpfs under the hardened compose setup (read-only root), so nothing a worker writes lands in /home/koldera.
+ENV HOME=/tmp
 USER koldera:koldera
 WORKDIR /data
 VOLUME ["/data"]

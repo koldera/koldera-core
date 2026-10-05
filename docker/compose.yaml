@@ -10,12 +10,12 @@ name: koldera
 
 services:
   front:
-    image: caddy:2.10-alpine
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.http:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [public, internal]
@@ -31,7 +31,7 @@ services:
     pids_limit: 128
 
   core:
-    image: ${KOLDERA_IMAGE:-ghcr.io/koldera/core:latest}
+    image: ${KOLDERA_IMAGE:?set KOLDERA_IMAGE, e.g. ghcr.io/koldera/core:0.1.0}
     restart: unless-stopped
     environment:
       KOLDERA_TOKEN: ${KOLDERA_TOKEN:?set KOLDERA_TOKEN to a long random secret}
