@@ -149,4 +149,68 @@ public class DocumentValidatorTests
             Assert.Empty(DocumentValidator.Validate(doc));
         }
     }
+
+    [Theory]
+    [InlineData("/etc/x.png")]
+    [InlineData("C:\\x.png")]
+    [InlineData("C:/x.png")]
+    [InlineData("a\\b.png")]
+    [InlineData("a/../b.png")]
+    [InlineData("..")]
+    [InlineData("file:///x")]
+    [InlineData("data:image/png;base64,AA==")]
+    [InlineData("a.png\n")]
+    public void Image_file_must_be_a_plain_relative_path(string file)
+    {
+        var block = JsonSerializer.Serialize(new { type = "image", file, alt = "x" });
+        Assert.Contains(DocumentValidator.Validate(Doc($"[{block}]")), e => e.Code == "SCHEMA" && e.Path == "/body/0");
+    }
+
+    [Fact]
+    public void Image_file_accepts_a_relative_path() =>
+        Assert.Empty(DocumentValidator.Validate(Doc("""[{"type":"image","file":"img/logo.png","alt":"x"}]""")));
+
+    [Theory]
+    [InlineData("data:text/html,x")]
+    [InlineData("file:///x")]
+    [InlineData("ftp://x")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("https://")]
+    [InlineData("https://x\n")]
+    public void Link_url_must_be_http_https_or_mailto(string url)
+    {
+        var block = JsonSerializer.Serialize(new { type = "link", text = "t", url });
+        Assert.Contains(DocumentValidator.Validate(Doc($"[{block}]")), e => e.Code == "SCHEMA" && e.Path == "/body/0");
+    }
+
+    [Theory]
+    [InlineData("mailto:a@example.com")]
+    [InlineData("https://example.com/a?b=c")]
+    public void Link_url_accepts_allowed_schemes(string url) =>
+        Assert.Empty(DocumentValidator.Validate(Doc(JsonSerializer.Serialize(new[] { new { type = "link", text = "t", url } }))));
+
+    [Fact]
+    public void Language_with_a_trailing_newline_is_rejected()
+    {
+        var doc = JsonDocument.Parse("{\"title\":\"T\",\"language\":\"en\\n\",\"body\":[]}").RootElement;
+        Assert.Contains(DocumentValidator.Validate(doc), e => e.Code == "LANGUAGE_INVALID" && e.Path == "/language");
+    }
+
+    [Theory]
+    [InlineData("""{"title":"   ","language":"en","body":[]}""", "/title")]
+    [InlineData("""{"title":"T","language":"en","body":[{"type":"heading","level":1,"text":" "}]}""", "/body/0")]
+    [InlineData("""{"title":"T","language":"en","body":[{"type":"table","caption":" ","header":[["A"]],"rows":[["1"]]}]}""", "/body/0")]
+    public void Whitespace_only_title_heading_and_caption_are_rejected(string json, string path) =>
+        Assert.Contains(DocumentValidator.Validate(JsonDocument.Parse(json).RootElement), e => e.Code == "SCHEMA" && e.Path == path);
+
+    [Theory]
+    [InlineData("""[{"type":"table","caption":"C","header":[["A","B"]],"rows":[["1","2"],["3"]]}]""", "/body/0/rows/1")]
+    [InlineData("""[{"type":"table","caption":"C","header":[["A","B"],["C"]],"rows":[["1","2"]]}]""", "/body/0/header/1")]
+    [InlineData("""[{"type":"table","caption":"C","header":[["A","B"]],"rows":[["1","2"]],"columnAlign":["left"]}]""", "/body/0/columnAlign")]
+    public void Ragged_tables_are_reported(string body, string path) =>
+        Assert.Contains(DocumentValidator.Validate(Doc(body)), e => e.Code == "TABLE_ROW_LENGTH_MISMATCH" && e.Path == path);
+
+    [Fact]
+    public void Matching_table_widths_are_valid() =>
+        Assert.Empty(DocumentValidator.Validate(Doc("""[{"type":"table","caption":"C","header":[["A","B"]],"rows":[["1","2"]],"columnAlign":["left","right"]}]""")));
 }
