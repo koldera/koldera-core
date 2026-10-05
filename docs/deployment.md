@@ -45,6 +45,7 @@ the open internet without it.
    - Signing in does not replace core's credentials: a signed-in browser without a token still gets `401` on
      `/v1`. Use the sign-in to gate a page or tool of your own that you place behind the same Caddy, and give that
      page a client-session token (pattern 2) for its API calls.
+   - **Never combine with `KOLDERA_AUTH=none`: bearer and signed requests bypass sign-in, so core's own `KOLDERA_TOKEN` must stay set.**
    - The session cookie is `Secure`, so serve the front over TLS, and set `KOLDERA_PUBLIC_URL` to that address.
 
    It was checked against a local mock OIDC issuer (redirect to sign-in, a completed sign-in, bearer calls, signed
@@ -52,8 +53,8 @@ the open internet without it.
    identity provider; test it with yours before you rely on it.
 
 Whatever you choose: terminate TLS in front of the server and set `KOLDERA_PUBLIC_URL`, set the limits in
-[configuration.md](configuration.md), and keep `KOLDERA_AUTH=none` for a loopback address or a proxy that
-authenticates every request. With `KOLDERA_AUTH=none` the server answers only the host names in `KOLDERA_ALLOWED_HOSTS`
+[configuration.md](configuration.md), and keep `KOLDERA_AUTH=none` for a loopback address only, or for a proxy that
+authenticates every request without exceptions. **Never combine the single sign-on example (pattern 3) with KOLDERA_AUTH=none: bearer and signed requests bypass sign-in; core's own KOLDERA_TOKEN must stay set.** With `KOLDERA_AUTH=none` the server answers only the host names in `KOLDERA_ALLOWED_HOSTS`
 (loopback names by default), so a proxy in front must forward one of them or you list its name there. The server is one instance with a local data directory; do not put several behind one
 load balancer. Serverless: see [aws-lambda.md](aws-lambda.md).
 
