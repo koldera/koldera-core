@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Authorization;
 namespace Koldera.Core;
 
 /// <summary>CORS for /v1, decided per request (a static policy cannot see a session token).
-/// Signed upload/artifact URLs answer any origin with <c>*</c> and never credentials: the signature is the credential.
-/// A preflight cannot carry a token, so it is answered for any origin; that grants nothing, because a cross-origin page
-/// can read the real response only if it carries Allow-Origin.
+/// Signed upload/artifact URLs answer any origin with <c>*</c>, never credentials: the signature is the credential.
+/// A preflight cannot carry a token, so it is answered for any origin (the real response is still unreadable without Allow-Origin).
 /// The actual response gets Allow-Origin only for an origin in KOLDERA_CORS_ORIGINS or the origin bound in the valid
-/// session token sent with it; a session token from any other origin is refused with 401 by the auth handler.</summary>
+/// session token sent with it; a session token from any other origin is refused with 401 by the auth handler.
+/// With KOLDERA_AUTH=none preflights too are answered only for configured origins. A literal * in KOLDERA_CORS_ORIGINS is not supported and allows nothing.</summary>
 internal sealed partial class CorsMiddleware(RequestDelegate next, CoreOptions options, ClientSessionTokens sessions)
 {
     private const string AllowedMethods = "GET, POST, PUT";
@@ -24,15 +24,24 @@ internal sealed partial class CorsMiddleware(RequestDelegate next, CoreOptions o
 
     public Task InvokeAsync(HttpContext http)
     {
+        if (!http.Request.Path.StartsWithSegments("/v1")) return next(http);
+        // Always, so a shared cache never serves one origin's CORS answer to another.
+        http.Response.Headers.Append("Vary", "Origin");
         var origin = http.Request.Headers.Origin.ToString();
-        if (origin.Length == 0 || !http.Request.Path.StartsWithSegments("/v1")) return next(http);
+        if (origin.Length == 0) return next(http);
 
         var h = http.Response.Headers;
         var signed = SignedRoute().IsMatch(http.Request.Path.Value ?? "");
-        h.Append("Vary", "Origin");
 
         if (HttpMethods.IsOptions(http.Request.Method) && http.Request.Headers.ContainsKey("Access-Control-Request-Method"))
         {
+            // With auth disabled anyone who can reach the port is the owner, so only configured origins may even preflight:
+            // otherwise any website could drive a local open instance from the visitor's browser.
+            if (!signed && options.Auth == "none" && !_configured.Contains(origin.TrimEnd('/')))
+            {
+                http.Response.StatusCode = StatusCodes.Status204NoContent;
+                return Task.CompletedTask;
+            }
             h["Access-Control-Allow-Origin"] = signed ? "*" : origin;
             h["Access-Control-Allow-Methods"] = AllowedMethods;
             h["Access-Control-Allow-Headers"] = AllowedHeaders;

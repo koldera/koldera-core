@@ -138,4 +138,20 @@ public class IdempotencyTests
         var b = await (await c.PostAsJsonAsync("/v1/pdf/jobs", body)).Content.ReadFromJsonAsync<JsonElement>();
         Assert.NotEqual(a.GetProperty("id").GetString(), b.GetProperty("id").GetString());
     }
+
+    [Fact]
+    public async Task Parallel_requests_with_one_key_create_one_job()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var upload = await f.CompletedUpload(Fixtures.SmallPdf());
+        var body = new { uploadId = upload, mode = "analyze", profile = "ua1" };
+        var ids = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => Task.Run(async () =>
+        {
+            var r = await f.RawPostWithKey("/v1/pdf/jobs", body, "burst");
+            Assert.Equal(HttpStatusCode.Accepted, r.StatusCode);
+            return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        })));
+        Assert.Single(ids.Distinct());
+        Assert.Single(f.Store.AllJobs());
+    }
 }

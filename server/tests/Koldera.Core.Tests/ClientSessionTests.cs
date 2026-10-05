@@ -192,4 +192,89 @@ public class ClientSessionTests
         var r = await f.CreateClient().PostAsJsonAsync("/v1/client-sessions", new { allowedOrigin = App });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
     }
+
+    private static object Decl(int n) => new { fileName = "r.pdf", sizeBytes = n, sha256 = new string('a', 64), contentType = "application/pdf" };
+
+    [Fact]
+    public async Task Session_upload_budget_is_enforced()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var c = f.SessionClient(await f.MintSession(App, maxUploads: 2), App);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/v1/uploads", Decl(1))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/v1/uploads", Decl(1))).StatusCode);
+        var r = await c.PostAsJsonAsync("/v1/uploads", Decl(1));
+        Assert.Equal(HttpStatusCode.TooManyRequests, r.StatusCode);
+        Assert.Equal("SESSION_UPLOAD_LIMIT", (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Default_upload_budget_is_ten_times_the_job_budget()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var c = f.SessionClient(await f.MintSession(App, maxJobs: 1), App);
+        for (var i = 0; i < 10; i++) Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/v1/uploads", Decl(1))).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await c.PostAsJsonAsync("/v1/uploads", Decl(1))).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_rejected_declaration_does_not_use_up_the_upload_budget()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var c = f.SessionClient(await f.MintSession(App, maxUploads: 1), App);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await c.PostAsJsonAsync("/v1/uploads", new { fileName = "", sizeBytes = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/v1/uploads", Decl(1))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Mint_rejects_an_out_of_range_upload_budget()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        foreach (var n in new[] { 0, 10001 })
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, (await f.AuthorizedClient().PostAsJsonAsync("/v1/client-sessions", new { allowedOrigin = App, maxUploads = n })).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_parallel_burst_of_declarations_never_exceeds_the_upload_budget()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var session = await f.MintSession(App, maxUploads: 3);
+        var codes = await Task.WhenAll(Enumerable.Range(0, 30).Select(_ => Task.Run(async () =>
+            (await f.SessionClient(session, App).PostAsJsonAsync("/v1/uploads", Decl(1))).StatusCode)));
+        Assert.Equal(3, codes.Count(x => x == HttpStatusCode.Created));
+        Assert.Equal(27, codes.Count(x => x == HttpStatusCode.TooManyRequests));
+    }
+
+    [Fact]
+    public async Task A_parallel_burst_of_job_creations_with_one_job_allowed_creates_exactly_one()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var session = await f.MintSession(App, maxJobs: 1, maxUploads: 20);
+        var c = f.SessionClient(session, App);
+        var bytes = Fixtures.SmallPdf();
+        var ids = new List<Guid>();
+        for (var i = 0; i < 10; i++)
+        {
+            var d = await (await c.PostAsJsonAsync("/v1/uploads", new { fileName = "r.pdf", sizeBytes = bytes.Length, sha256 = Fixtures.Sha256(bytes), contentType = "application/pdf" })).Content.ReadFromJsonAsync<JsonElement>();
+            (await f.CreateClient().PutAsync(d.GetProperty("uploadUrl").GetString()!, new ByteArrayContent(bytes))).EnsureSuccessStatusCode();
+            ids.Add(d.GetProperty("uploadId").GetGuid());
+        }
+        var codes = await Task.WhenAll(ids.Select(id => Task.Run(async () =>
+            (await f.SessionClient(session, App).PostAsJsonAsync("/v1/pdf/jobs", new { uploadId = id, mode = "analyze", profile = "ua1" })).StatusCode)));
+        Assert.Equal(1, codes.Count(x => x == HttpStatusCode.Accepted));
+        Assert.Equal(9, codes.Count(x => x == HttpStatusCode.TooManyRequests));
+    }
+
+    [Fact]
+    public async Task A_non_canonical_base64_encoding_of_a_valid_signature_is_refused()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var parts = (await f.MintSession(App)).Split('.');
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        // The last character of a 32-byte MAC carries two unused bits: another value decodes to the same bytes.
+        var sig = parts[2];
+        var alt = sig[..^1] + alphabet[alphabet.IndexOf(sig[^1]) ^ 1];
+        Assert.Equal(HttpStatusCode.OK, (await f.SessionClient($"v1.{parts[1]}.{sig}", App).GetAsync("/v1/info")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await f.SessionClient($"v1.{parts[1]}.{alt}", App).GetAsync("/v1/info")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await f.SessionClient($"v1.{parts[1]}.{sig}=", App).GetAsync("/v1/info")).StatusCode);
+    }
 }

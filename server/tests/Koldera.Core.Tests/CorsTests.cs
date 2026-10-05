@@ -101,4 +101,43 @@ public class CorsTests
         var g = await f.CreateClient().SendAsync(get);
         Assert.Equal("*", Header(g, "Access-Control-Allow-Origin"));
     }
+
+    [Fact]
+    public async Task With_auth_none_a_foreign_origin_preflight_gets_no_allow_headers()
+    {
+        // An open instance must not let any visited website drive it from a local browser.
+        using var f = CoreFactory.Create(new() { ["KOLDERA_AUTH"] = "none", ["KOLDERA_CORS_ORIGINS"] = App });
+        var foreign = await f.CreateClient().SendAsync(Preflight("/v1/client-sessions", "https://evil.example"));
+        Assert.Null(Header(foreign, "Access-Control-Allow-Origin"));
+        Assert.Null(Header(foreign, "Access-Control-Allow-Methods"));
+        var configured = await f.CreateClient().SendAsync(Preflight("/v1/client-sessions", App));
+        Assert.Equal(App, Header(configured, "Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task With_auth_none_the_actual_response_is_not_readable_by_a_foreign_origin()
+    {
+        using var f = CoreFactory.Create(new() { ["KOLDERA_AUTH"] = "none" });
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Add("Origin", "https://evil.example");
+        Assert.Null(Header(await c.GetAsync("/v1/info"), "Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task A_literal_star_in_the_configured_origins_allows_nothing()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted(), env: new() { ["KOLDERA_CORS_ORIGINS"] = "*" });
+        var c = f.AuthorizedClient();
+        c.DefaultRequestHeaders.Add("Origin", "https://evil.example");
+        Assert.Null(Header(await c.GetAsync("/v1/info"), "Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task Every_v1_response_varies_on_origin_even_without_an_origin_header()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        Assert.Contains("Origin", Header(await f.AuthorizedClient().GetAsync("/v1/info"), "Vary")!);
+        Assert.Contains("Origin", Header(await f.CreateClient().GetAsync("/v1/info"), "Vary")!); // 401 too
+        Assert.Contains("Origin", Header(await f.CreateClient().GetAsync($"/v1/artifacts/{Guid.NewGuid()}/content"), "Vary")!);
+    }
 }

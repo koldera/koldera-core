@@ -86,6 +86,7 @@ internal sealed class IdempotencyMiddleware(RequestDelegate next, Idempotency st
             return;
         }
 
+        // The hash covers method, path and body only: no POST route reads its query string or depends on content-type.
         var key = raw.ToString().Trim();
         if (key.Length is 0 or > MaxKeyLength || key.Any(char.IsControl))
         {

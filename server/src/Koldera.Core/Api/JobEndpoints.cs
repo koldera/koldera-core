@@ -151,13 +151,13 @@ public static partial class JobEndpoints
         // A session may start only maxJobs jobs; the reservation is given back if the job is not accepted after all.
         var principal = http.GetCorePrincipal();
         var budgets = principal.Kind == "session" ? http.RequestServices.GetRequiredService<SessionBudgets>() : null;
-        if (budgets is not null && !budgets.TryReserve(principal))
+        if (budgets is not null && !budgets.TryReserve(principal, SessionBudgetKind.Jobs))
             return Problems.Result(429, "SESSION_JOB_LIMIT", "Session job limit reached", "This client session has used its job budget; mint a new session.");
         try { await store.SaveJobAsync(job); }
-        catch { budgets?.Release(principal); throw; }
+        catch { budgets?.Release(principal, SessionBudgetKind.Jobs); throw; }
         if (!queue.TryEnqueue(job.Id))
         {
-            budgets?.Release(principal);
+            budgets?.Release(principal, SessionBudgetKind.Jobs);
             store.DeleteJob(job.Id);
             http.Response.Headers.RetryAfter = "30";
             return Problems.Result(503, "QUEUE_FULL", "Job queue is full", "Try again shortly.");

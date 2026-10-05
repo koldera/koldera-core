@@ -15,7 +15,7 @@ public static class SessionScopes
 
 /// <summary>
 /// Short-lived browser tokens: <c>v1.&lt;base64url(json)&gt;.&lt;base64url(hmac)&gt;</c> with payload
-/// <c>{sid, origin, scopes, maxJobs, exp}</c>. Stateless: the signature is the whole credential, so nothing is stored
+/// <c>{sid, origin, scopes, maxJobs, maxUploads, exp}</c>. Stateless: the signature is the whole credential, so nothing is stored
 /// and a restart does not invalidate live tokens. The MAC uses the same key as <see cref="UrlSigner"/> under its own
 /// context string, so a signed URL can never be replayed as a session token or the reverse.
 /// </summary>
@@ -27,7 +27,7 @@ public sealed class ClientSessionTokens(byte[] key, TimeProvider clock) : IToken
     private const int MaxTokenLength = 4096;
     private const string MacContext = "session";
 
-    public (string Token, string SessionId, DateTimeOffset ExpiresAt) Issue(string origin, IReadOnlyList<string> scopes, int maxJobs, TimeSpan ttl)
+    public (string Token, string SessionId, DateTimeOffset ExpiresAt) Issue(string origin, IReadOnlyList<string> scopes, int maxJobs, int maxUploads, TimeSpan ttl)
     {
         var sid = Guid.NewGuid().ToString("N");
         var expires = clock.GetUtcNow().Add(ttl);
@@ -37,6 +37,7 @@ public sealed class ClientSessionTokens(byte[] key, TimeProvider clock) : IToken
             ["origin"] = origin,
             ["scopes"] = scopes,
             ["maxJobs"] = maxJobs,
+            ["maxUploads"] = maxUploads,
             ["exp"] = expires.ToUnixTimeSeconds(),
         });
         var body = Version + "." + Base64Url(payload);
@@ -66,11 +67,12 @@ public sealed class ClientSessionTokens(byte[] key, TimeProvider clock) : IToken
             var sid = root.GetProperty("sid").GetString();
             var origin = root.GetProperty("origin").GetString();
             var maxJobs = root.GetProperty("maxJobs").GetInt32();
+            var maxUploads = root.GetProperty("maxUploads").GetInt32();
             var exp = root.GetProperty("exp").GetInt64();
             var scopes = root.GetProperty("scopes").EnumerateArray().Select(s => s.GetString()).ToList();
             if (string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(origin) || scopes.Any(s => s is null)) return null;
             if (clock.GetUtcNow().ToUnixTimeSeconds() >= exp) return null;
-            return new CorePrincipal("session", sid, origin, maxJobs, scopes!, DateTimeOffset.FromUnixTimeSeconds(exp));
+            return new CorePrincipal("session", sid, origin, maxJobs, scopes!, DateTimeOffset.FromUnixTimeSeconds(exp), maxUploads);
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
         {
@@ -93,51 +95,61 @@ public sealed class ClientSessionTokens(byte[] key, TimeProvider clock) : IToken
     internal static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
+    /// <summary>Strict: only the URL-safe alphabet, no padding, and exactly the canonical encoding (spare bits zero).</summary>
     private static byte[] FromBase64Url(string s)
     {
+        if (s.Length == 0 || s.AsSpan().IndexOfAny('+', '/', '=') >= 0) throw new FormatException();
         var t = s.Replace('-', '+').Replace('_', '/');
         t = t.PadRight(t.Length + (4 - t.Length % 4) % 4, '=');
-        return Convert.FromBase64String(t);
+        var bytes = Convert.FromBase64String(t);
+        if (Base64Url(bytes) != s) throw new FormatException();
+        return bytes;
     }
 }
 
+public enum SessionBudgetKind { Jobs, Uploads }
+
 /// <summary>
-/// How many jobs each session has started. In memory: a restart resets the counts, so a session's budget is only
-/// guaranteed within one process lifetime (its token expires within the hour anyway).
+/// How many jobs and uploads each session has started. In memory: a restart resets the counts, so a budget is only
+/// guaranteed within one process lifetime (the token expires within the hour anyway). One lock makes a parallel burst
+/// unable to exceed a cap.
 /// </summary>
 public sealed class SessionBudgets(TimeProvider clock)
 {
-    private readonly ConcurrentDictionary<string, (int Count, DateTimeOffset Expires)> _used = new();
+    private readonly object _gate = new();
+    private readonly Dictionary<string, (int Jobs, int Uploads, DateTimeOffset Expires)> _used = new();
     private DateTimeOffset _lastSweep = DateTimeOffset.MinValue;
 
-    public bool TryReserve(CorePrincipal session)
+    public bool TryReserve(CorePrincipal session, SessionBudgetKind kind)
     {
-        Sweep();
-        var sid = session.SessionId!;
-        var limit = session.MaxJobs ?? int.MaxValue;
-        var expires = session.ExpiresAt ?? clock.GetUtcNow().AddHours(1);
-        var granted = false;
-        _used.AddOrUpdate(sid,
-            _ => { granted = limit >= 1; return (granted ? 1 : 0, expires); },
-            (_, cur) =>
-            {
-                granted = cur.Count < limit;
-                return granted ? (cur.Count + 1, cur.Expires) : cur;
-            });
-        return granted;
+        var limit = (kind == SessionBudgetKind.Jobs ? session.MaxJobs : session.MaxUploads) ?? int.MaxValue;
+        lock (_gate)
+        {
+            Sweep();
+            var cur = _used.GetValueOrDefault(session.SessionId!, (0, 0, session.ExpiresAt ?? clock.GetUtcNow().AddHours(1)));
+            var count = kind == SessionBudgetKind.Jobs ? cur.Item1 : cur.Item2;
+            if (count >= limit) return false;
+            _used[session.SessionId!] = kind == SessionBudgetKind.Jobs ? (cur.Item1 + 1, cur.Item2, cur.Item3) : (cur.Item1, cur.Item2 + 1, cur.Item3);
+            return true;
+        }
     }
 
-    /// <summary>Gives a reservation back when the job was not accepted after all.</summary>
-    public void Release(CorePrincipal session) =>
-        _used.AddOrUpdate(session.SessionId!, _ => (0, clock.GetUtcNow()), (_, cur) => (Math.Max(0, cur.Count - 1), cur.Expires));
+    /// <summary>Gives a reservation back when the job or upload was not accepted after all.</summary>
+    public void Release(CorePrincipal session, SessionBudgetKind kind)
+    {
+        lock (_gate)
+        {
+            if (!_used.TryGetValue(session.SessionId!, out var cur)) return;
+            _used[session.SessionId!] = kind == SessionBudgetKind.Jobs ? (Math.Max(0, cur.Jobs - 1), cur.Uploads, cur.Expires) : (cur.Jobs, Math.Max(0, cur.Uploads - 1), cur.Expires);
+        }
+    }
 
-    // Entries of expired sessions can never be asked for again; drop them at most once a minute.
+    // Entries of expired sessions can never be asked for again; drop them at most once a minute (caller holds the lock).
     private void Sweep()
     {
         var now = clock.GetUtcNow();
         if (now - _lastSweep < TimeSpan.FromMinutes(1)) return;
         _lastSweep = now;
-        foreach (var (sid, entry) in _used)
-            if (entry.Expires <= now) _used.TryRemove(sid, out _);
+        foreach (var sid in _used.Where(e => e.Value.Expires <= now).Select(e => e.Key).ToList()) _used.Remove(sid);
     }
 }

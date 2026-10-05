@@ -31,10 +31,24 @@ public static partial class UploadEndpoints
             if (maxBytes is { } cap && req.SizeBytes > cap)
                 return Problems.Result(422, "FILE_TOO_LARGE", "File too large", $"The configured limit is {cap} bytes.");
 
+            // A session may declare only maxUploads uploads; validation errors above cost nothing, a failure below gives it back.
+            var principal = http.GetCorePrincipal();
+            var budgets = principal.Kind == "session" ? http.RequestServices.GetRequiredService<SessionBudgets>() : null;
+            if (budgets is not null && !budgets.TryReserve(principal, SessionBudgetKind.Uploads))
+                return Problems.Result(429, "SESSION_UPLOAD_LIMIT", "Session upload limit reached", "This client session has used its upload budget; mint a new session.");
             var now = clock.GetUtcNow();
             var id = Guid.NewGuid();
-            var record = store.CreateUpload(new UploadRecord(
-                id, name, req.SizeBytes.Value, req.Sha256, req.ContentType, RequestContext.Owner(http), now, now.Add(RecordTtl), false));
+            UploadRecord record;
+            try
+            {
+                record = store.CreateUpload(new UploadRecord(
+                    id, name, req.SizeBytes.Value, req.Sha256, req.ContentType, RequestContext.Owner(http), now, now.Add(RecordTtl), false));
+            }
+            catch
+            {
+                budgets?.Release(principal, SessionBudgetKind.Uploads);
+                throw;
+            }
             var baseUrl = RequestContext.BaseUrl(http, options);
             return Results.Json(new
             {
