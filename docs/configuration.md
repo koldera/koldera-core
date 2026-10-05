@@ -41,7 +41,7 @@ do not trust.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `KOLDERA_WEB_PROXY` | none | Egress proxy URL for the scanner's browser. The supplied compose file points it at the Squid container that refuses private and metadata addresses. |
+| `KOLDERA_WEB_PROXY` | none | Egress proxy URL for the scanner's browser. The supplied compose file points it at the Squid container that refuses private and metadata addresses and caps each response at 5 MB ([deployment.md](deployment.md#egress-proxy-limits)). With a proxy set, the scanner leaves name resolution to the proxy. |
 | `KOLDERA_WEB_ALLOW_HTTP` | `false` | Allow `http://` targets. Off means https only. |
 | `KOLDERA_CHROMIUM_SANDBOX` | `false` | `true` starts Chromium with its own sandbox. It only works where unprivileged user namespaces are allowed; the default Docker profile and AWS Lambda do not, so leave it unset there. See [deployment.md](deployment.md#browser-sandbox). |
 
