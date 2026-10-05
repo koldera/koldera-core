@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Koldera.Core.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Koldera.Core.Tests;
 
@@ -213,5 +214,84 @@ public class PreferWaitTests
         var r = await client.SendAsync(Post("/v1/pdf/jobs", new { uploadId = ticket.GetProperty("uploadId").GetGuid(), mode = "analyze", profile = "ua1" }, "wait=30"));
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         Assert.Contains("Preference-Applied", r.Headers.GetValues("Access-Control-Expose-Headers").Single());
+    }
+}
+
+public class IdempotencyLockTests
+{
+    [Fact]
+    public async Task A_held_key_does_not_block_any_other_key()
+    {
+        var store = new Idempotency(TimeProvider.System);
+        using var held = await store.LockAsync("server", "held", CancellationToken.None);
+        // With a striped lock some of these would share the held key's stripe and never finish.
+        for (var i = 0; i < 2000; i++)
+        {
+            using var other = await store.LockAsync("server", "k" + i, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    [Fact]
+    public async Task The_same_key_is_serialized_and_the_lock_map_empties()
+    {
+        var store = new Idempotency(TimeProvider.System);
+        var first = await store.LockAsync("server", "k", CancellationToken.None);
+        var second = store.LockAsync("server", "k", CancellationToken.None);
+        await Task.Delay(100);
+        Assert.False(second.IsCompleted);
+        Assert.Equal(1, store.ActiveLockCount);
+        first.Dispose();
+        (await second.WaitAsync(TimeSpan.FromSeconds(2))).Dispose();
+        Assert.Equal(0, store.ActiveLockCount);
+    }
+
+    [Fact]
+    public async Task A_cancelled_wait_leaks_no_lock()
+    {
+        var store = new Idempotency(TimeProvider.System);
+        using var held = await store.LockAsync("server", "k", CancellationToken.None);
+        using var cts = new CancellationTokenSource(50);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.LockAsync("server", "k", cts.Token));
+        Assert.Equal(1, store.ActiveLockCount);
+        held.Dispose();
+        Assert.Equal(0, store.ActiveLockCount);
+    }
+
+    private static HttpRequestMessage Keyed(Guid upload, string key, string? prefer)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "/v1/pdf/jobs") { Content = JsonContent.Create(new { uploadId = upload, mode = "analyze", profile = "ua1" }) };
+        req.Headers.Add("Idempotency-Key", key);
+        if (prefer is not null) req.Headers.Add("Prefer", prefer);
+        return req;
+    }
+
+    [Fact]
+    public async Task A_keyed_wait_in_flight_does_not_stall_other_keyed_posts()
+    {
+        var gate = new TaskCompletionSource();
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted(gate.Task), env: new() { ["KOLDERA_QUEUE_CAPACITY"] = "500" });
+        try
+        {
+            var upload = await f.CompletedUpload(Fixtures.SmallPdf());
+            var waiting = f.AuthorizedClient().SendAsync(Keyed(upload, "slow", "wait=30"));
+            for (var i = 0; i < 200 && !f.Store.AllJobs().Any(); i++) await Task.Delay(25);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            for (var i = 0; i < 150; i++)
+                Assert.Equal(HttpStatusCode.Accepted, (await f.AuthorizedClient().SendAsync(Keyed(upload, "other" + i, null))).StatusCode);
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
+            Assert.False(waiting.IsCompleted);
+        }
+        finally { gate.TrySetResult(); }
+    }
+
+    [Fact]
+    public async Task Concurrent_requests_with_one_key_create_one_job_and_leave_no_lock()
+    {
+        using var f = CoreFactory.WithStubWorkers(StubResults.PdfAnalyzeCompleted());
+        var upload = await f.CompletedUpload(Fixtures.SmallPdf());
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => f.AuthorizedClient().SendAsync(Keyed(upload, "same", "wait=30"))));
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        Assert.Single(f.Store.AllJobs());
+        Assert.Equal(0, f.Services.GetRequiredService<Idempotency>().ActiveLockCount);
     }
 }
