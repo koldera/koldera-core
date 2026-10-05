@@ -85,6 +85,7 @@ app.Services.GetRequiredService<ServerTokens>(); // resolves (and, if needed, ge
 app.UseMiddleware<CorsMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<JsonContentTypeMiddleware>();
 app.UseMiddleware<SessionPolicyMiddleware>();
 app.UseMiddleware<IdempotencyMiddleware>();
 
