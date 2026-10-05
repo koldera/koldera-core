@@ -11,6 +11,7 @@ public sealed record Limits(
     long? WebMaxResponseBytes,
     int? WebMaxRequests);
 
+/// <param name="CorsOrigins">KOLDERA_CORS_ORIGINS: exact origins (comma separated). A literal * is not supported and allows nothing (fails safe).</param>
 /// <param name="PublicUrl">
 /// KOLDERA_PUBLIC_URL: the externally visible base URL used in signed upload/download URLs. Behind a TLS-terminating proxy
 /// it must be set, otherwise the URLs are built from the request scheme the server sees (http).

@@ -10,7 +10,7 @@ namespace Koldera.Core;
 
 /// <summary>Who is calling. Kind is "server", "session" or "anonymous" (auth disabled, server rights).</summary>
 public sealed record CorePrincipal(string Kind, string? SessionId = null, string? AllowedOrigin = null, int? MaxJobs = null,
-    IReadOnlyList<string>? Scopes = null, DateTimeOffset? ExpiresAt = null);
+    IReadOnlyList<string>? Scopes = null, DateTimeOffset? ExpiresAt = null, int? MaxUploads = null);
 
 public static class CorePrincipalExtensions
 {

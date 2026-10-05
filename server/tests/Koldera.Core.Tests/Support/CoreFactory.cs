@@ -134,9 +134,9 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>Mints a client session through the real endpoint (as the server token) and returns the session token.</summary>
-    public async Task<string> MintSession(string origin, int? maxJobs = null, string[]? scopes = null, int? ttlSeconds = null)
+    public async Task<string> MintSession(string origin, int? maxJobs = null, string[]? scopes = null, int? ttlSeconds = null, int? maxUploads = null)
     {
-        var r = await AuthorizedClient().PostAsJsonAsync("/v1/client-sessions", new { allowedOrigin = origin, maxJobs, scopes, ttlSeconds });
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/client-sessions", new { allowedOrigin = origin, maxJobs, scopes, ttlSeconds, maxUploads });
         Assert.Equal(System.Net.HttpStatusCode.Created, r.StatusCode);
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sessionToken").GetString()!;
     }
