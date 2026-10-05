@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 using Koldera.Core.Documents;
 using Koldera.Core.Workers;
@@ -25,9 +26,23 @@ public static class DocumentEndpoints
         v1.MapPost("/documents/jobs", CreateAsync);
     }
 
-    private static async Task<IResult> CreateAsync(JsonElement document, HttpContext http, CoreOptions options, DataStore store, JobQueue queue, TimeProvider clock)
+    private static async Task<IResult> CreateAsync(HttpContext http, CoreOptions options, DataStore store, JobQueue queue, TimeProvider clock)
     {
+        // Feature check first: a disabled route must not even look at the body.
         if (!options.Features.Contains("document")) return RequestContext.NotFound();
+        // No cap by design, like the upload route (Kestrel's 30 MB default would refuse a large document).
+        var limit = http.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = null;
+        JsonElement document;
+        try
+        {
+            using var parsed = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted);
+            document = parsed.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return Problems.Result(400, "INVALID_JSON", "Invalid request body", "The request body is not valid JSON.");
+        }
         if (document.ValueKind != JsonValueKind.Object) return Invalid([new ValidationError("", DocumentErrorCodes.Schema, "The request body must be a document object.")]);
 
         var errors = DocumentValidator.Validate(document);

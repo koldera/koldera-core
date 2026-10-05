@@ -204,6 +204,113 @@ public class DocumentJobTests
         Assert.Equal(HttpStatusCode.OK, (await f.AuthorizedClient().GetAsync($"/v1/jobs/{id}/findings")).StatusCode);
     }
 
+    [Theory]
+    [InlineData("not_run")]
+    [InlineData("error")]
+    public async Task A_veraPDF_run_without_a_verdict_does_not_complete_the_job(string status)
+    {
+        var pdf = StubResults.PdfCustom(r => r["baseline"] = new JsonObject { ["profile"] = "ua1", ["status"] = status, ["failedRules"] = new JsonArray() });
+        using var f = Factory(pdf: pdf);
+        var id = await JobId(await Post(f, Golden()));
+        var job = await f.WaitForJob(id);
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+        Assert.Equal("DOCUMENT_VALIDATION_UNAVAILABLE", job.GetProperty("error").GetProperty("code").GetString());
+        var artifacts = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/artifacts");
+        Assert.Contains(artifacts.GetProperty("items").EnumerateArray(), a => a.GetProperty("kind").GetString() == "generated_pdf");
+    }
+
+    [Fact]
+    public async Task A_missing_baseline_verdict_does_not_complete_the_job()
+    {
+        var pdf = StubResults.PdfCustom(r => r["baseline"] = null);
+        using var f = Factory(pdf: pdf);
+        var job = await f.WaitForJob(await JobId(await Post(f, Golden())));
+        // Either the contract check or the verdict check refuses it; it is never completed.
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+    }
+
+    [Theory]
+    [InlineData("\uFEFF<svg xmlns=\"http://www.w3.org/2000/svg\"/>")] // BOM
+    [InlineData("<?xml version=\"1.0\" encoding=\"UTF-8\"?><svg xmlns=\"http://www.w3.org/2000/svg\"/>")]
+    [InlineData("<!-- made by a tool --><svg xmlns=\"http://www.w3.org/2000/svg\"/>")]
+    [InlineData("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\"><svg xmlns=\"http://www.w3.org/2000/svg\"/>")]
+    [InlineData("<!DOCTYPE svg [<!ENTITY a \"aaaaaaaaaa\"><!ENTITY b \"&a;&a;&a;&a;\">]><svg xmlns=\"http://www.w3.org/2000/svg\">&b;</svg>")]
+    [InlineData("<!DOCTYPE svg [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><svg xmlns=\"http://www.w3.org/2000/svg\"/>")]
+    public async Task Real_world_svg_prologs_are_accepted_without_expanding_or_fetching(string svg)
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(path, new UTF8Encoding(false).GetBytes(svg));
+            Assert.Null(await ImageSniffer.MismatchAsync(path, "image/svg+xml", CancellationToken.None));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task A_bom_prefixed_svg_is_accepted_over_http()
+    {
+        using var f = Factory();
+        var bytes = new UTF8Encoding(true).GetPreamble().Concat(Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"/>")).ToArray();
+        var id = await f.CompletedUpload(bytes, "a.svg", "image/svg+xml");
+        var r = await Post(f, ImageDoc($$"""{"type":"image","uploadId":"{{id}}","alt":"x"}"""));
+        Assert.Equal(HttpStatusCode.Accepted, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task With_the_feature_off_a_malformed_body_is_still_404()
+    {
+        using var f = Factory(features: "pdf");
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(f, "{not json")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_malformed_body_is_400_not_a_server_error()
+    {
+        using var f = Factory();
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(f, "{not json")).StatusCode);
+    }
+
+    private sealed class BlockingRender : IWorkerProcess
+    {
+        public TaskCompletionSource Started { get; } = new();
+        public TaskCompletionSource Release { get; } = new();
+
+        public async Task<WorkerRun> RunAsync(string scratchRoot, string requestPath, string resultPath, TimeSpan timeout, CancellationToken ct)
+        {
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(ct);
+            return new WorkerRun(0, true, "");
+        }
+    }
+
+    [Fact]
+    public async Task A_full_queue_is_503_and_leaves_no_job_directory_or_document()
+    {
+        var blocking = new BlockingRender();
+        using var f = Factory(blocking, env: new() { ["KOLDERA_CONCURRENCY"] = "1", ["KOLDERA_QUEUE_CAPACITY"] = "1" });
+        try
+        {
+            await JobId(await Post(f, Golden()));
+            await blocking.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            await JobId(await Post(f, Golden())); // fills the single slot
+            var before = f.Store.AllJobs().Select(j => j.Id).ToHashSet();
+            var jobsDir = Path.GetDirectoryName(f.Store.JobDir(before.First()))!;
+            var dirsBefore = Directory.GetDirectories(jobsDir).Length;
+            var refused = await Post(f, Golden());
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+            Assert.Equal(dirsBefore, Directory.GetDirectories(jobsDir).Length);
+            Assert.Equal(before, f.Store.AllJobs().Select(j => j.Id).ToHashSet());
+        }
+        finally
+        {
+            blocking.Release.TrySetResult();
+        }
+    }
+
     [Fact]
     public async Task A_renderer_refusal_fails_the_job_with_its_code_and_typsts_message()
     {
