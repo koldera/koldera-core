@@ -1,7 +1,7 @@
 namespace Koldera.Core.Workers;
 
-/// <summary>The renderer process and the read-only structure probe that checks what it produced.</summary>
-public sealed record HtmlWorkers(IWorkerProcess Render, IWorkerProcess Inspect);
+/// <summary>The renderer process, the read-only structure probe that checks what it produced and the optional DOM/focus-order collector for the source.</summary>
+public sealed record HtmlWorkers(IWorkerProcess Render, IWorkerProcess Inspect, IWorkerProcess? Semantic = null);
 
 /// <summary>
 /// One HTML job in a single execution: render the source to a tagged PDF, probe what the file really
@@ -74,6 +74,21 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         var generated = await ArtifactFiles.VerifyAndKeepAsync(Path.Combine(scratch, "out", generatedName), "generated_pdf", declared.Sha256, declared.Bytes, outDir, now, retention, ct);
         var generatedPath = Path.Combine(outDir, generated.FileName);
 
+        // Reading-order evidence of the source as uploaded, bound to its hash: DOM order, focus order, suspected mismatches.
+        var snapshots = new List<CoreSnapshot>();
+        if (html.Semantic is not null)
+        {
+            var semantic = await Snapshots.ProbeSemanticAsync(html.Semantic, scratch, job.Id,
+                maxBytes is null ? null : new SemanticLimits(null, maxBytes, null, null, null), timeout, ct);
+            if (semantic.Status == "completed")
+            {
+                if (semantic.SourceSha256 != expectedSource)
+                    throw new WorkerContractException("semantic collector reported a different source SHA-256");
+                snapshots.Add(Snapshots.FromSemantic(semantic, clock.GetUtcNow()));
+                findings.AddRange(Snapshots.FindingsFromSemantic(semantic));
+            }
+        }
+
         // 2. Independent structure probe on the exact bytes the renderer produced.
         var probePath = Path.Combine(scratch, "in", "generated.pdf");
         File.Copy(generatedPath, probePath, overwrite: true);
@@ -103,6 +118,9 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
             });
             return new JobOutcome(CoreJobState.Failed, "unsupported", TaggedOutputUnavailable, "the generated PDF has no usable structure tags: " + reason, "not_requested", engineVersion, null, null, findings, [], [generated]);
         }
+
+        if (options.Limits.PdfMaxPages is { } maxPages && structure.Pages > maxPages)
+            return new JobOutcome(CoreJobState.Failed, "failed", "LIMIT_EXCEEDED", $"the generated PDF has {structure.Pages} pages, above the limit of {maxPages}", "not_requested", engineVersion, null, null, findings, [], [generated], snapshots);
 
         // 3. The PDF engine on the generated file, in its own scratch layout; the mode maps to the engine's.
         var pdfScratch = Path.Combine(scratch, "pdf");
@@ -135,7 +153,6 @@ public sealed class HtmlToPdfExecutor(DataStore store, HtmlWorkers html, PdfWork
         var finalVersion = string.IsNullOrEmpty(run.EngineVersion) || run.EngineVersion == inspect.EngineVersion ? engineVersion : engineVersion + "; " + run.EngineVersion;
 
         // 4. Reading-order evidence for the generated PDF (the exact bytes probed above).
-        var snapshots = new List<CoreSnapshot>();
         if (pdf.StructureProbe is not null && run.State == CoreJobState.Completed)
         {
             var snapshot = await Snapshots.ProbeStructureAsync(pdf.StructureProbe, scratch, probePath, timeout, ct);

@@ -10,9 +10,11 @@ public class HtmlToPdfJobTests
 {
     private static string GeneratedSha => Fixtures.Sha256(Fixtures.SmallPdf());
 
-    private static CoreFactory Factory(StubWorker? render = null, StubWorker? pdf = null, StubWorker? inspect = null, StubWorker? structure = null, Dictionary<string, string?>? env = null) =>
+    private static CoreFactory Factory(StubWorker? render = null, StubWorker? pdf = null, StubWorker? inspect = null, StubWorker? structure = null, Dictionary<string, string?>? env = null, StubWorker? semantic = null) =>
         CoreFactory.WithStubWorkers(pdf ?? StubResults.PdfAnalyzeCompleted(), structure, env,
-            htmlRender: render ?? StubResults.HtmlRenderCompleted(), inspect: inspect ?? StubResults.InspectResult(GeneratedSha));
+            htmlRender: render ?? StubResults.HtmlRenderCompleted(), inspect: inspect ?? StubResults.InspectResult(GeneratedSha), semantic: semantic);
+
+    private static string SourceSha => Fixtures.Sha256(Fixtures.SmallHtml());
 
     [Fact]
     public async Task A_completed_render_and_validation_gives_a_generated_pdf_and_findings_from_both_stages()
@@ -238,5 +240,108 @@ public class HtmlToPdfJobTests
         var r = await f.AuthorizedClient().PostAsJsonAsync("/v1/html-to-pdf/jobs", new { uploadId = upload, mode = "generate_analyze", profile = "ua1" });
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, r.StatusCode);
         Assert.Empty(f.Store.AllJobs());
+    }
+
+    [Fact]
+    public async Task The_semantic_collector_adds_a_dom_snapshot_bound_to_the_source_and_its_findings()
+    {
+        using var f = Factory(semantic: StubResults.SemanticCollected(SourceSha), structure: StubResults.StructureInspected(GeneratedSha));
+        var id = await f.CreateHtmlJob();
+        await f.WaitForJob(id);
+        var stored = f.Store.GetJob(id)!;
+        var dom = Assert.Single(stored.Snapshots, x => x.Origin == SnapshotOrigin.HtmlDom);
+        Assert.Equal(SourceSha, dom.ArtifactSha256);
+        Assert.Contains("n1", dom.NodesJson);
+        // The PDF structure snapshot stays alongside it.
+        Assert.Single(stored.Snapshots, x => x.Origin == SnapshotOrigin.PdfStructure && x.ArtifactSha256 == GeneratedSha);
+        var finding = Assert.Single(stored.Findings, x => x.RuleId == "DOM_ORDER_NOTE");
+        Assert.Equal("html", finding.Source);
+        Assert.Equal("suspected_semantic_mismatch", finding.Disposition);
+        Assert.True(finding.NeedsHumanReview);
+        // Renderer diagnostics, then the semantic findings, then the PDF engine's.
+        Assert.True(stored.Findings.FindIndex(x => x.RuleId == "HTML_LANG_MISSING") < stored.Findings.FindIndex(x => x.RuleId == "DOM_ORDER_NOTE"));
+        Assert.True(stored.Findings.FindIndex(x => x.RuleId == "DOM_ORDER_NOTE") < stored.Findings.FindIndex(x => x.Source == "pdf"));
+    }
+
+    [Fact]
+    public async Task The_semantic_collector_gets_the_source_and_the_unchanged_timeout()
+    {
+        var semantic = StubResults.SemanticCollected(SourceSha);
+        using var f = Factory(semantic: semantic, env: new() { ["KOLDERA_JOB_TIMEOUT_SECONDS"] = "90" });
+        await f.WaitForJob(await f.CreateHtmlJob());
+        var call = semantic.Calls.Single();
+        Assert.Equal(TimeSpan.FromSeconds(90), call.Timeout);
+        Assert.Equal("/work/in/source.html", JsonDocument.Parse(call.RequestJson).RootElement.GetProperty("inputPath").GetString());
+    }
+
+    [Fact]
+    public async Task A_semantic_result_for_another_source_fails_the_job()
+    {
+        using var f = Factory(semantic: StubResults.SemanticCollected(new string('a', 64)));
+        var job = await f.WaitForJob(await f.CreateHtmlJob());
+        Assert.Equal("WORKER_CONTRACT", job.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task A_semantic_collector_that_cannot_collect_leaves_the_job_without_a_dom_snapshot()
+    {
+        using var f = Factory(semantic: StubResults.SemanticCollected(SourceSha, status: "unsupported"));
+        var id = await f.CreateHtmlJob();
+        var job = await f.WaitForJob(id);
+        Assert.Equal("completed", job.GetProperty("state").GetString());
+        Assert.DoesNotContain(f.Store.GetJob(id)!.Snapshots, x => x.Origin == SnapshotOrigin.HtmlDom);
+    }
+
+    [Fact]
+    public async Task A_timed_out_semantic_collector_fails_the_job_as_a_timeout()
+    {
+        using var f = Factory(semantic: new StubWorker(_ => "", timedOut: true));
+        var job = await f.WaitForJob(await f.CreateHtmlJob());
+        Assert.Equal("WORKER_TIMEOUT", job.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Pdf_bytes_uploaded_as_html_are_unsupported()
+    {
+        using var f = Factory();
+        var upload = await f.CompletedHtmlUpload(Fixtures.SmallPdf());
+        var r = await f.AuthorizedClient().PostAsJsonAsync("/v1/html-to-pdf/jobs", new { uploadId = upload, mode = "generate_analyze", profile = "ua1" });
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, r.StatusCode);
+        Assert.Empty(f.Store.AllJobs());
+    }
+
+    [Fact]
+    public async Task A_source_that_is_not_utf8_is_unsupported()
+    {
+        using var f = Factory();
+        var bytes = new byte[] { (byte)'<', (byte)'p', (byte)'>', 0xFF, 0xFE, 0xFD }.Concat("0123456789 and more text".Select(c => (byte)c)).ToArray();
+        var upload = await f.CompletedHtmlUpload(bytes);
+        var r = await f.AuthorizedClient().PostAsJsonAsync("/v1/html-to-pdf/jobs", new { uploadId = upload, mode = "generate_analyze", profile = "ua1" });
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, r.StatusCode);
+        Assert.Empty(f.Store.AllJobs());
+    }
+
+    [Fact]
+    public async Task An_upload_that_was_never_sent_answers_409()
+    {
+        using var f = Factory();
+        var ticket = await f.HtmlUploadTicket();
+        var r = await f.AuthorizedClient().PostAsJsonAsync("/v1/html-to-pdf/jobs", new { uploadId = ticket, mode = "generate_analyze", profile = "ua1" });
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal("UPLOAD_INCOMPLETE", (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task A_generated_pdf_over_the_configured_page_limit_fails_with_limit_exceeded_and_keeps_the_file()
+    {
+        var pdf = StubResults.PdfAnalyzeCompleted();
+        // The inspect stub reports 2 pages.
+        using var f = Factory(pdf: pdf, env: new() { ["KOLDERA_PDF_MAX_PAGES"] = "1" });
+        var id = await f.CreateHtmlJob();
+        var job = await f.WaitForJob(id);
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+        Assert.Equal("LIMIT_EXCEEDED", job.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(pdf.Calls);
+        Assert.Single(f.Store.GetJob(id)!.Artifacts, a => a.Kind == "generated_pdf");
     }
 }

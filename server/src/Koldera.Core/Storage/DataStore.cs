@@ -14,7 +14,7 @@ public sealed class UploadException(string code) : Exception(code)
 }
 
 /// <summary>File-based store under the data directory. Every write goes to "file.tmp" and is moved into place.</summary>
-public sealed class DataStore
+public class DataStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -125,7 +125,7 @@ public sealed class DataStore
         return string.Equals(Convert.ToHexString(SHA256.HashData(fs)), rec.Sha256, StringComparison.OrdinalIgnoreCase);
     }
 
-    public async Task SaveJobAsync(CoreJob job)
+    public virtual async Task SaveJobAsync(CoreJob job)
     {
         var path = Path.Combine(JobDir(job.Id), "job.json");
         var tmp = path + ".tmp";
