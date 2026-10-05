@@ -329,4 +329,45 @@ public sealed class JobRunnerTests : IDisposable
 
         Assert.Equal("completed", _store.GetJob(job.Id)!.State);
     }
+
+    [Fact]
+    public async Task A_waiter_woken_for_a_job_whose_outcome_could_not_be_saved_gets_false_promptly()
+    {
+        var flaky = new FlakyStore(_root, TimeProvider.System);
+        var gate = new TaskCompletionSource();
+        var executor = new LambdaExecutor("pdf", async (_, _, _, _) =>
+        {
+            await gate.Task;
+            flaky.FailNextSaves(int.MaxValue);
+            return Done();
+        });
+        var queue = new JobQueue(10);
+        var options = CoreOptions.From(n => n == "KOLDERA_DATA_DIR" ? _root : null);
+        var runner = new JobRunner(flaky, queue, [executor], options, TimeProvider.System, new LoggerOf(_log));
+        var id = await QueueJob(queue);
+        await runner.StartAsync(CancellationToken.None);
+        _started.Add(runner);
+        while (_store.GetJob(id)!.State != CoreJobState.Running) await Task.Delay(10);
+
+        var waiting = runner.WaitForCompletionAsync(id, TimeSpan.FromSeconds(30), CancellationToken.None);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        gate.SetResult();
+
+        Assert.False(await waiting);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"the waiter took {clock.Elapsed}");
+        Assert.NotEqual(CoreJobState.Completed, _store.GetJob(id)!.State);
+    }
+
+    [Fact]
+    public async Task A_replace_refused_beyond_the_retry_budget_throws_and_leaves_no_temporary_file()
+    {
+        var job = new CoreJob { Id = Guid.NewGuid(), Kind = "pdf", State = CoreJobState.Queued, Owner = "server", CreatedAt = DateTimeOffset.UtcNow };
+        await _store.SaveJobAsync(job);
+        job.State = CoreJobState.Completed;
+        using (HoldRecordOpen(job.Id))
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _store.SaveJobAsync(job));
+
+        Assert.False(File.Exists(Path.Combine(_root, "jobs", job.Id.ToString("N"), "job.json.tmp")));
+        Assert.Equal("queued", _store.GetJob(job.Id)!.State);
+    }
 }

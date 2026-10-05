@@ -68,13 +68,13 @@ public class JobRunnerSaveTests
     }
 
     [Fact]
-    public async Task When_nothing_can_be_saved_the_waiter_is_still_released()
+    public async Task When_nothing_can_be_saved_the_waiter_is_released_with_false()
     {
         using var f = Factory();
         var id = await QueueJob(f, failingSaves: int.MaxValue);
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        // Released by the runner's signal, not by the 10 s guard.
-        Assert.True(await f.Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(id, TimeSpan.FromSeconds(10), limit.Token));
+        // Released by the runner's signal, not by the 10 s guard (that would throw), and not reported finished.
+        Assert.False(await f.Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(id, TimeSpan.FromSeconds(10), limit.Token));
         ((FlakyStore)f.Store).FailNextSaves(0);
         Assert.NotEqual(CoreJobState.Running, f.Store.GetJob(id)!.State);
     }

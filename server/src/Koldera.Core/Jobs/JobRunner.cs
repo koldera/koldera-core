@@ -64,7 +64,10 @@ public sealed class JobRunner : BackgroundService
         await _store.SaveJobAsync(job);
     }
 
-    /// <summary>Waits until the job is completed or failed; false when it is unknown or still unfinished after <paramref name="max"/>.</summary>
+    /// <summary>
+    /// Waits until the job is completed or failed; false when it is unknown, still unfinished after <paramref name="max"/>,
+    /// or its run ended without a stored completed or failed record.
+    /// </summary>
     public async Task<bool> WaitForCompletionAsync(Guid id, TimeSpan max, CancellationToken ct)
     {
         if (IsTerminal(_store.GetJob(id))) return true;
@@ -86,9 +89,17 @@ public sealed class JobRunner : BackgroundService
         try
         {
             await tcs.Task.WaitAsync(max, _clock, ct);
-            return true;
         }
         catch (TimeoutException)
+        {
+            return false;
+        }
+        // The runner wakes waiters on every exit of a run, also when the outcome could not be stored.
+        try
+        {
+            return IsTerminal(_store.GetJob(id));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
             return false;
         }
