@@ -42,7 +42,7 @@ public class JobRunnerSaveTests
         });
 
     /// <summary>A queued job on a stored upload; saves are armed to fail only after the record exists, then the job is enqueued.</summary>
-    private static async Task<Guid> QueueJob(CoreFactory f, int failingSaves, int succeedingSavesFirst = 0)
+    private static async Task<Guid> QueueJob(CoreFactory f, int failingSaves, int succeedingSavesFirst = 0, Func<Guid, Task>? beforeEnqueue = null)
     {
         var pdf = Fixtures.SmallPdf();
         var uploadId = Guid.NewGuid();
@@ -53,6 +53,7 @@ public class JobRunnerSaveTests
         await f.Store.SaveJobAsync(new CoreJob { Id = id, Kind = CoreJobKind.Pdf, Mode = "analyze", Profile = "ua1", InputUploadId = uploadId, Owner = "server", CreatedAt = now });
         ((FlakyStore)f.Store).SucceedNextSaves(succeedingSavesFirst);
         ((FlakyStore)f.Store).FailNextSaves(failingSaves);
+        if (beforeEnqueue is not null) await beforeEnqueue(id);
         Assert.True(f.Services.GetRequiredService<JobQueue>().TryEnqueue(id));
         return id;
     }
@@ -94,10 +95,14 @@ public class JobRunnerSaveTests
     {
         using var f = Factory();
         // The start save succeeds, the worker runs, then every save (the outcome) fails.
-        var id = await QueueJob(f, failingSaves: int.MaxValue, succeedingSavesFirst: 1);
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        // The waiter registers before the job is enqueued: the runner's signal is only delivered to a registered waiter,
+        // and a fast worker could otherwise finish before the waiter exists (the clock here is fake, so max never elapses).
+        Task<bool>? wait = null;
+        var id = await QueueJob(f, failingSaves: int.MaxValue, succeedingSavesFirst: 1,
+            beforeEnqueue: i => { wait = f.Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(i, TimeSpan.FromSeconds(10), limit.Token); return Task.CompletedTask; });
         // Released by the runner's signal (a hang would end in OperationCanceledException), and not reported finished.
-        Assert.False(await f.Services.GetRequiredService<JobRunner>().WaitForCompletionAsync(id, TimeSpan.FromSeconds(10), limit.Token));
+        Assert.False(await wait!);
         ((FlakyStore)f.Store).FailNextSaves(0);
         Assert.Equal(CoreJobState.Running, f.Store.GetJob(id)!.State);
     }
