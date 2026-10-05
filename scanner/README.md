@@ -7,8 +7,14 @@ automated findings only: never a conformance verdict. `manualReviewRequired` is 
 Requires Node 22 and the Chromium build that matches the pinned Playwright version.
 
 ```
-pnpm install --frozen-lockfile && pnpm build && pnpm test
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium-headless-shell
+pnpm build && pnpm test
 ```
+
+The package launches headless Chromium, which Playwright serves as its headless shell, so that is the browser to install
+(once per Playwright version). On a bare Linux host add `--with-deps` for the system libraries; the Docker image does the
+same with `playwright install --with-deps --only-shell chromium`.
 
 ## CLI
 

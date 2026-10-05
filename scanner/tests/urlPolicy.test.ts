@@ -40,6 +40,16 @@ describe("checkUrlSyntax", () => {
     ["https://[::127.0.0.1]/", "not publicly routable"],
     ["https://[::7f00:1]/", "not publicly routable"],
     ["https://[2001::1]/", "not publicly routable"],
+    // Odd IPv4 spellings: the URL parser turns them into 127.0.0.1 before the policy sees the host.
+    ["https://2130706433/", "not publicly routable"],
+    ["https://0x7f.1/", "not publicly routable"],
+    ["https://0177.0.0.1/", "not publicly routable"],
+    ["https://0.0.0.0/", "not publicly routable"],
+    ["https://100.64.0.1/", "not publicly routable"],
+    // Trailing dot and upper case do not change the name.
+    ["https://localhost./", "reserved"],
+    ["https://LOCALHOST/", "reserved"],
+    ["https://LocalHost.:443/", "reserved"],
   ])("rejects %s (%s)", (url, reason) => {
     expect(() => checkUrlSyntax(url, anon)).toThrow(BlockedDestinationError);
     try {
