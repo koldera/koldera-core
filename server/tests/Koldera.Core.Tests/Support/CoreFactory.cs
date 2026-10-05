@@ -54,10 +54,11 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
 
     /// <summary>A server (token "t") whose PDF engine processes are the given stubs; the structure probe is off unless one is given.</summary>
     public static CoreFactory WithStubWorkers(IWorkerProcess pdf, IWorkerProcess? structureProbe = null, Dictionary<string, string?>? env = null,
-        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null)
+        IWorkerProcess? htmlRender = null, IWorkerProcess? inspect = null, IWorkerProcess? semantic = null, Action<IServiceCollection>? configure = null, IWorkerProcess? web = null, string? features = null)
     {
         var values = new Dictionary<string, string?> { ["KOLDERA_TOKEN"] = "t" };
         foreach (var (k, v) in env ?? []) values[k] = v;
+        if (features is not null) values["KOLDERA_FEATURES"] = features;
         var factory = Create(values);
         factory._services = s =>
         {
@@ -67,6 +68,9 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             s.RemoveAll<HtmlWorkers>();
             s.AddSingleton(new HtmlWorkers(htmlRender ?? new StubWorker(_ => throw new InvalidOperationException("no html render stub")),
                 inspect ?? new StubWorker(_ => throw new InvalidOperationException("no inspect stub")), semantic));
+            // Without a web stub a scan would start a real process; fail loudly if a test forgot it.
+            s.RemoveAll<WebWorkers>();
+            s.AddSingleton(new WebWorkers(web ?? new StubWorker(_ => throw new InvalidOperationException("no web stub"))));
             configure?.Invoke(s);
         };
         return factory;
@@ -112,6 +116,13 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
     {
         var upload = await CompletedHtmlUpload(html);
         var r = await AuthorizedClient().PostAsJsonAsync("/v1/html-to-pdf/jobs", new { uploadId = upload, mode, profile = "ua1", contentSelector });
+        Assert.Equal(System.Net.HttpStatusCode.Accepted, r.StatusCode);
+        return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    public async Task<Guid> CreateWebJob(string url)
+    {
+        var r = await AuthorizedClient().PostAsJsonAsync("/v1/web/jobs", new { url });
         Assert.Equal(System.Net.HttpStatusCode.Accepted, r.StatusCode);
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }

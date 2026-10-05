@@ -1,10 +1,13 @@
 using System.Text.RegularExpressions;
+using Koldera.Core.Workers;
 
 namespace Koldera.Core;
 
 public sealed record PdfJobRequest(Guid UploadId, string? Mode, string? Profile, string? ExplicitLanguage, string? ExplicitTitle = null);
 
 public sealed record HtmlJobRequest(Guid UploadId, string? Mode, string? Profile, string? ContentSelector, string? ExplicitLanguage = null, string? ExplicitTitle = null);
+
+public sealed record WebJobRequest(string? Url);
 
 public static partial class JobEndpoints
 {
@@ -17,6 +20,28 @@ public static partial class JobEndpoints
     {
         v1.MapPost("/pdf/jobs", CreatePdfAsync);
         v1.MapPost("/html-to-pdf/jobs", CreateHtmlAsync);
+        v1.MapPost("/web/jobs", CreateWebAsync);
+    }
+
+    private static async Task<IResult> CreateWebAsync(WebJobRequest request, HttpContext http, CoreOptions options, DataStore store, JobQueue queue, TimeProvider clock)
+    {
+        if (!options.Features.Contains("web")) return RequestContext.NotFound();
+        // Syntax only; the scanner repeats the checks with live DNS. The reason never repeats the URL.
+        var reason = ScanTargetPolicy.Reject(request.Url, options.WebAllowHttp, out var target);
+        if (reason is not null || target is null) return Invalid("url rejected: " + reason);
+
+        var job = new CoreJob
+        {
+            Id = Guid.NewGuid(),
+            Kind = CoreJobKind.Web,
+            Mode = "scan",
+            State = CoreJobState.Queued,
+            Profile = WebJobExecutor.Profile,
+            TargetUrl = target.AbsoluteUri, // query and fragment already removed: they may carry tokens
+            Owner = RequestContext.Owner(http),
+            CreatedAt = clock.GetUtcNow(),
+        };
+        return await AcceptAsync(job, http, store, queue);
     }
 
     private static async Task<IResult> CreatePdfAsync(PdfJobRequest request, HttpContext http, DataStore store, JobQueue queue, TimeProvider clock)
