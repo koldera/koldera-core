@@ -1,0 +1,35 @@
+{
+  "title": "Quarterly Report, Example Co.",
+  "language": "en",
+  "page": { "size": "A4", "orientation": "portrait", "margins": "25mm" },
+  "theme": { "font": "Noto Serif", "fontSize": 11, "accent": "#8a1c1c" },
+  "header": [{ "type": "image", "file": "logo.png", "decorative": true }],
+  "footer": [{ "type": "pageNumber" }],
+  "body": [
+    { "type": "heading", "level": 1, "text": "Quarterly Report" },
+    { "type": "paragraph", "content": ["This report summarises ", { "strong": "synthetic" }, " figures for a fictional company."] },
+    { "type": "heading", "level": 2, "text": "Highlights" },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        ["Revenue grew in every region."],
+        ["Three launches shipped:", { "list": { "ordered": true, "items": [["Alpha"], ["Beta"], ["Gamma"]] } }],
+        ["Details at ", { "link": { "text": "the example site", "url": "https://example.com/report" } }]
+      ]
+    },
+    { "type": "heading", "level": 3, "text": "Revenue by region" },
+    {
+      "type": "table",
+      "caption": "Revenue by region, in thousands",
+      "header": [["Region", "Q1", "Q2"]],
+      "rows": [["North", "120", "135"], ["South", "98", "104"], ["East", "75", "91"]],
+      "rowHeaders": true,
+      "columnAlign": ["left", "right", "right"]
+    },
+    { "type": "image", "file": "chart.png", "alt": "Bar chart: revenue rises from Q1 to Q2 in all three regions." },
+    { "type": "image", "file": "logo.png", "decorative": true },
+    { "type": "spacer", "height": "8mm" },
+    { "type": "link", "text": "Full data set", "url": "https://example.com/data" }
+  ]
+}

@@ -180,6 +180,29 @@ export interface HtmlReorderResult {
   error: { code: ReorderErrorCode; message: string } | null;
 }
 
+// ---- structured document render (Typst) ----------------------------------------------------
+
+export interface DocumentRenderRequest {
+  specVersion: "1.0";
+  jobId: string;
+  documentPath: "/work/in/document.json";
+  imagesDirectory: "/work/in/images";
+  outputDirectory: "/work/out";
+  typstCommand: string;
+}
+
+export type DocumentErrorCode = "INVALID_INPUT" | "DOCUMENT_REFUSED" | "TIMEOUT" | "WORKER_ERROR";
+
+export interface DocumentRenderResult {
+  specVersion: "1.0";
+  jobId: string;
+  status: "completed" | "failed";
+  engineVersion: string;
+  templateVersion: "1";
+  artifacts: RendererArtifact[];
+  error?: { code: DocumentErrorCode; message: string } | null;
+}
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Repository layout by default; containers set KOLDERA_CONTRACTS_DIR to wherever contracts/ was copied.
 const contractsDir = process.env["KOLDERA_CONTRACTS_DIR"] ?? path.resolve(here, "..", "..", "..", "contracts");
@@ -216,6 +239,19 @@ export function validateReorderRequest(value: unknown): string[] {
 export function validateReorderResult(value: unknown): string[] {
   reorderResultValidator ??= loadSchema("html-reorder-result.schema.json");
   return errorsOf(reorderResultValidator, value);
+}
+
+let documentRequestValidator: ValidateFunction | undefined;
+let documentResultValidator: ValidateFunction | undefined;
+
+export function validateDocumentRenderRequest(value: unknown): string[] {
+  documentRequestValidator ??= loadSchema("document-render-request.schema.json");
+  return errorsOf(documentRequestValidator, value);
+}
+
+export function validateDocumentRenderResult(value: unknown): string[] {
+  documentResultValidator ??= loadSchema("document-render-result.schema.json");
+  return errorsOf(documentResultValidator, value);
 }
 
 export function validateRequest(value: unknown): string[] {

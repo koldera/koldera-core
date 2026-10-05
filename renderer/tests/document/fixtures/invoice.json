@@ -1,0 +1,26 @@
+{
+  "title": "Invoice 2026-0042",
+  "language": "en",
+  "page": { "size": "A4", "margins": "20mm" },
+  "theme": { "font": "Noto Sans", "fontSize": 11, "accent": "#1f3a5f" },
+  "header": [{ "type": "paragraph", "content": [{ "strong": "Example Co." }, " - 1 Sample Street, Exampleville"] }],
+  "footer": [{ "type": "paragraph", "content": ["Questions: ", { "link": { "text": "billing@example.com", "url": "mailto:billing@example.com" } }] }, { "type": "pageNumber" }],
+  "body": [
+    { "type": "heading", "level": 1, "text": "Invoice 2026-0042" },
+    { "type": "keyValue", "rows": [["Issued", "2026-10-01"], ["Due", "2026-10-31"], ["Customer", "Sample Customer Ltd."], ["Reference", "PO-1234"]] },
+    { "type": "heading", "level": 2, "text": "Line items" },
+    {
+      "type": "table",
+      "caption": "Items billed on invoice 2026-0042",
+      "header": [["Description", "Quantity", "Unit price", "Amount"]],
+      "rows": [
+        ["Consulting, hours", "10", "100.00", "1000.00"],
+        ["Hosting, months", "3", "25.00", "75.00"],
+        ["Support plan", "1", "50.00", "50.00"],
+        ["Total", "", "", "1125.00"]
+      ],
+      "columnAlign": ["left", "right", "right", "right"]
+    },
+    { "type": "paragraph", "content": ["Please pay within 30 days to the account shown in your ", { "emphasis": "customer portal" }, "."] }
+  ]
+}
