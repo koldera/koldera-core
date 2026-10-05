@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Koldera.Core.Workers;
 
 namespace Koldera.Core;
@@ -9,13 +8,8 @@ public sealed record HtmlJobRequest(Guid UploadId, string? Mode, string? Profile
 
 public sealed record WebJobRequest(string? Url);
 
-public static partial class JobEndpoints
+public static class JobEndpoints
 {
-    private static readonly byte[] PdfMagic = "%PDF-"u8.ToArray();
-
-    [GeneratedRegex("^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")]
-    private static partial Regex LanguageTag();
-
     public static void MapJobEndpoints(this RouteGroupBuilder v1)
     {
         v1.MapPost("/pdf/jobs", CreatePdfAsync);
@@ -48,8 +42,8 @@ public static partial class JobEndpoints
     {
         if (request.Mode is not ("analyze" or "fix")) return Invalid("mode must be analyze or fix");
         if (request.Profile != "ua1") return Invalid("profile must be ua1");
-        if (request.ExplicitLanguage is not null && !LanguageTag().IsMatch(request.ExplicitLanguage))
-            return Invalid("explicitLanguage must be a well-formed BCP 47 tag");
+        if (request.ExplicitLanguage is not null && !JobRequestRules.IsLanguageTag(request.ExplicitLanguage))
+            return Invalid(JobRequestRules.LanguageError);
         var explicitTitle = TitleInput.Normalize(request.ExplicitTitle, out var titleError);
         if (titleError is not null) return Invalid(titleError);
 
@@ -61,7 +55,7 @@ public static partial class JobEndpoints
             return Problems.Result(409, "UPLOAD_INCOMPLETE", "Upload not completed", "Send the file to the upload URL first.");
         if (upload.ContentType != "application/pdf")
             return Problems.Result(415, "UNSUPPORTED_INPUT", "Unsupported input", $"uploadId refers to a {upload.ContentType} upload; PDF jobs need application/pdf");
-        if (!await HasPdfHeaderAsync(store.UploadPath(upload.Id), http.RequestAborted))
+        if (!await JobRequestRules.HasPdfHeaderAsync(store.UploadPath(upload.Id), http.RequestAborted))
             return Problems.Result(415, "UNSUPPORTED_INPUT", "Unsupported input", "uploaded file is not a PDF (missing %PDF- header)");
 
         var job = new CoreJob
@@ -86,12 +80,10 @@ public static partial class JobEndpoints
         if (!options.Features.Contains("html")) return RequestContext.NotFound();
         if (request.Mode is not ("generate_analyze" or "generate_fix")) return Invalid("mode must be generate_analyze or generate_fix");
         if (request.Profile != "ua1") return Invalid("profile must be ua1");
-        if (request.ExplicitLanguage is not null && !LanguageTag().IsMatch(request.ExplicitLanguage))
-            return Invalid("explicitLanguage must be a well-formed BCP 47 tag");
-        // Only Chromium can tell whether a selector is valid CSS; here it is bounded and printable.
-        var selector = request.ContentSelector?.Trim();
-        if (selector is not null && (selector.Length is 0 or > 200 || selector.Any(char.IsControl)))
-            return Invalid("contentSelector must be 1-200 printable characters (a CSS selector) or omitted");
+        if (request.ExplicitLanguage is not null && !JobRequestRules.IsLanguageTag(request.ExplicitLanguage))
+            return Invalid(JobRequestRules.LanguageError);
+        var selector = JobRequestRules.NormalizeSelector(request.ContentSelector, out var selectorError);
+        if (selectorError is not null) return Invalid(selectorError);
         var explicitTitle = TitleInput.Normalize(request.ExplicitTitle, out var titleError);
         if (titleError is not null) return Invalid(titleError);
 
@@ -103,7 +95,7 @@ public static partial class JobEndpoints
             return Problems.Result(409, "UPLOAD_INCOMPLETE", "Upload not completed", "Send the file to the upload URL first.");
         if (upload.ContentType != "text/html")
             return Invalid($"uploadId refers to a {upload.ContentType} upload; HTML-to-PDF jobs need a text/html upload");
-        if (await SniffHtmlAsync(store.UploadPath(upload.Id), http.RequestAborted) is { } unsupported)
+        if (await JobRequestRules.SniffHtmlAsync(store.UploadPath(upload.Id), http.RequestAborted) is { } unsupported)
             return Problems.Result(415, "UNSUPPORTED_INPUT", "Unsupported input", unsupported);
 
         var job = new CoreJob
@@ -122,27 +114,6 @@ public static partial class JobEndpoints
             CreatedAt = now,
         };
         return await AcceptAsync(job, http, store, queue);
-    }
-
-    /// <summary>Cheap shape check only (the renderer's preflight is the real boundary): no PDF, some markup, valid UTF-8; null when acceptable.</summary>
-    private static async Task<string?> SniffHtmlAsync(string path, CancellationToken ct)
-    {
-        var buffer = new byte[1024];
-        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var n = await fs.ReadAsync(buffer, ct);
-        var head = buffer.AsSpan(0, n);
-        if (head.IndexOf(PdfMagic) >= 0) return "uploaded file is a PDF, not an HTML document";
-        if (head.IndexOf((byte)'<') < 0) return "uploaded file does not look like an HTML document (no markup in the first kilobyte)";
-        try
-        {
-            // The window may cut a multi-byte sequence at its end; only earlier bytes must decode.
-            new System.Text.UTF8Encoding(false, true).GetCharCount(head[..Math.Max(0, head.Length - 4)]);
-        }
-        catch (System.Text.DecoderFallbackException)
-        {
-            return "uploaded file is not UTF-8 encoded";
-        }
-        return null;
     }
 
     /// <summary>Saves the job as queued before enqueueing it, so a runner that picks it up at once finds it; a full queue removes it again.</summary>
@@ -164,15 +135,6 @@ public static partial class JobEndpoints
         }
         http.Response.Headers.Location = $"/v1/jobs/{job.Id}";
         return Results.Json(JobResponse.From(job), statusCode: 202);
-    }
-
-    private static async Task<bool> HasPdfHeaderAsync(string path, CancellationToken ct)
-    {
-        // The first 1024 bytes may carry the header after a short preamble (ISO 32000 permits an offset).
-        var buffer = new byte[1024];
-        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var n = await fs.ReadAsync(buffer, ct);
-        return buffer.AsSpan(0, n).IndexOf(PdfMagic) >= 0;
     }
 
     private static IResult Invalid(string detail) => Problems.Result(422, "VALIDATION_ERROR", "Invalid job request", detail);

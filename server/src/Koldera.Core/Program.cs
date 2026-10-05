@@ -1,8 +1,19 @@
 using Koldera.Core;
+using Koldera.Core.Cli;
 using Koldera.Core.Workers;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-var builder = WebApplication.CreateBuilder(args);
+// `koldera <command>` runs the command-line tool; no arguments, `serve` or only host options (--urls ...) start the server.
+if (!CliApp.StartsServer(args))
+{
+    using var cancel = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancel.Cancel(); };
+    var cliConfig = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+    var cliWorkers = (cliConfig.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions()).ApplyDefaults(Environment.GetEnvironmentVariable);
+    return await CliApp.RunAsync(args, Console.Out, Console.Error, new ProcessWorkerFactory(cliWorkers), ct: cancel.Token);
+}
+
+var builder = WebApplication.CreateBuilder(args.Length > 0 && args[0] == "serve" ? args[1..] : args);
 
 builder.Logging.ClearProviders().AddJsonConsole();
 // Request logs carry the path with its query string, which may hold tokens or file names.
@@ -31,39 +42,14 @@ builder.Services.AddSingleton(sp => new RetentionService(sp.GetRequiredService<D
 builder.Services.AddHostedService(sp => new RetentionWorker(sp.GetRequiredService<RetentionService>(), sp.GetRequiredService<TimeProvider>(),
     sp.GetRequiredService<ILoggerFactory>().CreateLogger<RetentionWorker>()));
 
-builder.Services.AddSingleton(builder.Configuration.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions());
-builder.Services.AddSingleton(sp =>
-{
-    var w = sp.GetRequiredService<WorkerOptions>();
-    return new PdfWorkers(
-        SubprocessWorker.ForPdfProcess(w.PdfCommand, w.VeraPdfCommand),
-        w.PdfStructureCommand.Length > 0 ? SubprocessWorker.ForProbe(w.PdfStructureCommand) : null);
-});
-builder.Services.AddSingleton(sp =>
-{
-    var w = sp.GetRequiredService<WorkerOptions>();
-    return new HtmlWorkers(SubprocessWorker.ForNodeVerb(w.HtmlRenderCommand, w.ContractsDir),
-        SubprocessWorker.ForProbe(w.PdfInspectCommand),
-        w.HtmlSemanticCommand.Length > 0 ? SubprocessWorker.ForNodeVerb(w.HtmlSemanticCommand, w.ContractsDir) : null);
-});
-builder.Services.AddSingleton(sp =>
-{
-    var w = sp.GetRequiredService<WorkerOptions>();
-    return new WebWorkers(SubprocessWorker.ForWeb(w.WebCommand, w.ContractsDir, w.AllowLoopbackForTests));
-});
-builder.Services.AddSingleton(sp =>
-{
-    var w = sp.GetRequiredService<WorkerOptions>();
-    return new DocumentWorkers(SubprocessWorker.ForNodeVerb(w.DocumentRenderCommand, w.ContractsDir));
-});
-builder.Services.AddSingleton<IJobExecutor>(sp => new DocumentExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<DocumentWorkers>(),
-    sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
-builder.Services.AddSingleton<IJobExecutor>(sp => new WebJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<WebWorkers>(),
-    sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
-builder.Services.AddSingleton<IJobExecutor>(sp => new HtmlToPdfExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<HtmlWorkers>(),
-    sp.GetRequiredService<PdfWorkers>(), sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
-builder.Services.AddSingleton<IJobExecutor>(sp => new PdfJobExecutor(sp.GetRequiredService<DataStore>(), sp.GetRequiredService<PdfWorkers>(),
-    sp.GetRequiredService<CoreOptions>(), sp.GetRequiredService<TimeProvider>()));
+// The "Workers" section wins; whatever it leaves empty comes from the simple KOLDERA_* variables, else the container layout.
+builder.Services.AddSingleton((builder.Configuration.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions()).ApplyDefaults(Environment.GetEnvironmentVariable));
+builder.Services.AddSingleton<IWorkerFactory>(sp => new ProcessWorkerFactory(sp.GetRequiredService<WorkerOptions>()));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorkerFactory>().Pdf());
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorkerFactory>().Html());
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorkerFactory>().Web());
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorkerFactory>().Document());
+builder.Services.AddExecutors();
 builder.Services.AddSingleton(sp =>
 {
     var w = sp.GetRequiredService<WorkerOptions>();
@@ -76,6 +62,7 @@ builder.Services.AddSingleton<IJobExecutor>(sp => new OrderHtmlExecutor(sp.GetRe
 builder.Services.AddSingleton(sp => new ArtifactIndex(sp.GetRequiredService<DataStore>()));
 
 var app = builder.Build();
+app.Logger.LogInformation("koldera ready; {Report}", StartupReport.Describe(app.Services.GetRequiredService<CoreOptions>(), app.Services.GetRequiredService<WorkerOptions>()));
 app.Services.GetRequiredService<CoreOptions>().EnsureDataDirWritable();
 app.Services.GetRequiredService<UrlSigner>(); // fails fast on a bad signing key
 app.Services.GetRequiredService<ArtifactIndex>(); // rebuilds the artifact lookup from the data directory
@@ -100,5 +87,6 @@ v1.MapDocumentEndpoints();
 v1.MapJobReadEndpoints();
 v1.MapReadingOrderEndpoints();
 app.Run();
+return 0;
 
 public partial class Program;
