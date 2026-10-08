@@ -29,7 +29,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Through the production rules and the real veraPDF: a {@code tagged_unusable} upload whose only image is a Figure described
  * "Sales by region, 2025" is rebuilt from its content, the rebuilt Figure keeps the description and is block-placed, no
- * figure-alt check (7.3-1) fails on the published copy, and the machine-check identifier is written.
+ * figure-alt check (7.3-1) fails on the published copy, and nothing but the identifier check is left (the identifier itself
+ * is never written by default).
  */
 class DescribedFigureUploadIT {
 
@@ -56,7 +57,9 @@ class DescribedFigureUploadIT {
     assertTrue(inferred.reason().endsWith("; alternative text carried to 1 rebuilt figure"), inferred.reason());
     assertFalse(result.finalValidation().failedRules().stream().map(FailedRule::ruleId).anyMatch(r -> r.endsWith(" 7.3-1")), "7.3-1 fails: " + context);
     WorkerResult.Action identifier = result.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_UA_IDENTIFIER_V1).findFirst().orElseThrow();
-    assertEquals(ActionOutcome.APPLIED, identifier.outcome(), "identifier not written: " + identifier.reason() + " " + context);
+    assertEquals(ActionOutcome.SKIPPED, identifier.outcome(), context);
+    assertEquals(com.koldera.pdf.rules.PdfUaIdentifierStep.NOT_REQUESTED, identifier.reason(), context);
+    assertEquals(List.of("ISO 14289-1:2014 5-1"), result.finalValidation().failedRules().stream().map(FailedRule::ruleId).toList(), context);
     try (PDDocument doc = Loader.loadPDF(workspace.outputFile("remediated.pdf").toFile())) {
       List<String> alts = new ArrayList<>();
       collectFigureAlts(doc.getDocumentCatalog().getStructureTreeRoot().getKids(), alts);

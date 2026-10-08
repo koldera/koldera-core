@@ -311,15 +311,16 @@ public final class FindingsBuilder {
   public static final String PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY = "PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY";
 
   /**
-   * Added only when the copy was given the PDF/UA-1 identifier: the declaration rests on the
-   * automated checks alone, so a person still has to review what they cannot see.
+   * Added only when the copy was given the PDF/UA-1 identifier, which happens only on request after
+   * human review: the identifier is a conformance declaration, and the automated checks behind it
+   * cover only part of PDF/UA-1.
    */
   public FindingsBuilder pdfUaIdentifierFromMachineChecks() {
     findings.add(
         new Finding(
             PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY,
-            "The copy declares PDF/UA-1 in its metadata (pdfuaid:part=1) because the automated PDF/UA-1 machine checks"
-                + " reported no failures. Those checks cover only part of PDF/UA-1: reading order, tag semantics,"
+            "The copy declares PDF/UA-1 conformance in its metadata (pdfuaid:part=1) because the request asked for it after"
+                + " human review and the automated PDF/UA-1 machine checks reported no failures. Those checks cover only part of PDF/UA-1: reading order, tag semantics,"
                 + " alternative text, table structure, link purpose and language still require human review.",
             null,
             true));

@@ -29,8 +29,9 @@ No telemetry: koldera-core does not send data anywhere; documents stay on your s
 - Generate alternative text, or guess headings, tables, lists or reading order beyond the documented inference.
 - Decide that a reading order or a page is right. Findings carry `needsHumanReview`, and `manualReviewRequired` is
   always `true`.
-- Claim conformance. A `pdfuaid:part=1` identifier is written only when veraPDF and the engine's own checks report
-  nothing left; it is a machine-check declaration, not a statement that the document is accessible.
+- Claim conformance. A `pdfuaid:part=1` identifier is a PDF/UA-1 conformance declaration, so the engine never writes
+  it by default; the API offers no way to request it. The engine writes it only for an explicit worker request after
+  human review, and never over structure it inferred or figures it marked as artifact.
 
 Known limits: Typst 0.15.1 tags row headers as bold data cells (TD), not TH; links in a document's header and footer
 render as plain text; Chromium runs without its own sandbox in the supplied container (see

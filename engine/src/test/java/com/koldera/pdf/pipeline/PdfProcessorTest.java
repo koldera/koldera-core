@@ -635,18 +635,65 @@ class PdfProcessorTest {
     assertSchemaValid(result);
   }
 
-  // ---- PDF/UA identifier for machine-clean generated PDFs ------------------------------------
+  // ---- PDF/UA identifier: never by default, only on request after human review -------------
 
   private static final String FONT_RULE = "ISO 14289-1:2014 7.21.4.1-1";
 
+  /** A generated fix request with {@code declarePdfUa: true} and {@code humanReviewAcknowledged: true}. */
+  private static WorkerRequest declared() {
+    return UploadIdentifierTest.declaring(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), true);
+  }
+
   @Test
-  void aGeneratedCopyWhoseOnlyFailureIsTheIdentifierCheckDeclaresPdfUaOneAndIsStillFlaggedForReview() throws IOException {
+  void aGeneratedCopyWhoseOnlyFailureIsTheIdentifierCheckGetsNoIdentifierByDefault() throws IOException {
     install(generatedFixture("generated-lists.pdf"));
     validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
     validator.enqueue(passed());
 
     WorkerResult result = production().process(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), workspace);
+
+    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
+    assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
+    WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
+    assertEquals(com.koldera.pdf.rules.PdfUaIdentifierStep.NOT_REQUESTED, ua.reason());
+    assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
+    assertFalse(remediatedXmp().contains("pdfuaid"), "no identifier in the published copy");
+    assertEquals(List.of(UAID_RULE), result.finalValidation().failedRules().stream().map(WorkerResult.FailedRule::ruleId).toList());
+    assertTrue(result.findings().stream().noneMatch(f -> f.ruleId().equals(FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY)));
+    assertTrue(result.manualReviewRequired());
+    assertScratchClean();
+    assertSchemaValid(result);
+  }
+
+  @Test
+  void aDeclarationRequestWithoutTheHumanReviewAcknowledgementWritesNoIdentifier() throws IOException {
+    install(generatedFixture("generated-lists.pdf"));
+    validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
+    validator.enqueue(failed(Map.of(UAID_RULE, 1)));
+    validator.enqueue(passed());
+
+    WorkerResult result = production().process(UploadIdentifierTest.declaring(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), false), workspace);
+
+    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
+    WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
+    assertEquals(com.koldera.pdf.rules.PdfUaIdentifierStep.NOT_ACKNOWLEDGED, ua.reason());
+    assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
+    assertFalse(remediatedXmp().contains("pdfuaid"), "no identifier in the published copy");
+    assertScratchClean();
+    assertSchemaValid(result);
+  }
+
+  @Test
+  void aGeneratedCopyWhoseOnlyFailureIsTheIdentifierCheckDeclaresPdfUaOneWhenRequestedAfterReviewAndIsStillFlaggedForReview() throws IOException {
+    install(generatedFixture("generated-lists.pdf"));
+    validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
+    validator.enqueue(failed(Map.of(UAID_RULE, 1)));
+    validator.enqueue(passed());
+
+    WorkerResult result = production().process(declared(), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
@@ -675,7 +722,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(METADATA_RULE, 1, FONT_RULE, 2)));
     validator.enqueue(failed(Map.of(UAID_RULE, 1, FONT_RULE, 2)));
 
-    WorkerResult result = production().process(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), workspace);
+    WorkerResult result = production().process(declared(), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
@@ -697,7 +744,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
 
-    WorkerResult result = production().process(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), workspace);
+    WorkerResult result = production().process(declared(), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
@@ -749,7 +796,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
     validator.enqueue(failed(Map.of("ISO 14289-1:2014 5-2", 1)));
 
-    WorkerResult result = production().process(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), workspace);
+    WorkerResult result = production().process(declared(), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
@@ -772,7 +819,7 @@ class PdfProcessorTest {
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
     validator.enqueue(new ValidationOutcome(ValidationStatus.ERROR, Map.of(), Map.of(), null, ErrorCode.VALIDATOR_ERROR, "boom", "fake"));
 
-    WorkerResult result = production().process(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), workspace);
+    WorkerResult result = production().process(declared(), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(ActionOutcome.SKIPPED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome());
@@ -809,7 +856,7 @@ class PdfProcessorTest {
       if (clean) {
         validator.enqueue(passed());
       }
-      WorkerResult result = production().process(generatedOrUpload(WorkerRequest.Origin.HTML_GENERATED), workspace);
+      WorkerResult result = production().process(declared(), workspace);
       assertEquals(clean ? ActionOutcome.APPLIED : ActionOutcome.SKIPPED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome());
       shas.add(sha(Files.readAllBytes(workspace.outputFile("remediated.pdf"))));
     }
@@ -817,7 +864,7 @@ class PdfProcessorTest {
   }
 
   @Test
-  void anUploadInFixModeWhoseOnlyFailureIsTheIdentifierCheckGetsTheIdentifierSinceTheOwnerDecisionOf20260928() throws IOException {
+  void anUploadInFixModeWhoseOnlyFailureIsTheIdentifierCheckGetsNoIdentifierByDefault() throws IOException {
     // The upload behaviour is pinned in UploadIdentifierTest.
     install(SyntheticPdfFactory.simpleUntagged());
     validator.enqueue(failed(Map.of(STRUCT_RULE, 1)));
@@ -829,9 +876,9 @@ class PdfProcessorTest {
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
-    assertEquals(ActionOutcome.APPLIED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome());
-    assertEquals(3, validator.calls.size());
-    assertTrue(remediatedXmp().contains("pdfuaid"));
+    assertEquals(ActionOutcome.SKIPPED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome());
+    assertEquals(2, validator.calls.size());
+    assertFalse(remediatedXmp().contains("pdfuaid"));
     assertNoConformanceWording(result);
     assertSchemaValid(result);
   }
