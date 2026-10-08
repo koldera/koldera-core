@@ -553,7 +553,10 @@ components:
       required: [profile, status, failedRules]
       properties:
         profile: {type: string}
-        status: {type: string, enum: [passed, failed, error, not_run]}
+        status:
+          type: string
+          enum: [passed, failed, error, not_run, declaration_withheld]
+          description: "`declaration_withheld`: the only failing check is the missing PDF/UA identifier (veraPDF 5-1, still listed in `failedRules`), which was not written because declaring PDF/UA requires a human review. It is not a pass. Treat an unknown value as no verdict."
         failedRules:
           type: array
           items:

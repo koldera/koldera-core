@@ -178,6 +178,31 @@ public final class PdfUaIdentifierStep {
     }
   }
 
+  public static final String WITHDRAWN =
+      "removed the pdfuaid identifier the renderer wrote: it declares PDF/UA-1 conformance to every reader, so a rendered document is"
+          + " declared only on request (declarePdfUa) after human review; every other byte of the XMP packet is kept";
+
+  /**
+   * {@code PDF_UA_IDENTIFIER_WITHDRAWN_V1}, documents rendered by Typst only ({@code --pdf-standard ua-1} writes the identifier
+   * itself): removes the {@code pdfuaid} properties from the XMP packet in place ({@link XmpPacketEditor#withoutProperties}),
+   * nothing else. Skipped when there are none; failed when the packet cannot be edited safely. The identifier step may add
+   * the identifier back afterwards, on the same terms as for any other copy.
+   */
+  public static WorkerResult.Action withdraw(PDDocument document) {
+    WorkerResult.RuleId id = WorkerResult.RuleId.PDF_UA_IDENTIFIER_WITHDRAWN_V1;
+    PDMetadata metadata = document.getDocumentCatalog().getMetadata();
+    try {
+      byte[] edited = metadata == null ? null : XmpPacketEditor.withoutProperties(metadata.toByteArray(), NAMESPACE);
+      if (edited == null) {
+        return new WorkerResult.Action(id, WorkerResult.ActionOutcome.SKIPPED, "the XMP metadata has no PDF/UA identifier to withdraw", null, null);
+      }
+      metadata.importXMPMetadata(edited);
+      return new WorkerResult.Action(id, WorkerResult.ActionOutcome.APPLIED, WITHDRAWN, "pdfuaid identifier written by the renderer", "no PDF/UA identifier");
+    } catch (IOException | RuntimeException e) {
+      return new WorkerResult.Action(id, WorkerResult.ActionOutcome.FAILED, "could not withdraw the renderer's PDF/UA identifier (" + e.getMessage() + ")", null, null);
+    }
+  }
+
   static byte[] withIdentifier(byte[] packet) throws IOException {
     try {
       DomXmpParser parser = new DomXmpParser();

@@ -23,7 +23,7 @@ import org.xml.sax.SAXException;
  * Adds {@code dc:title} and/or {@code dc:language} to an existing XMP packet by inserting one new {@code rdf:Description} before
  * the {@code rdf:RDF} end tag. Every existing byte stays where it was (nothing is re-serialized). A packet that is not UTF-8
  * or well-formed, has no single {@code rdf:RDF}, a DOCTYPE, or an end tag not found exactly once is left alone with a reason.
- * The edited packet is parsed again and must have gained exactly the new elements.
+ * The edited packet is parsed again and must have gained exactly the new elements. {@link #withoutProperties} removes, likewise.
  */
 final class XmpPacketEditor {
 
@@ -126,6 +126,84 @@ final class XmpPacketEditor {
       throw new IOException("the edited packet did not read back as the original plus the added properties");
     }
     return edited;
+  }
+
+  /**
+   * The packet without its properties in {@code namespace} (simple elements or RDF short-form attributes); every other byte
+   * stays, the namespace declaration too. {@code null} when there are none. Throws when the packet cannot be edited safely or
+   * the result does not read back as the original minus exactly those properties (same other elements, attributes and text).
+   */
+  static byte[] withoutProperties(byte[] packet, String namespace) throws IOException {
+    Packet before = read(packet);
+    if (before.unreadable() != null) {
+      throw new IOException(before.unreadable());
+    }
+    Document dom = parseOrThrow(packet);
+    int elements = dom.getElementsByTagNameNS(namespace, "*").getLength();
+    int attributes = attributesIn(dom, namespace);
+    if (elements + attributes == 0) {
+      return null;
+    }
+    java.util.Set<String> prefixes = new java.util.TreeSet<>();
+    NodeList all = dom.getElementsByTagName("*");
+    for (int i = 0; i < all.getLength(); i++) {
+      Element element = (Element) all.item(i);
+      if (namespace.equals(element.getNamespaceURI())) {
+        prefixes.add(element.getPrefix() == null ? "" : element.getPrefix());
+      }
+      NamedNodeMap attrs = element.getAttributes();
+      for (int j = 0; j < attrs.getLength(); j++) {
+        if (namespace.equals(attrs.item(j).getNamespaceURI())) {
+          prefixes.add(attrs.item(j).getPrefix() == null ? "" : attrs.item(j).getPrefix());
+        }
+      }
+    }
+    if (prefixes.contains("")) {
+      throw new IOException("the properties use a default namespace and cannot be located exactly");
+    }
+    String text = new String(packet, StandardCharsets.UTF_8);
+    for (String prefix : prefixes) {
+      String p = Pattern.quote(prefix);
+      text = text.replaceAll("<" + p + ":([A-Za-z_][\\w.-]*)(?:\\s[^<>]*)?(?:/>|>[^<]*</" + p + ":\\1\\s*>)", "");
+      text = text.replaceAll("\\s" + p + ":[A-Za-z_][\\w.-]*\\s*=\\s*(?:\"[^\"]*\"|'[^']*')", "");
+    }
+    byte[] edited = text.getBytes(StandardCharsets.UTF_8);
+    Document after = parseOrThrow(edited);
+    for (int i = dom.getElementsByTagNameNS(namespace, "*").getLength() - 1; i >= 0; i--) {
+      org.w3c.dom.Node gone = dom.getElementsByTagNameNS(namespace, "*").item(i);
+      gone.getParentNode().removeChild(gone);
+    }
+    if (read(edited).unreadable() != null
+        || after.getElementsByTagNameNS(namespace, "*").getLength() != 0 || attributesIn(after, namespace) != 0
+        || after.getElementsByTagName("*").getLength() != before.elements() - elements
+        || attributesIn(after, null) != attributesIn(dom, null) - attributes
+        || !after.getDocumentElement().getTextContent().equals(dom.getDocumentElement().getTextContent())) {
+      throw new IOException("the edited packet did not read back as the original minus the removed properties");
+    }
+    return edited;
+  }
+
+  /** Attributes in {@code namespace} on any element; every attribute when {@code namespace} is null. */
+  private static int attributesIn(Document dom, String namespace) {
+    int count = 0;
+    NodeList all = dom.getElementsByTagName("*");
+    for (int i = 0; i < all.getLength(); i++) {
+      NamedNodeMap attrs = all.item(i).getAttributes();
+      for (int j = 0; j < attrs.getLength(); j++) {
+        if (namespace == null || namespace.equals(attrs.item(j).getNamespaceURI())) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  private static Document parseOrThrow(byte[] packet) throws IOException {
+    try {
+      return parse(packet);
+    } catch (SAXException e) {
+      throw new IOException("the packet is not well-formed XML", e);
+    }
   }
 
   /** A dc property present as an element anywhere, or as an attribute of any element (the RDF short form). */

@@ -88,7 +88,11 @@ A failing document answers `422 VALIDATION_ERROR`; `errors[]` has one entry per 
 
 ## What the Typst path does and does not do
 
-- The PDF is checked after rendering. If veraPDF reports a failed rule, the job fails with
+- Typst's `--pdf-standard ua-1` writes the PDF/UA identifier (`pdfuaid:part`) itself. koldera-core removes exactly
+  that XMP property and nothing else (action `PDF_UA_IDENTIFIER_WITHDRAWN_V1`), checks that pages and text are
+  unchanged and validates the copy, which becomes the `generated_pdf`. Declaring PDF/UA needs a human review, so a
+  copy whose only failing check is that identifier completes with `validation.status` `declaration_withheld`.
+- The PDF is checked after rendering. If veraPDF reports any other failed rule, the job fails with
   `DOCUMENT_VALIDATION_FAILED` and the findings list the rules; if the validator cannot run, with
   `DOCUMENT_VALIDATION_UNAVAILABLE`. A passing machine check is not a statement that the document is accessible:
   `manualReviewRequired` stays `true`.

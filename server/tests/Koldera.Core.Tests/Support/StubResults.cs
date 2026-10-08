@@ -141,6 +141,30 @@ public static class StubResults
     /// <summary>The PDF engine's analyze result with a passed baseline (no failed veraPDF rule).</summary>
     public static StubWorker PdfAnalyzeClean() => PdfCustom(r => r["baseline"] = Validation("passed"));
 
+    /// <summary>
+    /// The engine's fix of a Typst document: the renderer's PDF/UA identifier withdrawn into "remediated.pdf" (other bytes than the
+    /// rendered file), only 5-1 failing, so the verdict is declaration_withheld. <paramref name="mutate"/> changes the result further.
+    /// </summary>
+    public static StubWorker PdfDocumentWithdrawn(Action<JsonObject>? mutate = null)
+    {
+        var bytes = Fixtures.OtherPdf();
+        var artifact = new JsonObject { ["kind"] = "remediated", ["path"] = "/work/out/remediated.pdf", ["sha256"] = Fixtures.Sha256(bytes), ["bytes"] = bytes.Length };
+        var actions = new JsonArray(
+            new JsonObject { ["ruleId"] = "PDF_UA_IDENTIFIER_WITHDRAWN_V1", ["outcome"] = "applied", ["reason"] = "removed the pdfuaid identifier the renderer wrote", ["before"] = "pdfuaid", ["after"] = "no PDF/UA identifier" },
+            new JsonObject { ["ruleId"] = "PDF_UA_IDENTIFIER_V1", ["outcome"] = "skipped", ["reason"] = "not written: requires human review", ["before"] = null, ["after"] = null });
+        return new StubWorker(request =>
+        {
+            var result = JsonNode.Parse(Result(request, "completed", "applied", Validation(DeclarationWithheld, ("ISO 14289-1:2014 5-1", 1)), actions.DeepClone().AsArray(), new JsonArray(artifact.DeepClone())))!.AsObject();
+            result["baseline"] = Validation("passed");
+            mutate?.Invoke(result);
+            return result.ToJsonString();
+        }, new Dictionary<string, byte[]> { ["remediated.pdf"] = bytes });
+    }
+
+    public const string DeclarationWithheld = "declaration_withheld";
+
+    internal static JsonObject ValidationOf(string status, params (string Rule, int Count)[] failed) => Validation(status, failed);
+
     /// <summary>The Typst renderer wrote "document.pdf" (the small PDF, so the PDF stub's original hash matches).</summary>
     public static StubWorker DocumentRenderCompleted()
     {

@@ -19,8 +19,9 @@ internal static class Summary
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    /// 0 only when the machine verdict is "passed"; 2 when it is "failed" or rules failed (a document whose generated PDF
-    /// fails veraPDF counts as 2); 3 for a failed job and for a completed one without a verdict (not_run, error, missing).
+    /// 0 when the machine verdict is "passed" or "declaration_withheld" (only the PDF/UA identifier is missing, withheld pending
+    /// human review); 2 when it is "failed" or rules failed (a document whose generated PDF fails veraPDF counts as 2);
+    /// 3 for a failed job and for a completed one without a verdict (not_run, error, missing).
     /// </summary>
     public static int ExitCode(CoreJob job)
     {
@@ -28,6 +29,7 @@ internal static class Summary
             return job.ErrorCode == DocumentExecutor.ValidationFailed ? FailedRules : JobFailed;
         var v = JobResponse.From(job).Validation;
         if (v is null) return JobFailed;
+        if (v.Status == MachineValidationResponse.DeclarationWithheld) return Ok;
         if (v.Status == "failed" || v.FailedRules.Length > 0) return FailedRules;
         return v.Status == "passed" ? Ok : JobFailed;
     }
@@ -53,6 +55,8 @@ internal static class Summary
         if (r.Validation is { } v)
         {
             sb.AppendLine($"{label} machine check: {Describe(v)}");
+            if (v.Status == MachineValidationResponse.DeclarationWithheld)
+                sb.AppendLine("  The PDF/UA identifier (pdfuaid) was not written: declaring PDF/UA requires a human review. This is not a pass.");
             // A fix has a before and an after; show the starting point when it differs.
             if (r.BaselineValidation is { } b && r.FinalValidation is not null && Describe(b) != Describe(v))
                 sb.AppendLine($"  before the fix: {Describe(b)}");
