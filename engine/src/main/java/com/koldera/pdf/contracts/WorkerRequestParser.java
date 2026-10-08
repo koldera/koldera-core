@@ -72,7 +72,9 @@ public final class WorkerRequestParser {
               request.explicitTitle(),
               request.sourceFileName(),
               WorkerRequest.Origin.UPLOAD,
-              request.limits());
+              request.limits(),
+              request.declarePdfUa(),
+              request.humanReviewAcknowledged());
     }
     // Defence in depth: the schema pins both paths with `const`; re-check after mapping so a
     // schema edit can never widen the mounted job root silently.

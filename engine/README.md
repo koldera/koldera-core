@@ -7,9 +7,11 @@ reported as `rolled_back`.
 
 What it never does: modify the original file, guess alternative text, infer meaning the file does not
 state, or claim conformance. `status=completed` means the run finished; `manualReviewRequired` is
-always `true`. A written `pdfuaid:part=1` identifier is a machine-check declaration (veraPDF and the
-engine's own structure checks report nothing left), not a conformance claim. Signed and encrypted files are
-never rewritten.
+always `true`. A `pdfuaid:part=1` identifier is a PDF/UA-1 conformance declaration to every reader of the
+file, so it is never written by default. Only a `fix` request with `declarePdfUa: true` and
+`humanReviewAcknowledged: true` may get it, never when the engine inferred or added the structure tags or marked
+a figure as artifact, and then only when veraPDF and the engine's own structure checks report nothing left. The
+server never sets these fields. Signed and encrypted files are never rewritten.
 
 ## Build and test
 

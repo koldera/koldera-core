@@ -164,14 +164,14 @@ class PdfWorkerCliIT {
     assertTrue(baseline.contains("ISO 14289-1:2014 7.1-10"), baseline.toString());
     assertFalse(fin.contains("ISO 14289-1:2014 7.1-9"), fin.toString());
     assertFalse(fin.contains("ISO 14289-1:2014 7.1-10"), fin.toString());
-    // The non-embedded Helvetica gets a metric-compatible substitute, so nothing but 5-1 is left
-    // and the identifier step writes pdfuaid:part=1 (a machine-check declaration; a person still reviews the document).
-    assertTrue(fin.isEmpty(), "the identified copy validates clean: " + fin);
+    // The non-embedded Helvetica gets a metric-compatible substitute, so nothing but 5-1 is left; the identifier
+    // (a conformance declaration) is not written by default.
+    assertEquals(List.of("ISO 14289-1:2014 5-1"), fin, "only the identifier check is left: " + fin);
     assertTrue(result.actions().stream()
-        .anyMatch(a -> a.ruleId() == WorkerResult.RuleId.PDF_UA_IDENTIFIER_V1 && a.outcome() == WorkerResult.ActionOutcome.APPLIED), result.actions().toString());
+        .anyMatch(a -> a.ruleId() == WorkerResult.RuleId.PDF_UA_IDENTIFIER_V1 && a.outcome() == WorkerResult.ActionOutcome.SKIPPED), result.actions().toString());
     assertTrue(result.actions().stream()
         .anyMatch(a -> a.ruleId() == WorkerResult.RuleId.PDF_FONT_EMBEDDING_V1 && a.outcome() == WorkerResult.ActionOutcome.APPLIED), result.actions().toString());
-    assertTrue(result.findings().stream().anyMatch(f -> f.ruleId().equals("PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY") && f.needsHumanReview()));
+    assertTrue(result.findings().stream().noneMatch(f -> f.ruleId().equals("PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY")));
     assertTrue(result.findings().stream().anyMatch(f -> f.ruleId().equals("FONT_EMBEDDED_SUBSTITUTE") && f.needsHumanReview()));
     assertTrue(result.manualReviewRequired());
     assertTrue(result.findings().stream().anyMatch(f -> f.ruleId().equals("TITLE_FROM_FILE_NAME") && f.needsHumanReview()));

@@ -669,7 +669,8 @@ public final class PdfProcessor implements Main.JobRunner {
   }
 
   /**
-   * After the gate passed on a {@code fix} copy: when {@code 5-1} is the only failing check and the PAC-only structure rules
+   * After the gate passed on a {@code fix} copy whose request asked for the declaration after human review (and whose
+   * structure and figures the engine did not make up, {@link PdfUaIdentifierStep#requestBlocker}): when {@code 5-1} is the only failing check and the PAC-only structure rules
    * report nothing, writes {@code pdfuaid:part=1} into a second scratch copy, re-checks integrity and validates it again.
    * Only zero failures make that copy the one to publish; every other outcome leaves the gate-approved copy untouched and
    * records why the identifier was not written.
@@ -677,7 +678,10 @@ public final class PdfProcessor implements Main.JobRunner {
   private IdentifierRun identify(
       WorkerRequest request, JobWorkspace workspace, PreflightOutcome pre, CopyIntegrity.Report integrityBefore, ValidationOutcome fin, Path candidate,
       Instant deadline, List<Action> actions, byte[] originalBytes) {
-    String blocked = PdfUaIdentifierStep.blocker(fin.failedRuleCounts());
+    String blocked = PdfUaIdentifierStep.requestBlocker(request, actions);
+    if (blocked == null) {
+      blocked = PdfUaIdentifierStep.blocker(fin.failedRuleCounts());
+    }
     if (blocked == null) {
       blocked = PdfUaIdentifierStep.titleBlocker(candidate);
     }
@@ -725,8 +729,8 @@ public final class PdfProcessor implements Main.JobRunner {
         new Action(
             RuleId.PDF_UA_IDENTIFIER_V1,
             ActionOutcome.APPLIED,
-            "added pdfuaid:part=1 to the XMP packet: the automated PDF/UA-1 machine checks report no failures on this copy;"
-                + " the checks cover only part of PDF/UA-1 and the document still requires human review",
+            "added pdfuaid:part=1 to the XMP packet as requested after human review: the automated PDF/UA-1 machine checks report no"
+                + " failures on this copy; they cover only part of PDF/UA-1",
             "no PDF/UA identifier",
             "pdfuaid:part=1"),
         identifiedValidation);
