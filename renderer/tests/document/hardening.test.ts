@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { validateDocumentRenderRequest } from "../../src/contracts/types.js";
-import { compileTypst } from "../../src/document/compile.js";
+import { compileTypst, typstVersionProblem } from "../../src/document/compile.js";
 import { runDocument } from "../../src/document/run.js";
 import { DocumentRefusedError, lit, toTypst, type RenderDocument } from "../../src/document/toTypst.js";
 
@@ -112,5 +112,27 @@ describe("compileTypst process failures", () => {
       callback(Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" }), "", "");
     };
     expect(await outcome(exec)).toMatchObject({ ok: false, code: "WORKER_ERROR", message: "Typst could not be started" });
+  });
+});
+
+describe("Typst version pin", () => {
+  it("accepts the pinned 0.15.x line only", () => {
+    expect(typstVersionProblem("typst 0.15.1 (b8fb6c8f)")).toBeNull();
+    expect(typstVersionProblem("typst 0.15.0")).toBeNull();
+    for (const v of ["typst 0.16.0", "typst 0.14.2", "typst 0.1.5", "typst 1.15.0", "unknown", ""]) expect(typstVersionProblem(v)).toMatch(/0\.15/);
+  });
+
+  it("fails the job as WORKER_ERROR before compiling with another program or version", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "koldera-docver-"));
+    await mkdir(path.join(dir, "in", "images"), { recursive: true });
+    await writeFile(path.join(dir, "in", "document.json"), JSON.stringify({ title: "T", language: "en", body: [{ type: "paragraph", content: ["x"] }] }));
+    // `node --version` answers, but not as Typst 0.15.
+    const r = await runDocument(
+      { specVersion: "1.0", jobId: "123e4567-e89b-42d3-a456-426614174000", documentPath: "/work/in/document.json", imagesDirectory: "/work/in/images", outputDirectory: "/work/out", typstCommand: process.execPath },
+      { workRoot: dir },
+    );
+    expect(r.status).toBe("failed");
+    expect(r.error?.code).toBe("WORKER_ERROR");
+    expect(r.error?.message).toMatch(/0\.15/);
   });
 });

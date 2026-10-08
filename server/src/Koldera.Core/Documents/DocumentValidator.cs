@@ -173,6 +173,12 @@ public static class DocumentValidator
         {
             errors.Add(new ValidationError(path + "/header", DocumentErrorCodes.TableHeaderEmpty, "A table needs at least one header row and every header row needs a non-blank cell."));
         }
+        // Typst 0.15 tags a body cell as TD even when it is meant as a row header, and veraPDF cannot tell, so the
+        // PDF would pass while the table had lost its row headers. Kept in the contract, refused until Typst tags TH.
+        if (table.TryGetProperty("rowHeaders", out var rowHeaders) && rowHeaders.ValueKind == JsonValueKind.True)
+        {
+            errors.Add(new ValidationError(path + "/rowHeaders", DocumentErrorCodes.Schema, "rowHeaders true is not supported yet: the PDF engine cannot tag a body cell as a header cell (TH). Omit it or set it to false."));
+        }
         // The first header row sets the column count; with no header row there is nothing to compare to.
         if (header.GetArrayLength() == 0 || header[0].GetArrayLength() == 0)
         {

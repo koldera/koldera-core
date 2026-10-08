@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ValidateFunction } from "ajv";
 import type { DocumentErrorCode, DocumentRenderRequest, DocumentRenderResult } from "../contracts/types.js";
-import { compileTypst, typstVersion } from "./compile.js";
+import { compileTypst, typstVersion, typstVersionProblem } from "./compile.js";
 import { DocumentRefusedError, TEMPLATE_VERSION, toTypst, type RenderDocument } from "./toTypst.js";
 
 const cjs = createRequire(import.meta.url);
@@ -74,6 +74,10 @@ export async function runDocument(request: DocumentRenderRequest, options: { wor
     if (e instanceof DocumentRefusedError) return fail(request, version, "DOCUMENT_REFUSED", e.message);
     throw e;
   }
+
+  // Only the pinned Typst has been checked to tag what the template asks for; another one does not compile.
+  const versionProblem = typstVersionProblem(version);
+  if (versionProblem) return fail(request, version, "WORKER_ERROR", versionProblem);
 
   const outDir = local(workRoot, request.outputDirectory);
   await mkdir(outDir, { recursive: true });

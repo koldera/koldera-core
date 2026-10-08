@@ -53,6 +53,12 @@ describe("toTypst", () => {
     expect(src).toContain('table.header([#strong[#"a"]], [#strong[#"b"]])');
   });
 
+  it("refuses rowHeaders: true, because Typst 0.15 tags body row headers as TD", () => {
+    const table = (rowHeaders: boolean) => doc([{ type: "table", caption: "C", header: [["a", "b"]], rows: [["1", "2"]], rowHeaders }]);
+    expect(() => toTypst(table(true), opts)).toThrow(/rowHeaders/);
+    expect(() => toTypst(table(false), opts)).not.toThrow();
+  });
+
   it("refuses a ragged table instead of guessing", () => {
     expect(() => toTypst(doc([{ type: "table", caption: "C", header: [["a", "b"]], rows: [["1"]] }]), opts)).toThrow(DocumentRefusedError);
   });

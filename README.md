@@ -33,7 +33,8 @@ No telemetry: koldera-core does not send data anywhere; documents stay on your s
   it by default; the API offers no way to request it. The engine writes it only for an explicit worker request after
   human review, and never over structure it inferred or figures it marked as artifact.
 
-Known limits: Typst 0.15.1 tags row headers as bold data cells (TD), not TH; links in a document's header and footer
+Known limits: Typst 0.15.1 cannot tag row headers as TH, so a structured-document table with `rowHeaders: true` is
+refused (`422 VALIDATION_ERROR`) instead of rendered with untagged row headers; links in a document's header and footer
 render as plain text; Chromium runs without its own sandbox in the supplied container (see
 [docs/deployment.md](docs/deployment.md#browser-sandbox)); idempotency keys and client-session budgets are held in
 memory and lost on restart; it is a single instance and does not scale horizontally.
