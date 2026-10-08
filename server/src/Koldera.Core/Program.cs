@@ -10,6 +10,15 @@ if (!CliApp.StartsServer(args))
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancel.Cancel(); };
     var cliConfig = new ConfigurationBuilder().AddEnvironmentVariables().Build();
     var cliWorkers = (cliConfig.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions()).ApplyDefaults(Environment.GetEnvironmentVariable);
+    try
+    {
+        cliWorkers.EnsureTestSwitchesAllowed(cliConfig["DOTNET_ENVIRONMENT"] ?? cliConfig["ASPNETCORE_ENVIRONMENT"] ?? Environments.Production);
+    }
+    catch (InvalidOperationException e)
+    {
+        await Console.Error.WriteLineAsync("koldera: invalid configuration: " + e.Message);
+        return Koldera.Core.Cli.Summary.Usage;
+    }
     return await CliApp.RunAsync(args, Console.Out, Console.Error, new ProcessWorkerFactory(cliWorkers), ct: cancel.Token);
 }
 
@@ -43,7 +52,8 @@ builder.Services.AddHostedService(sp => new RetentionWorker(sp.GetRequiredServic
     sp.GetRequiredService<ILoggerFactory>().CreateLogger<RetentionWorker>()));
 
 // The "Workers" section wins; whatever it leaves empty comes from the simple KOLDERA_* variables, else the container layout.
-builder.Services.AddSingleton((builder.Configuration.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions()).ApplyDefaults(Environment.GetEnvironmentVariable));
+builder.Services.AddSingleton((builder.Configuration.GetSection("Workers").Get<WorkerOptions>() ?? new WorkerOptions())
+    .ApplyDefaults(Environment.GetEnvironmentVariable).EnsureTestSwitchesAllowed(builder.Environment.EnvironmentName));
 builder.Services.AddSingleton<IWorkerFactory>(sp => new ProcessWorkerFactory(sp.GetRequiredService<WorkerOptions>()));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorkerFactory>().Pdf());
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IWorkerFactory>().Html());

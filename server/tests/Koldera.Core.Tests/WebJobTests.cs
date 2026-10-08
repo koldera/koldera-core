@@ -67,7 +67,7 @@ public class WebJobTests
     }
 
     [Fact]
-    public async Task By_default_the_worker_policy_forbids_http_names_no_proxy_and_sets_no_limits()
+    public async Task By_default_the_worker_policy_forbids_http_names_no_proxy_and_sets_only_the_default_timeout()
     {
         var web = StubResults.WebCompleted();
         using var f = Factory(web);
@@ -75,7 +75,10 @@ public class WebJobTests
         var request = JsonDocument.Parse(web.Calls.Single().RequestJson).RootElement;
         Assert.False(request.GetProperty("policy").GetProperty("allowHttp").GetBoolean());
         Assert.Equal(JsonValueKind.Null, request.GetProperty("policy").GetProperty("proxyServer").ValueKind);
-        Assert.False(request.TryGetProperty("limits", out _));
+        var limits = request.GetProperty("limits");
+        Assert.Equal(Limits.DefaultJobTimeoutSeconds, limits.GetProperty("timeoutSeconds").GetInt32());
+        Assert.False(limits.TryGetProperty("maxResponseBytes", out _));
+        Assert.False(limits.TryGetProperty("maxRequests", out _));
     }
 
     [Fact]

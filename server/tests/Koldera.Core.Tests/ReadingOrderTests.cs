@@ -146,12 +146,15 @@ public class ReadingOrderTests
         Assert.Equal("pdf_tags", stored.RemediationTarget);
         Assert.Equal("server", stored.ReviewerIdentity);
 
-        // The worker got the resolved kid path and indexes, the hash of the base and no limits (none configured).
+        // The worker got the resolved kid path and indexes, the hash of the base and only the default job timeout as a limit.
         var request = JsonDocument.Parse(reorder.Calls.Single().RequestJson).RootElement;
         Assert.Equal(sha, request.GetProperty("baseSha256").GetString());
         Assert.Equal([0], request.GetProperty("parentPath").EnumerateArray().Select(e => e.GetInt32()).ToArray());
         Assert.Equal([2, 0, 1], request.GetProperty("orderedKidIndexes").EnumerateArray().Select(e => e.GetInt32()).ToArray());
-        Assert.False(request.TryGetProperty("limits", out _));
+        var limits = request.GetProperty("limits");
+        Assert.Equal(Limits.DefaultJobTimeoutSeconds, limits.GetProperty("timeoutSeconds").GetInt32());
+        Assert.False(limits.TryGetProperty("maxBytes", out _));
+        Assert.False(limits.TryGetProperty("maxPages", out _));
 
         var artifact = Assert.Single(stored.Artifacts, a => a.Kind == "reordered");
         Assert.Equal(Sha(Fixtures.OtherPdf()), artifact.Sha256);
@@ -628,8 +631,8 @@ public class ReadingOrderTests
         Assert.Equal(["Gamma", "Beta", "Alpha"], Previews(after, "p", "html_dom"));
         Assert.Equal(Sha(CorrectedHtml), after.GetProperty("artifactHashes").GetProperty("html_dom").GetString());
         Assert.Equal(Sha(Fixtures.OtherPdf()), after.GetProperty("artifactHashes").GetProperty("pdf_structure").GetString());
-        // The semantic collector saw the corrected bytes, with the unchanged (infinite) time limit.
-        Assert.Equal(Timeout.InfiniteTimeSpan, semantic.Calls.Last().Timeout);
+        // The semantic collector saw the corrected bytes, with the unchanged (default) time limit.
+        Assert.Equal(TimeSpan.FromSeconds(Limits.DefaultJobTimeoutSeconds), semantic.Calls.Last().Timeout);
         Assert.Equal(Sha(Fixtures.SmallHtml()), (await Get(f, sourceId)).GetProperty("artifactHashes").GetProperty("html_dom").GetString());
     }
 

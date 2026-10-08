@@ -50,11 +50,11 @@ public class InfoTests
     }
 
     [Fact]
-    public void Caps_are_unlimited_by_default_and_parsed_when_set()
+    public void Caps_have_their_defaults_and_are_parsed_when_set()
     {
         var d = CoreOptions.FromEnvironment(new Dictionary<string, string?>());
         Assert.Null(d.Limits.PdfMaxBytes);
-        Assert.Null(d.Limits.JobTimeoutSeconds);
+        Assert.Equal(Limits.DefaultJobTimeoutSeconds, d.Limits.JobTimeoutSeconds);
         Assert.Equal(24, d.RetentionHours);
         Assert.Equal(100, d.QueueCapacity);
         Assert.Equal("/data", d.DataDir);

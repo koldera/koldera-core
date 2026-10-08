@@ -124,14 +124,17 @@ public class PdfJobTests
     }
 
     [Fact]
-    public async Task Without_configured_caps_the_request_has_no_limits_and_the_run_has_no_timeout()
+    public async Task Without_configured_caps_the_request_carries_only_the_default_timeout()
     {
         var pdf = StubResults.PdfAnalyzeCompleted();
         using var f = CoreFactory.WithStubWorkers(pdf);
         await f.WaitForJob(await f.CreatePdfJob());
         var call = pdf.Calls.Single();
-        Assert.False(JsonDocument.Parse(call.RequestJson).RootElement.TryGetProperty("limits", out _));
-        Assert.Equal(Timeout.InfiniteTimeSpan, call.Timeout);
+        var limits = JsonDocument.Parse(call.RequestJson).RootElement.GetProperty("limits");
+        Assert.Equal(Limits.DefaultJobTimeoutSeconds, limits.GetProperty("timeoutSeconds").GetInt32());
+        Assert.False(limits.TryGetProperty("maxBytes", out _));
+        Assert.False(limits.TryGetProperty("maxPages", out _));
+        Assert.Equal(TimeSpan.FromSeconds(Limits.DefaultJobTimeoutSeconds), call.Timeout);
     }
 
     [Fact]
