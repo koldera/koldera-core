@@ -30,10 +30,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * A {@code fix} run over each Chromium-generated fixture with the production rules and the real
- * veraPDF: the generated-structure and XMP rules apply, the no-increase gate passes, the only
- * check still failing is {@code 5-1}; the request asks for the declaration after human review
- * ({@code declarePdfUa}, {@code humanReviewAcknowledged}), so the identifier step writes {@code pdfuaid:part=1} and the
+ * A {@code fix} run over each Chromium-generated fixture with the production rules and real veraPDF. The request asks for the
+ * declaration after human review, so once only {@code 5-1} fails the identifier step writes {@code pdfuaid:part=1} and the
  * identified copy validates with zero failures.
  */
 class GeneratedFixProcessorIT {
