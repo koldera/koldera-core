@@ -28,9 +28,10 @@ source and the image always come from the same commit. It also refuses a source 
 ## Steps
 
 1. On `main`, with CI green: move the `Unreleased` entries of `CHANGELOG.md` under `## X.Y.Z (YYYY-MM-DD)` (today's
-   date), set the version in `contracts/openapi.yaml` (`info.version`), `docker/Dockerfile`
-   (`org.opencontainers.image.version`), the server/engine/renderer/scanner project files, and open a PR with that
-   change. Merge it after review.
+   date), set the version in `contracts/openapi.yaml` (`info.version`), `docker/Dockerfile` (`ARG KOLDERA_VERSION`),
+   `server/Directory.Build.props` (`<Version>`), `engine/pom.xml` and the renderer/scanner project files, and open a
+   PR with that change. Merge it after review. `scripts/version-alignment.test.mjs` fails when the Dockerfile, server
+   and engine versions differ; the image build also sets all three from the tag (`KOLDERA_VERSION`).
 2. Tag the merge commit and push only that tag:
 
    ```bash
