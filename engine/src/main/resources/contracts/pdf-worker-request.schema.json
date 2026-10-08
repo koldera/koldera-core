@@ -15,7 +15,7 @@
     "explicitLanguage": {"type": ["string", "null"], "minLength": 2, "maxLength": 35, "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"},
     "explicitTitle": {"type": ["string", "null"], "minLength": 1, "maxLength": 500},
     "sourceFileName": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
-    "origin": {"enum": ["upload", "html_generated"]},
+    "origin": {"enum": ["upload", "html_generated", "document_generated"], "description": "document_generated: a Typst-rendered structured document; in fix only its renderer-written PDF/UA identifier is withdrawn, nothing is repaired."},
     "declarePdfUa": {"type": "boolean", "description": "Opt-in: write pdfuaid:part=1 in fix mode. Honoured only with humanReviewAcknowledged true, no engine-made structure, no figure auto-marked as artifact and a clean final validation."},
     "humanReviewAcknowledged": {"type": "boolean", "description": "The caller confirms a person reviewed the document; required for declarePdfUa."},
     "limits": {
