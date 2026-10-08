@@ -85,7 +85,7 @@ function textOfContentStream(bytes: Uint8Array, fonts: Map<string, Map<number, s
   const text = Buffer.from(bytes).toString("latin1");
   let activeFont: Map<number, string> | undefined;
   let out = "";
-  const TOKEN = /\/([A-Za-z0-9#+._-]+)\s+[-\d.]+\s+Tf|<([0-9A-Fa-f\s]*)>\s*Tj|\[((?:<[0-9A-Fa-f\s]*>|\([^)]*\)|[^\]])*)\]\s*TJ|\(([^)]*)\)\s*Tj/g;
+  const TOKEN = /\/([A-Za-z0-9#+._-]+)\s+[-\d.]+\s+Tf|<([0-9A-Fa-f\s]*)>\s*Tj|\[((?:<[0-9A-Fa-f\s]*>|\([^)]*\)|[^\]<(])*)\]\s*TJ|\(([^)]*)\)\s*Tj/g;
   let match: RegExpExecArray | null;
   while ((match = TOKEN.exec(text)) !== null) {
     if (match[1] !== undefined) {
