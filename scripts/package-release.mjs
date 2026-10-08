@@ -108,6 +108,7 @@ async function main() {
     if (!opts.image) {
       run("docker", ["build", "-f", "docker/Dockerfile", "--platform", "linux/amd64", "-t", ref,
         "--label", `org.opencontainers.image.revision=${commit}`,
+        "--build-arg", `KOLDERA_VERSION=${version}`,
         "--label", `org.opencontainers.image.version=${version}`,
         "--label", `org.opencontainers.image.created=${new Date().toISOString()}`, "."], { stdio: "inherit" });
     }
