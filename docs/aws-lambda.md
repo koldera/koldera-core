@@ -46,7 +46,7 @@ the adapter version, and keep the image's own entrypoint (`serve`). The adapter 
 then forwards each invocation as an HTTP request to port 8080.
 
 ```dockerfile
-FROM ghcr.io/koldera/core:0.1.0
+FROM koldera-core:0.1.0
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 ENV AWS_LWA_PORT=8080 \
     AWS_LWA_READINESS_CHECK_PATH=/healthz \
