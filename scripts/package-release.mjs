@@ -63,7 +63,7 @@ export function listFiles(dir, rel = "") {
   }).sort();
 }
 
-const run = (cmd, args, o = {}) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 1 << 26, ...o }).trim();
+const run = (cmd, args, o = {}) => (execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 1 << 26, ...o }) ?? "").trim();
 const has = (cmd) => { try { execFileSync(cmd, ["version"], { stdio: "ignore" }); return true; } catch { return false; } };
 const sha256 = (file) => new Promise((resolve, reject) => {
   const h = createHash("sha256");
