@@ -161,16 +161,17 @@ They will live under github.com/koldera. Until they are published, use the HTTP 
 
 ## Licensing
 
-koldera-core is licensed under **AGPL-3.0-only** ([LICENSE](LICENSE)). If you modify it and let users interact with it
-over a network, or distribute it or a work based on it, the AGPL requires you to offer the corresponding source under
-the same licence. A commercial licence lets you do this without the AGPL obligations. Using an unmodified
-koldera-core, including inside a company or behind your own service over its HTTP API, is free.
-For embedding or redistribution without source, OEM terms or support, see [COMMERCIAL.md](COMMERCIAL.md) or write to
-licensing@koldera-accessibility.dev. Third-party components and their licences are listed in [NOTICE](NOTICE).
+> Draft — pending legal review.
+
+koldera-core is proprietary, commercial, source-available software ([LICENSE](LICENSE)). Using, modifying or deploying
+it requires a signed Koldera Commercial License Agreement. Customers receive the source, may modify and build it for
+their internal business purposes and run it on their own infrastructure; redistribution, resale and OEM embedding
+need a separate agreement. See [COMMERCIAL.md](COMMERCIAL.md) or write to licensing@koldera-accessibility.dev.
+Third-party components keep their own licences, listed in [NOTICE](NOTICE).
 
 ## Contributing and security
 
-Contributions need a signed [CLA](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
+External contributions are not accepted without a separate written agreement; see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
 described in [SECURITY.md](SECURITY.md), not in a public issue. Participation is governed by the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 

@@ -31,4 +31,4 @@ body:
     attributes:
       label: Contribution
       options:
-        - label: I would be willing to send a pull request (and sign the CLA).
+        - label: I would be willing to help (external code contributions need a separate written agreement).
