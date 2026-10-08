@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Isolated static-HTML-to-tagged-PDF render worker (Playwright + Chromium, no network, no scripts)",
-  "license": "AGPL-3.0-only",
+  "license": "UNLICENSED",
   "type": "module",
   "engines": {
     "node": ">=22"
