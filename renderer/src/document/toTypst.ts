@@ -164,10 +164,12 @@ function table(b: Record<string, unknown>): string {
     if (a.length !== columns) refuse("columnAlign must have one entry per column");
     align = `, align: (${a.join(", ")})`;
   }
-  const rowHeaders = b["rowHeaders"] === true;
+  // Typst 0.15 tags a body cell as TD even when it is meant as a row header, so a data table would lose its
+  // row headers without any checker noticing. Refused until Typst can tag TH there (the server refuses it too).
+  if (b["rowHeaders"] === true) refuse("rowHeaders is not supported yet: Typst 0.15 cannot tag body row headers as TH");
   // Header cells are strong, and the accent tint marks the header rows visibly.
   const head = `table.header(${header.flat().map((c) => `[#strong[#${lit(c)}]]`).join(", ")})`;
-  const body = rows.flatMap((r) => r.map((c, i) => (rowHeaders && i === 0 ? `[#strong[#${lit(c)}]]` : content(c))));
+  const body = rows.flatMap((r) => r.map(content));
   return `#figure(caption: ${content(b["caption"])}, table(columns: ${columns}${align}, fill: (_, y) => if y < ${header.length} { accent.lighten(85%) }, ${[head, ...body].join(", ")}))`;
 }
 
