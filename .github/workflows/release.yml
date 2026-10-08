@@ -56,6 +56,7 @@ jobs:
           load: true
           push: false
           tags: koldera-core:${{ steps.version.outputs.version }}
+          build-args: KOLDERA_VERSION=${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
