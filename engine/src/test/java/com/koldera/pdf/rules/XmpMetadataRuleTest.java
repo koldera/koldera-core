@@ -54,8 +54,8 @@ class XmpMetadataRuleTest {
       assertEquals("Quarterly R&D <statement>", doc.getDocumentInformation().getTitle(), "Info untouched");
       // The reason must not contradict a later PDF_UA_IDENTIFIER_V1 (mode fix, uploads and generated PDFs), nor promise one.
       assertEquals(
-          "wrote a minimal XMP packet (dc:title=from Info, dc:language=en); a PDF/UA identifier is added only by"
-              + " PDF_UA_IDENTIFIER_V1, in mode fix, when the machine checks pass;"
+          "wrote a minimal XMP packet (dc:title=from Info, dc:language=en); no PDF/UA identifier is written: PDF_UA_IDENTIFIER_V1"
+              + " adds one only in mode fix, on request (declarePdfUa) after human review (humanReviewAcknowledged), when the machine checks pass;"
               + " whether the title and language are correct requires human review",
           action.reason());
     }

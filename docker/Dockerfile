@@ -15,13 +15,18 @@
 #   Licenses: veraPDF GPLv3+/MPLv2+ (dual) and Typst Apache-2.0 run as separate processes; PDFBox Apache-2.0;
 #   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is proprietary (see LICENSE).
 
+# The one version of the image (server, engine, label): the default for local builds; release.yml and
+# scripts/package-release.mjs pass the release tag. It must match <Version> in server/Directory.Build.props and engine/pom.xml.
+ARG KOLDERA_VERSION=0.1.0
+
 # ---------- PDF engine jar ----------
 FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
+ARG KOLDERA_VERSION
 WORKDIR /src
 COPY engine/pom.xml .
 RUN mvn -q -B dependency:go-offline
 COPY engine/src ./src
-RUN mvn -q -B -DskipTests package
+RUN mvn -q -B -DskipTests -Dkoldera.version="${KOLDERA_VERSION}" package
 
 # ---------- renderer and scanner: build, then keep production dependencies only ----------
 FROM node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7 AS node
@@ -45,11 +50,12 @@ RUN mkdir -p /licenses && cp -L node_modules/axe-core/LICENSE /licenses/axe-core
 
 # ---------- ASP.NET server ----------
 FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317 AS server
+ARG KOLDERA_VERSION
 WORKDIR /src
 COPY server/Directory.Build.props server/Directory.Packages.props ./server/
 COPY server/src ./server/src
 COPY contracts ./contracts
-RUN dotnet publish server/src/Koldera.Core/Koldera.Core.csproj -c Release -o /out/server --no-self-contained -p:UseAppHost=false
+RUN dotnet publish server/src/Koldera.Core/Koldera.Core.csproj -c Release -o /out/server --no-self-contained -p:UseAppHost=false -p:Version="${KOLDERA_VERSION}"
 
 # ---------- veraPDF (unattended IzPack install) ----------
 FROM eclipse-temurin:21-jdk-noble@sha256:b468c3fc688b14450571494f588bd939378e7fd542ed5a73f8efc13f17872a87 AS verapdf
@@ -103,12 +109,13 @@ FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddf
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
 # WebKit too, and deleting them in a later layer would not make the image smaller.
 FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+ARG KOLDERA_VERSION
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
       org.opencontainers.image.licenses="LicenseRef-Koldera-Commercial" \
       org.opencontainers.image.documentation="https://github.com/koldera/koldera-core/blob/main/NOTICE" \
-      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.version="${KOLDERA_VERSION}" \
       dev.koldera.third-party-licenses="/usr/share/licenses/koldera"
 
 COPY --from=jre /opt/java/openjdk /opt/java/openjdk

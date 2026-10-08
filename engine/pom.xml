@@ -19,6 +19,8 @@
 
     <!-- Pinned versions; verified against Maven Central metadata on 2026-09-17. -->
     <pdfbox.version>3.0.8</pdfbox.version>
+    <!-- Recorded in engine-version.properties; the image build sets it from the release tag (-Dkoldera.version). -->
+    <koldera.version>${project.version}</koldera.version>
     <bouncycastle.version>1.86</bouncycastle.version>
     <jackson.version>2.22.3</jackson.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
