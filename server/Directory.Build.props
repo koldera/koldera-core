@@ -1,5 +1,7 @@
 <Project>
   <PropertyGroup>
+    <!-- The release version; the image build overrides it with the tag (KOLDERA_VERSION in docker/Dockerfile). -->
+    <Version>0.1.0</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
