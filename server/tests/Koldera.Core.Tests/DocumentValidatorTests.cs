@@ -20,6 +20,7 @@ public class DocumentValidatorTests
     [InlineData("""[{"type":"table","caption":"C","header":[[]],"rows":[["1"]]}]""", "TABLE_HEADER_EMPTY", "/body/0/header")]
     [InlineData("""[{"type":"table","caption":"C","header":[],"rows":[["1"]]}]""", "TABLE_HEADER_EMPTY", "/body/0/header")]
     [InlineData("""[{"type":"table","caption":"C","header":[["", " "]],"rows":[["1","2"]]}]""", "TABLE_HEADER_EMPTY", "/body/0/header")]
+    [InlineData("""[{"type":"table","caption":"C","header":[["a","b"]],"rows":[["1","2"]],"rowHeaders":true}]""", "SCHEMA", "/body/0/rowHeaders")]
     [InlineData("""[{"type":"link","text":"  ","url":"https://example.com"}]""", "LINK_TEXT_EMPTY", "/body/0/text")]
     [InlineData("""[{"type":"paragraph","content":[{"link":{"text":"","url":"https://example.com"}}]}]""", "LINK_TEXT_EMPTY", "/body/0/content/0/link/text")]
     [InlineData("""[{"type":"paragraph","content":["x"],"lang":"not a tag"}]""", "LANGUAGE_INVALID", "/body/0/lang")]
@@ -29,6 +30,14 @@ public class DocumentValidatorTests
     {
         var errors = DocumentValidator.Validate(Doc(body));
         Assert.Contains(errors, e => e.Code == code && e.Path == path);
+    }
+
+    [Fact]
+    public void Row_headers_are_refused_until_Typst_tags_them_as_TH_but_false_is_accepted()
+    {
+        var on = DocumentValidator.Validate(Doc("""[{"type":"table","caption":"C","header":[["a","b"]],"rows":[["1","2"]],"rowHeaders":true}]"""));
+        Assert.Contains("TH", Assert.Single(on).Message);
+        Assert.Empty(DocumentValidator.Validate(Doc("""[{"type":"table","caption":"C","header":[["a","b"]],"rows":[["1","2"]],"rowHeaders":false}]""")));
     }
 
     [Theory]
