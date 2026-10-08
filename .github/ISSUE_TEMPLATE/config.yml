@@ -8,4 +8,4 @@ contact_links:
     about: Ask how to use koldera-core or discuss an idea before opening an issue.
   - name: Commercial licence
     url: https://github.com/koldera/koldera-core/blob/main/COMMERCIAL.md
-    about: For a product or service built on koldera-core without publishing your code under the AGPL.
+    about: Licences, maintenance and OEM or redistribution terms for koldera-core.

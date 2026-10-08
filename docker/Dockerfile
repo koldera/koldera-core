@@ -13,7 +13,7 @@
 #     typst-x86_64-unknown-linux-musl.tar.xz   sha256 a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
 #     typst-aarch64-unknown-linux-musl.tar.xz  sha256 5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee
 #   Licenses: veraPDF GPLv3+/MPLv2+ (dual) and Typst Apache-2.0 run as separate processes; PDFBox Apache-2.0;
-#   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is AGPL-3.0-only.
+#   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is proprietary (see LICENSE).
 
 # ---------- PDF engine jar ----------
 FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
@@ -106,10 +106,10 @@ FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
-      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.licenses="LicenseRef-Koldera-Commercial" \
       org.opencontainers.image.documentation="https://github.com/koldera/koldera-core/blob/main/NOTICE" \
       org.opencontainers.image.version="0.1.0" \
-      dev.koldera.source-offer="Corresponding source (AGPL-3.0 sections 6 and 13): the git tag of this image's version in https://github.com/koldera/koldera-core; licence texts of bundled components: /usr/share/licenses/koldera"
+      dev.koldera.third-party-licenses="/usr/share/licenses/koldera"
 
 COPY --from=jre /opt/java/openjdk /opt/java/openjdk
 COPY --from=dotnet /usr/share/dotnet /usr/share/dotnet
@@ -137,7 +137,7 @@ COPY --from=node /src/scanner/node_modules /app/scanner/node_modules
 COPY --from=node /src/scanner/package.json /app/scanner/package.json
 COPY --from=server /out/server /app/server
 COPY contracts /app/contracts
-# Licence texts (AGPL-3.0 for koldera-core, third-party licences of what is bundled). Source: the tagged GitHub release.
+# Licence texts: the koldera-core licence notice and the third-party licences of what is bundled.
 COPY LICENSE NOTICE /usr/share/licenses/koldera/
 COPY renderer/fonts/OFL.txt /usr/share/licenses/koldera/fonts-noto-OFL.txt
 COPY engine/src/main/resources/fonts/liberation/LICENSE /usr/share/licenses/koldera/fonts-liberation-LICENSE
