@@ -31,7 +31,7 @@ services:
     pids_limit: 128
 
   core:
-    image: ${KOLDERA_IMAGE:?set KOLDERA_IMAGE, e.g. ghcr.io/koldera/core:0.1.0}
+    image: ${KOLDERA_IMAGE:-koldera-core:0.1.0}
     restart: unless-stopped
     environment:
       KOLDERA_TOKEN: ${KOLDERA_TOKEN:?set KOLDERA_TOKEN to a long random secret}
