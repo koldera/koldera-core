@@ -128,7 +128,9 @@ The most used options (all of them, with defaults, are in [docs/configuration.md
 | `KOLDERA_FEATURES` | `pdf,html,web,document` | Enabled features. Turn `web` off if you do not need scans. |
 | `KOLDERA_RETENTION_HOURS` | `24` | How long results are kept. |
 | `KOLDERA_PDF_MAX_BYTES` | no limit | Largest PDF upload; set it for untrusted users. |
-| `KOLDERA_JOB_TIMEOUT_SECONDS` | no limit | Time one job may run. |
+| `KOLDERA_JOB_TIMEOUT_SECONDS` | `900` | Time one job may run, all its steps together. |
+| `KOLDERA_DOCUMENT_MAX_BYTES` | `10485760` (10 MiB) | Largest structured-document request body. |
+| `KOLDERA_IMAGE_MAX_BYTES` | `20971520` (20 MiB) | Largest image upload. |
 | `KOLDERA_CONCURRENCY` | half the CPUs | Jobs that run at once. |
 
 ## Secure deployment

@@ -36,8 +36,17 @@ public sealed class WorkerOptions
     /// <summary>Forwarded to the Node workers; null when KOLDERA_CONTRACTS_DIR is not set.</summary>
     public string? ContractsDir { get; set; } = Environment.GetEnvironmentVariable("KOLDERA_CONTRACTS_DIR") is { Length: > 0 } d ? d : null;
 
-    /// <summary>Test-only switch forwarded to the scanner; never set in production.</summary>
+    /// <summary>Test-only switch forwarded to the scanner; refused outside the Development environment (<see cref="EnsureTestSwitchesAllowed"/>).</summary>
     public bool AllowLoopbackForTests { get; set; }
+
+    /// <summary>Fails fast when a test-only switch is set in any environment but Development.</summary>
+    public WorkerOptions EnsureTestSwitchesAllowed(string environmentName)
+    {
+        if (AllowLoopbackForTests && !string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Workers:AllowLoopbackForTests lets the scanner reach loopback addresses and is for tests only; it is refused in the {environmentName} environment. Unset Workers__AllowLoopbackForTests.");
+        return this;
+    }
 
     /// <summary>
     /// Fills every empty command (and the veraPDF path) from the environment, else from the container layout:

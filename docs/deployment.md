@@ -5,6 +5,7 @@ The image is built from `docker/Dockerfile`; `docker/compose.yaml` is the harden
 ```bash
 export KOLDERA_IMAGE=koldera-core:0.1.0   # the default; loaded from the release bundle (docker load) or built from source
 export KOLDERA_TOKEN="$(openssl rand -base64 32)"
+export KOLDERA_PUBLIC_URL=http://localhost:8080   # required: the address clients use (https://... behind TLS)
 docker compose -f docker/compose.yaml up -d
 curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info
 ```
@@ -16,13 +17,48 @@ variable is required and has no default). Base images are pinned by digest in th
 
 ### Egress proxy limits
 
-The server itself has no limits by default, but the supplied egress proxy does: `docker/egress-proxy/squid.conf`
+Independently of the server's own limits (see [Production profile](#production-profile)), the supplied egress proxy has one: `docker/egress-proxy/squid.conf`
 sets `reply_body_max_size 5 MB`, so any single response a scanned page loads (the page, a script, an image) that is
 larger than 5 MB is cut off by Squid, and a scan whose page is larger fails with `NAVIGATION_FAILED`. The proxy also
 allows only ports 80 and 443 and keeps no cache. To change the cap, edit that line (for example `reply_body_max_size
 20 MB`, or delete it for no cap) and rebuild the proxy with `docker compose -f docker/compose.yaml up -d --build egress`.
 The scanner's own budgets (`KOLDERA_WEB_MAX_RESPONSE_BYTES` and friends in [configuration.md](configuration.md))
 apply on top of it.
+
+## Production profile
+
+`docker/compose.yaml` is the recommended production profile. It requires `KOLDERA_TOKEN` and `KOLDERA_PUBLIC_URL`
+(Compose refuses to start without them), sets every `KOLDERA_*` limit explicitly and caps each container:
+
+| Setting | Value in compose.yaml | Server default without it |
+| --- | --- | --- |
+| `KOLDERA_CONCURRENCY` / `KOLDERA_QUEUE_CAPACITY` | `2` / `50` | half the CPUs / `100` |
+| `KOLDERA_JOB_TIMEOUT_SECONDS` | `900` | `900` |
+| `KOLDERA_PDF_MAX_BYTES` / `KOLDERA_PDF_MAX_PAGES` | 100 MiB / `500` | no limit |
+| `KOLDERA_HTML_MAX_BYTES` | 10 MiB | no limit |
+| `KOLDERA_IMAGE_MAX_BYTES` / `KOLDERA_DOCUMENT_MAX_BYTES` | 20 MiB / 10 MiB | 20 MiB / 10 MiB |
+| `KOLDERA_WEB_MAX_RESPONSE_BYTES` / `KOLDERA_WEB_MAX_REQUESTS` | 50 MiB / `300` | no limit |
+| `cpus` / `mem_limit` | core 2 / 4g, front 0.5 / 256m, egress 0.5 / 256m | none |
+
+Each limit can be changed from the environment without editing the file (for example
+`KOLDERA_PDF_MAX_PAGES=1000 docker compose -f docker/compose.yaml up -d`). Raise `KOLDERA_CONCURRENCY` only together
+with `cpus` and `mem_limit`: a running job can hold a JVM and a Chromium at the same time.
+
+**Never use these settings in production:**
+
+- `KOLDERA_AUTH=none` on anything but a loopback address or behind a proxy that authenticates every request (and never
+  with the single sign-on example, see below).
+- `Workers__AllowLoopbackForTests=true`: lets the scanner reach loopback addresses. The server refuses to start with it
+  unless `ASPNETCORE_ENVIRONMENT=Development`.
+- `ASPNETCORE_ENVIRONMENT=Development`: development error pages and test-only switches.
+- `KOLDERA_CORS_ORIGINS=*` does nothing (it allows no origin); list exact origins instead.
+- Removing `KOLDERA_WEB_PROXY` or putting `core` on a network with a route out: the egress proxy is what refuses
+  private, loopback and metadata addresses for page scans.
+- `KOLDERA_WEB_ALLOW_HTTP=true` unless you need plain-HTTP targets.
+- Publishing `core`'s port 8080 directly instead of going through `front`, or dropping `read_only`, `cap_drop`,
+  `no-new-privileges`, `cpus` or `mem_limit` from the compose file.
+- Very large or effectively unlimited values for the limits above on an instance that accepts files from people you
+  do not trust.
 
 ## Who calls the API
 

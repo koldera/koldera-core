@@ -153,6 +153,39 @@ public sealed class JobRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task The_timeout_is_one_deadline_for_the_whole_job_not_per_step()
+    {
+        // Three steps of 0.7 s each: every one fits the 1 s limit on its own, together they do not.
+        var steps = 0;
+        var (_, id) = await RunToEnd(new LambdaExecutor("pdf", async (_, _, timeout, ct) =>
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(700), ct);
+                steps++;
+            }
+            return Done();
+        }), timeoutSeconds: 1);
+
+        var job = _store.GetJob(id)!;
+        Assert.Equal("failed", job.State);
+        Assert.Equal("WORKER_TIMEOUT", job.ErrorCode);
+        Assert.True(steps < 3, $"all {steps} steps ran although the job deadline had passed");
+    }
+
+    [Fact]
+    public async Task A_job_within_its_deadline_completes()
+    {
+        var (_, id) = await RunToEnd(new LambdaExecutor("pdf", async (_, _, _, ct) =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50), ct);
+            return Done();
+        }), timeoutSeconds: 5);
+
+        Assert.Equal("completed", _store.GetJob(id)!.State);
+    }
+
+    [Fact]
     public async Task A_missing_executor_for_the_kind_fails_the_job()
     {
         var (runner, queue) = Runner(new LambdaExecutor("web", (_, _, _, _) => Task.FromResult(Done())));
@@ -194,7 +227,7 @@ public sealed class JobRunnerTests : IDisposable
     }
 
     [Fact]
-    public async Task The_configured_job_timeout_is_passed_to_the_executor_else_infinite()
+    public async Task The_configured_job_timeout_is_passed_to_the_executor_else_the_default()
     {
         TimeSpan? seen = null;
         IJobExecutor Capture() => new LambdaExecutor("pdf", (_, _, t, _) => { seen = t; return Task.FromResult(Done()); });
@@ -204,7 +237,7 @@ public sealed class JobRunnerTests : IDisposable
 
         seen = null;
         await RunToEnd(Capture());
-        Assert.Equal(Timeout.InfiniteTimeSpan, seen);
+        Assert.Equal(TimeSpan.FromSeconds(Limits.DefaultJobTimeoutSeconds), seen);
     }
 
     [Fact]
