@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { PDFDocument } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRef, type PDFContext, type PDFObject } from "pdf-lib";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 import { validateDocumentRenderResult } from "../../src/contracts/types.js";
@@ -34,6 +34,21 @@ const request = () => ({
 
 const fixtureDoc = async (name: string) => JSON.parse(await readFile(path.join(fixtures, `${name}.json`), "utf8")) as unknown;
 
+/** Struct element children of a StructElem (or the StructTreeRoot) that carry an /S name. */
+function kids(context: PDFContext, element: PDFDict): PDFDict[] {
+  const at = (o: PDFObject | undefined) => (o instanceof PDFRef ? context.lookup(o) : o);
+  const k = at(element.get(PDFName.of("K")));
+  return (k instanceof PDFArray ? k.asArray() : k ? [k] : []).map(at).filter((d): d is PDFDict => d instanceof PDFDict && d.get(PDFName.of("S")) instanceof PDFName);
+}
+
+function elements(context: PDFContext, node: PDFDict, type: string, out: PDFDict[] = []): PDFDict[] {
+  for (const kid of kids(context, node)) {
+    if (kid.get(PDFName.of("S")) === PDFName.of(type)) out.push(kid);
+    elements(context, kid, type, out);
+  }
+  return out;
+}
+
 // Skipped without TYPST_CMD so a plain `pnpm test` works on a machine without Typst; CI always sets it.
 describe.skipIf(!typst)("document compile (Typst)", () => {
   for (const name of FIXTURES) {
@@ -50,6 +65,28 @@ describe.skipIf(!typst)("document compile (Typst)", () => {
       expect(b.artifacts[0]?.sha256).toBe(a.artifacts[0]?.sha256);
     });
   }
+
+  it("tags the column header row as TH and body cells as TD in the real Typst output", async () => {
+    const doc = { title: "T", language: "en", body: [{ type: "table", caption: "C", header: [["Region", "Q1"]], rows: [["North", "1"], ["South", "2"]] }] };
+    const dir = await workspace(doc);
+    const r = await runDocument(request(), { workRoot: dir });
+    expect(r.error ?? null).toBeNull();
+    const pdf = await PDFDocument.load(await readFile(path.join(dir, "out", "document.pdf")), { updateMetadata: false });
+    const tree = pdf.catalog.lookup(PDFName.of("StructTreeRoot"), PDFDict);
+    const rows = elements(pdf.context, tree, "TR").map((tr) => kids(pdf.context, tr).map((c) => (c.get(PDFName.of("S")) as PDFName).decodeText()));
+    expect(rows).toEqual([
+      ["TH", "TH"],
+      ["TD", "TD"],
+      ["TD", "TD"],
+    ]);
+  });
+
+  it("refuses rowHeaders: true before Typst runs (Typst 0.15 would tag them TD)", async () => {
+    const doc = { title: "T", language: "en", body: [{ type: "table", caption: "C", header: [["a", "b"]], rows: [["x", "1"]], rowHeaders: true }] };
+    const r = await runDocument(request(), { workRoot: await workspace(doc) });
+    expect(r.error?.code).toBe("DOCUMENT_REFUSED");
+    expect(r.error?.message).toMatch(/rowHeaders/);
+  });
 
   it("writes the artifact at the reported path with the reported hash", async () => {
     const dir = await workspace(await fixtureDoc("invoice"));
