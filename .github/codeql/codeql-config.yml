@@ -1,0 +1,4 @@
+# The scanner's fixture server is a deliberately hostile site (open redirects, slow responses) that the
+# egress-guard tests point the scanner at; it only ever listens on loopback inside the test run.
+paths-ignore:
+  - scanner/tests/fixtureServer.ts
