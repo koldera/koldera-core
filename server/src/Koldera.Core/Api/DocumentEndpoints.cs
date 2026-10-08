@@ -26,18 +26,46 @@ public static class DocumentEndpoints
         v1.MapPost("/documents/jobs", CreateAsync);
     }
 
+    /// <summary>
+    /// Applies KOLDERA_DOCUMENT_MAX_BYTES to the server's own body limit (Kestrel then stops a longer chunked body while it
+    /// is read) and refuses a declared Content-Length over it before anything is read. Null when the request may go on.
+    /// </summary>
+    internal static IResult? ApplyBodyLimit(HttpContext http, CoreOptions options)
+    {
+        var max = options.Limits.DocumentMaxBytes;
+        var limit = http.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = max;
+        return max is { } cap && http.Request.ContentLength > cap ? TooLarge(cap) : null;
+    }
+
+    internal static IResult TooLarge(long max) =>
+        Problems.Result(422, "FILE_TOO_LARGE", "Document too large", $"The request body exceeds the configured limit of {max} bytes.");
+
     private static async Task<IResult> CreateAsync(HttpContext http, CoreOptions options, DataStore store, JobQueue queue, TimeProvider clock)
     {
         // Feature check first: a disabled route must not even look at the body.
         if (!options.Features.Contains("document")) return RequestContext.NotFound();
-        // No cap by design, like the upload route (Kestrel's 30 MB default would refuse a large document).
-        var limit = http.Features.Get<IHttpMaxRequestBodySizeFeature>();
-        if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = null;
+        if (ApplyBodyLimit(http, options) is { } refused) return refused;
         JsonElement document;
         try
         {
-            using var parsed = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted);
+            // Counted here as well: not every host enforces the server body limit (TestServer, the Lambda adapter).
+            var max = options.Limits.DocumentMaxBytes;
+            using var body = new MemoryStream();
+            var chunk = new byte[16 * 1024];
+            int n;
+            while ((n = await http.Request.Body.ReadAsync(chunk, http.RequestAborted)) > 0)
+            {
+                if (max is { } m && body.Length + n > m) return TooLarge(m);
+                body.Write(chunk, 0, n);
+            }
+            body.Position = 0;
+            using var parsed = JsonDocument.Parse(body);
             document = parsed.RootElement.Clone();
+        }
+        catch (BadHttpRequestException e) when (e.StatusCode == StatusCodes.Status413PayloadTooLarge && options.Limits.DocumentMaxBytes is { } cap)
+        {
+            return TooLarge(cap);
         }
         catch (JsonException)
         {

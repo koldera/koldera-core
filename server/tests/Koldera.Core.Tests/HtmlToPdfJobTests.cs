@@ -158,16 +158,17 @@ public class HtmlToPdfJobTests
     }
 
     [Fact]
-    public async Task Without_a_timeout_every_stage_runs_without_one()
+    public async Task Without_a_configured_timeout_every_stage_runs_under_the_default()
     {
         var render = StubResults.HtmlRenderCompleted();
         var inspect = StubResults.InspectResult(GeneratedSha);
         var pdf = StubResults.PdfAnalyzeCompleted();
         using var f = Factory(render: render, inspect: inspect, pdf: pdf);
         await f.WaitForJob(await f.CreateHtmlJob());
-        Assert.Equal(Timeout.InfiniteTimeSpan, render.Calls.Single().Timeout);
-        Assert.Equal(Timeout.InfiniteTimeSpan, inspect.Calls.Single().Timeout);
-        Assert.Equal(Timeout.InfiniteTimeSpan, pdf.Calls.Single().Timeout);
+        var expected = TimeSpan.FromSeconds(Limits.DefaultJobTimeoutSeconds);
+        Assert.Equal(expected, render.Calls.Single().Timeout);
+        Assert.Equal(expected, inspect.Calls.Single().Timeout);
+        Assert.Equal(expected, pdf.Calls.Single().Timeout);
     }
 
     [Fact]

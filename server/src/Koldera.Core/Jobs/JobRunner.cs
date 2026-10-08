@@ -31,7 +31,10 @@ public sealed class JobRunner : BackgroundService
 
     private string ScratchRoot => Path.Combine(_options.DataDir, "scratch");
 
-    /// <summary>The configured job timeout, else no timeout at all; handed to every executor.</summary>
+    /// <summary>
+    /// The configured job timeout, else no timeout at all. It is one deadline for the whole job: the token handed to the
+    /// executor is cancelled when it passes, so every step (worker process, probe, file work) only gets what is left.
+    /// </summary>
     private TimeSpan JobTimeout =>
         _options.Limits.JobTimeoutSeconds is { } s ? TimeSpan.FromSeconds(s) : Timeout.InfiniteTimeSpan;
 
@@ -171,19 +174,22 @@ public sealed class JobRunner : BackgroundService
         if (!await TryMarkRunningAsync(job, stop)) return;
 
         var scratch = Path.Combine(ScratchRoot, id.ToString("N"));
+        var timeout = JobTimeout;
+        using var deadline = new CancellationTokenSource(timeout, _clock);
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(stop, deadline.Token);
         try
         {
             Directory.CreateDirectory(Path.Combine(scratch, "in"));
             Directory.CreateDirectory(Path.Combine(scratch, "out"));
             if (!_executors.TryGetValue(job.Kind, out var executor))
                 throw new InvalidOperationException("no executor for job kind");
-            Apply(job, await executor.ExecuteAsync(job, scratch, JobTimeout, stop));
+            Apply(job, await executor.ExecuteAsync(job, scratch, timeout, run.Token));
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             throw;
         }
-        catch (TimeoutException)
+        catch (Exception e) when (e is TimeoutException || e is OperationCanceledException && deadline.IsCancellationRequested)
         {
             Fail(job, "WORKER_TIMEOUT", "the worker exceeded the job time limit");
         }

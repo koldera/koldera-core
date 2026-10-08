@@ -1,8 +1,12 @@
 # Hardened single-host deployment. Only `front` publishes a port; `core` sits on an internal network and
 # can reach the internet solely through the `egress` proxy, which refuses private and metadata addresses.
 
-#   KOLDERA_TOKEN=<long random secret> docker compose -f docker/compose.yaml up -d
+#   KOLDERA_TOKEN=<long random secret> KOLDERA_PUBLIC_URL=http://localhost:8080 docker compose -f docker/compose.yaml up -d
 #   curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info
+
+# This is the recommended production profile: explicit limits and CPU/memory caps on every service. The KOLDERA_*
+# limits below can be raised per variable from the environment (KOLDERA_PDF_MAX_BYTES=... docker compose ...);
+# see docs/configuration.md and the unsafe settings listed in docs/deployment.md.
 
 # `front` speaks plain HTTP here. For TLS use docker/Caddyfile, and for single sign-on docker/compose.sso.yaml.
 
@@ -28,6 +32,7 @@ services:
     cap_add: [NET_BIND_SERVICE]   # the caddy binary carries this file capability; without it exec is refused
     security_opt: ["no-new-privileges:true"]
     mem_limit: 256m
+    cpus: 0.5
     pids_limit: 128
 
   core:
@@ -35,6 +40,20 @@ services:
     restart: unless-stopped
     environment:
       KOLDERA_TOKEN: ${KOLDERA_TOKEN:?set KOLDERA_TOKEN to a long random secret}
+      # Signed upload/download links are built from it; without it they carry the scheme and host core sees.
+      KOLDERA_PUBLIC_URL: ${KOLDERA_PUBLIC_URL:?set KOLDERA_PUBLIC_URL to the externally visible base URL, e.g. https://koldera.example.com}
+      # Limits (docs/configuration.md). Concurrency and the caps are sized for cpus/mem_limit below: each running
+      # job can hold a JVM and a Chromium at once.
+      KOLDERA_CONCURRENCY: ${KOLDERA_CONCURRENCY:-2}
+      KOLDERA_QUEUE_CAPACITY: ${KOLDERA_QUEUE_CAPACITY:-50}
+      KOLDERA_JOB_TIMEOUT_SECONDS: ${KOLDERA_JOB_TIMEOUT_SECONDS:-900}
+      KOLDERA_PDF_MAX_BYTES: ${KOLDERA_PDF_MAX_BYTES:-104857600}          # 100 MiB
+      KOLDERA_PDF_MAX_PAGES: ${KOLDERA_PDF_MAX_PAGES:-500}
+      KOLDERA_HTML_MAX_BYTES: ${KOLDERA_HTML_MAX_BYTES:-10485760}         # 10 MiB
+      KOLDERA_IMAGE_MAX_BYTES: ${KOLDERA_IMAGE_MAX_BYTES:-20971520}       # 20 MiB
+      KOLDERA_DOCUMENT_MAX_BYTES: ${KOLDERA_DOCUMENT_MAX_BYTES:-10485760} # 10 MiB
+      KOLDERA_WEB_MAX_RESPONSE_BYTES: ${KOLDERA_WEB_MAX_RESPONSE_BYTES:-52428800} # 50 MiB per scan; Squid caps each response at 5 MB
+      KOLDERA_WEB_MAX_REQUESTS: ${KOLDERA_WEB_MAX_REQUESTS:-300}
       # The scanner's only way out; the proxy enforces the public-destination rule at connection time.
       KOLDERA_WEB_PROXY: http://egress:3128
     volumes:
@@ -46,6 +65,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 4g
+    cpus: 2
     pids_limit: 512
 
   egress:
@@ -59,6 +79,7 @@ services:
     cap_add: [SETUID, SETGID]   # Squid starts as root and drops to its proxy user
     security_opt: ["no-new-privileges:true"]
     mem_limit: 256m
+    cpus: 0.5
     pids_limit: 128
 
 networks:

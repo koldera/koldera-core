@@ -27,7 +27,7 @@ public static partial class UploadEndpoints
             if (req.SizeBytes is not > 0) return Invalid("sizeBytes must be a positive integer");
             if (req.Sha256 is null || !Sha256Pattern().IsMatch(req.Sha256)) return Invalid("sha256 must be 64 lowercase hexadecimal characters");
 
-            long? maxBytes = req.ContentType == "text/html" ? options.Limits.HtmlMaxBytes : ImageContentTypes.Contains(req.ContentType) ? null : options.Limits.PdfMaxBytes;
+            var maxBytes = req.ContentType == "text/html" ? options.Limits.HtmlMaxBytes : ImageContentTypes.Contains(req.ContentType) ? options.Limits.ImageMaxBytes : options.Limits.PdfMaxBytes;
             if (maxBytes is { } cap && req.SizeBytes > cap)
                 return Problems.Result(422, "FILE_TOO_LARGE", "File too large", $"The configured limit is {cap} bytes.");
 
