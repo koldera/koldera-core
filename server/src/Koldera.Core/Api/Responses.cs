@@ -3,7 +3,11 @@ using System.Text.Json.Serialization;
 
 namespace Koldera.Core;
 
-public sealed record MachineValidationResponse(string Profile, string Status, FailedRuleResponse[] FailedRules);
+public sealed record MachineValidationResponse(string Profile, string Status, FailedRuleResponse[] FailedRules)
+{
+    /// <summary>A fix copy whose only failing check is the PDF/UA identifier, withheld pending human review: neither passed nor failed.</summary>
+    public const string DeclarationWithheld = "declaration_withheld";
+}
 
 public sealed record FailedRuleResponse(string RuleId, int Count);
 

@@ -38,7 +38,9 @@ Every `POST` under `/v1` must send `Content-Type: application/json`, otherwise t
    waited. Add an `Idempotency-Key` so a retry returns the stored answer instead of creating a second job.
 4. **Poll** `GET /v1/jobs/{jobId}` until `state` is `completed` or `failed` (it sends `Retry-After` meanwhile).
    `completed` means the run finished, not that the document passed: read `validation.status` (`passed`, `failed`,
-   `error`, `not_run`) and `failedRules`.
+   `error`, `not_run`, `declaration_withheld`) and `failedRules`. `declaration_withheld` means the only failing check is
+   the missing PDF/UA identifier (veraPDF `5-1`, still listed in `failedRules`): it was not written because declaring
+   PDF/UA requires a human review. It is not a pass; treat a status you do not know as no verdict.
 5. **Read the results.**
    - `GET /v1/jobs/{jobId}/findings`: what the checks found; `needsHumanReview` marks what a person must look at.
    - `GET /v1/jobs/{jobId}/actions`: which repairs ran, were skipped or were rolled back, with reasons.

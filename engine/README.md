@@ -11,7 +11,10 @@ always `true`. A `pdfuaid:part=1` identifier is a PDF/UA-1 conformance declarati
 file, so it is never written by default. Only a `fix` request with `declarePdfUa: true` and
 `humanReviewAcknowledged: true` may get it, never when the engine inferred or added the structure tags or marked
 a figure as artifact, and then only when veraPDF and the engine's own structure checks report nothing left. The
-server never sets these fields. Signed and encrypted files are never rewritten.
+server never sets these fields. A `fix` copy whose only failing check is that identifier, withheld on these terms while
+every machine check would allow it, reports `finalValidation.status` `declaration_withheld`, never `passed`. For origin
+`document_generated` (Typst output) the only change is removing the identifier Typst writes (`PDF_UA_IDENTIFIER_WITHDRAWN_V1`).
+Signed and encrypted files are never rewritten.
 
 ## Build and test
 

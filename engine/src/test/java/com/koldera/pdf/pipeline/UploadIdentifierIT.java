@@ -47,6 +47,7 @@ class UploadIdentifierIT {
     WorkerResult.Action ua = result.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_UA_IDENTIFIER_V1).findFirst().orElseThrow();
     assertEquals(ActionOutcome.SKIPPED, ua.outcome(), context);
     assertEquals(com.koldera.pdf.rules.PdfUaIdentifierStep.NOT_REQUESTED, ua.reason(), context);
+    assertEquals(ValidationStatus.DECLARATION_WITHHELD, result.finalValidation().status(), context);
     assertTrue(result.manualReviewRequired());
   }
 }

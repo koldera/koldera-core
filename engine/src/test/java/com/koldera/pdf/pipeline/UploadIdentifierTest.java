@@ -88,6 +88,7 @@ class UploadIdentifierTest {
     assertEquals(RuleId.PDF_UA_IDENTIFIER_V1, result.actions().get(result.actions().size() - 1).ruleId(), "listed last: it runs after the final validation");
     assertEquals(2, validator.calls.size(), "baseline and the copy; no identified copy");
     assertEquals(List.of(UAID_RULE), result.finalValidation().failedRules().stream().map(WorkerResult.FailedRule::ruleId).toList());
+    assertEquals(ValidationStatus.DECLARATION_WITHHELD, result.finalValidation().status(), "only the withheld declaration is missing: not failed, not passed");
     assertEquals("", pdfUaPart(), "no pdfuaid in the published copy's XMP");
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY), result.findings().toString());
     assertTrue(has(result, FindingsBuilder.STRUCTURE_INFERRED), "the findings list what was inferred: " + result.findings());
@@ -159,6 +160,7 @@ class UploadIdentifierTest {
     assertEquals(ActionOutcome.SKIPPED, ua.outcome());
     assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, ua.reason());
     assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "another rule fails");
     assertEquals("", pdfUaPart());
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
     assertTrue(result.manualReviewRequired());
@@ -178,11 +180,26 @@ class UploadIdentifierTest {
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
     assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
     assertTrue(ua.reason().contains("the internal structure checks") && ua.reason().contains(StructureRules.TBODY_WITHOUT_THEAD), ua.reason());
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "an internal structure check fails: not only the declaration is missing");
     assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
     assertEquals("", pdfUaPart());
     assertEquals(List.of(UAID_RULE), result.finalValidation().failedRules().stream().map(WorkerResult.FailedRule::ruleId).toList());
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
     assertScratchClean();
+    assertSchemaValid(result);
+  }
+
+  @Test
+  void anUnrequestedUploadWhoseStructureChecksReportSomethingStaysFailed() throws IOException {
+    Files.write(workspace.inputFile(), SyntheticPdfFactory.taggedRuledTableWithoutHead());
+    validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
+    validator.enqueue(failed(Map.of(UAID_RULE, 1)));
+
+    WorkerResult result = production().process(upload(WorkerRequest.Mode.FIX), workspace);
+
+    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
+    assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).reason());
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "the same verdict whether or not the declaration was requested");
     assertSchemaValid(result);
   }
 
@@ -250,6 +267,7 @@ class UploadIdentifierTest {
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
     assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
     assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, ua.reason());
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "no XMP title: more than the declaration is missing");
     for (WorkerResult.Action a : result.actions()) {
       assertFalse(a.reason() != null && a.reason().contains("already has a title"), "no reason claims a title: " + a.reason());
       assertFalse(a.reason() != null && a.reason().contains("already has dc:title"), "no reason claims a title: " + a.reason());
@@ -293,6 +311,7 @@ class UploadIdentifierTest {
     assertEquals(ActionOutcome.FAILED, generated.outcome());
     assertTrue(generated.reason().endsWith(PdfProcessor.FALLBACK_NOTE), generated.reason());
     assertEquals(2, validator.calls.size(), "baseline and the fallback copy; no identified copy");
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status(), "the fallback never takes the identifier step");
     assertEquals("", pdfUaPart());
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
     assertSchemaValid(result);
@@ -324,7 +343,7 @@ class UploadIdentifierTest {
     assertEquals(PdfUaIdentifierStep.ENGINE_MADE_STRUCTURE, ua.reason());
     assertEquals(1, result.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_UA_IDENTIFIER_V1).count());
     assertEquals("", pdfUaPart());
-    assertEquals(ValidationStatus.FAILED, result.finalValidation().status());
+    assertEquals(ValidationStatus.DECLARATION_WITHHELD, result.finalValidation().status(), "engine-made structure is never declared; only 5-1 fails");
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
     assertTrue(result.manualReviewRequired());
     assertScratchClean();
@@ -427,16 +446,16 @@ class UploadIdentifierTest {
     assertTrue(errors.isEmpty(), errors::toString);
   }
 
-  private static ValidationOutcome failed(Map<String, Integer> rules) {
+  static ValidationOutcome failed(Map<String, Integer> rules) {
     return new ValidationOutcome(ValidationStatus.FAILED, rules, Map.of(), null, null, null, "fake");
   }
 
-  private static ValidationOutcome passed() {
+  static ValidationOutcome passed() {
     return new ValidationOutcome(ValidationStatus.PASSED, Map.of(), Map.of(), null, null, null, "fake");
   }
 
   /** Returns queued outcomes in order, records calls and writes a stand-in raw report file. */
-  private static final class ScriptedValidator implements PdfValidator {
+  static final class ScriptedValidator implements PdfValidator {
     record Call(Path pdf, Path report, Duration timeout) {}
 
     final List<Call> calls = new ArrayList<>();

@@ -99,7 +99,7 @@ original. Commands: `pdf`, `html`, `scan`, `document`; add `--json` for machine-
 
 | Exit code | Meaning |
 | --- | --- |
-| `0` | The machine check passed. |
+| `0` | The machine check passed, or only the PDF/UA identifier is missing because declaring PDF/UA needs a human review (`declaration_withheld`, not a pass). |
 | `2` | The job completed but machine rules failed. |
 | `3` | The job failed, the input is unsupported, or there is no machine verdict. |
 | `64` | Usage error. |
