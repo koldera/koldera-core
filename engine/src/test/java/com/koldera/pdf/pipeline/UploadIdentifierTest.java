@@ -18,6 +18,7 @@ import com.koldera.pdf.fixtures.SyntheticPdfFactory;
 import com.koldera.pdf.generated.StructureRules;
 import com.koldera.pdf.preflight.PdfPreflight;
 import com.koldera.pdf.report.FindingsBuilder;
+import com.koldera.pdf.rules.PdfUaIdentifierStep;
 import com.koldera.pdf.rules.RemediationRule;
 import com.koldera.pdf.rules.RuleDecision;
 import com.koldera.pdf.validation.PdfValidator;
@@ -44,9 +45,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * {@code PDF_UA_IDENTIFIER_V1} for uploads: exactly the generated-PDF rule. Only
- * when the final validation fails nothing but {@code 5-1}, the PAC-only structure checks report nothing and the
- * identified copy validates with zero failures; deprecated modes and a generated run's fallback never write it.
+ * {@code PDF_UA_IDENTIFIER_V1} for uploads. The identifier is a conformance declaration, so it is never written by default:
+ * only on {@code declarePdfUa} with {@code humanReviewAcknowledged}, never over engine-made structure (inferred or basic
+ * content-order tags) or figures auto-marked as artifact, and then only when the final validation fails nothing but
+ * {@code 5-1}, the PAC-only structure checks report nothing and the identified copy validates with zero failures.
  */
 class UploadIdentifierTest {
 
@@ -70,7 +72,7 @@ class UploadIdentifierTest {
   }
 
   @Test
-  void anUploadCleanExceptTheIdentifierGetsIt() throws IOException {
+  void anUploadCleanExceptTheIdentifierGetsNoIdentifierByDefault() throws IOException {
     Files.write(workspace.inputFile(), SyntheticPdfFactory.untaggedEmbeddedFontArticle());
     validator.enqueue(failed(UNTAGGED_BASELINE));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
@@ -81,16 +83,63 @@ class UploadIdentifierTest {
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus());
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
-    assertEquals(ActionOutcome.APPLIED, ua.outcome(), ua.reason());
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
+    assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, ua.reason());
     assertEquals(RuleId.PDF_UA_IDENTIFIER_V1, result.actions().get(result.actions().size() - 1).ruleId(), "listed last: it runs after the final validation");
-    assertEquals(3, validator.calls.size(), "baseline, the copy, the identified copy");
-    assertEquals(ValidationStatus.PASSED, result.finalValidation().status(), "the published copy's own validation");
-    assertTrue(result.finalValidation().failedRules().isEmpty());
-    assertEquals("1", pdfUaPart(), "pdfuaid:part in the published copy's XMP");
-    assertTrue(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY), result.findings().toString());
+    assertEquals(2, validator.calls.size(), "baseline and the copy; no identified copy");
+    assertEquals(List.of(UAID_RULE), result.finalValidation().failedRules().stream().map(WorkerResult.FailedRule::ruleId).toList());
+    assertEquals("", pdfUaPart(), "no pdfuaid in the published copy's XMP");
+    assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY), result.findings().toString());
     assertTrue(has(result, FindingsBuilder.STRUCTURE_INFERRED), "the findings list what was inferred: " + result.findings());
     assertTrue(result.manualReviewRequired());
     assertNoConformanceWording(result);
+    assertScratchClean();
+    assertSchemaValid(result);
+  }
+
+  @Test
+  void inferredStructureNeverGetsTheIdentifierEvenWhenTheDeclarationIsRequestedAfterReview() throws IOException {
+    Files.write(workspace.inputFile(), SyntheticPdfFactory.untaggedEmbeddedFontArticle());
+    validator.enqueue(failed(UNTAGGED_BASELINE));
+    validator.enqueue(failed(Map.of(UAID_RULE, 1)));
+    validator.enqueue(passed());
+
+    WorkerResult result = production().process(declaring(upload(WorkerRequest.Mode.FIX), true), workspace);
+
+    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
+    assertEquals(ActionOutcome.APPLIED, action(result, RuleId.PDF_STRUCTURE_INFERRED_V1).outcome());
+    WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
+    assertEquals(PdfUaIdentifierStep.ENGINE_MADE_STRUCTURE, ua.reason());
+    assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
+    assertEquals("", pdfUaPart());
+    assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
+    assertScratchClean();
+    assertSchemaValid(result);
+  }
+
+  @Test
+  void figuresAutoMarkedAsArtifactBlockTheIdentifierEvenWhenTheDeclarationIsRequestedAfterReview() throws IOException {
+    // Author-tagged (no engine-made structure); the Figure has no /Alt, so PDF_FIGURES_WITHOUT_ALT_V1 marks it as decoration.
+    Files.write(workspace.inputFile(), SyntheticPdfFactory.taggedBlocks(
+        SyntheticPdfFactory.TaggedOptions.of(SyntheticPdfFactory.Block.of("P", "Intro"), SyntheticPdfFactory.Block.of("Figure", "image"))));
+    validator.enqueue(failed(Map.of(METADATA_RULE, 1, SPEC + "7.3-1", 1)));
+    validator.enqueue(failed(Map.of(UAID_RULE, 1)));
+    validator.enqueue(passed());
+
+    WorkerResult result = production().process(declaring(upload(WorkerRequest.Mode.FIX), true), workspace);
+
+    assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
+    WorkerResult.Action figures = action(result, RuleId.PDF_FIGURES_WITHOUT_ALT_V1);
+    assertEquals(ActionOutcome.APPLIED, figures.outcome(), figures.reason());
+    assertTrue(result.actions().stream().noneMatch(a -> (a.ruleId() == RuleId.PDF_STRUCTURE_INFERRED_V1 || a.ruleId() == RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1)
+        && a.outcome() == ActionOutcome.APPLIED), result.actions().toString());
+    WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
+    assertEquals(PdfUaIdentifierStep.FIGURES_MARKED_ARTIFACT, ua.reason());
+    assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
+    assertEquals("", pdfUaPart());
+    assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
     assertScratchClean();
     assertSchemaValid(result);
   }
@@ -108,7 +157,7 @@ class UploadIdentifierTest {
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
     assertEquals(ActionOutcome.SKIPPED, ua.outcome());
-    assertTrue(ua.reason().startsWith("not written: the final validation still fails " + FONT_RULE), ua.reason());
+    assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, ua.reason());
     assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
     assertEquals("", pdfUaPart());
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
@@ -123,7 +172,7 @@ class UploadIdentifierTest {
     validator.enqueue(failed(Map.of(METADATA_RULE, 1)));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
 
-    WorkerResult result = production().process(upload(WorkerRequest.Mode.FIX), workspace);
+    WorkerResult result = production().process(declaring(upload(WorkerRequest.Mode.FIX), true), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
@@ -137,29 +186,29 @@ class UploadIdentifierTest {
     assertSchemaValid(result);
   }
 
-  /** A copy with no tagged text presents nothing a machine check can judge. */
+  /** A scan with no text gets engine-made tags only, so even a requested declaration is refused before the tagged-text check. */
   @Test
   void anImageOnlyScanGetsNoIdentifier() throws IOException {
-    assertNoTaggedTextBlocksTheIdentifier(SyntheticPdfFactory.untaggedImageOnlyScan());
+    assertEngineTaggedScanBlocksTheIdentifier(SyntheticPdfFactory.untaggedImageOnlyScan());
   }
 
   @Test
   void anOutlineOnlyPageGetsNoIdentifier() throws IOException {
-    assertNoTaggedTextBlocksTheIdentifier(SyntheticPdfFactory.untaggedOutlinesOnly());
+    assertEngineTaggedScanBlocksTheIdentifier(SyntheticPdfFactory.untaggedOutlinesOnly());
   }
 
-  private void assertNoTaggedTextBlocksTheIdentifier(byte[] input) throws IOException {
+  private void assertEngineTaggedScanBlocksTheIdentifier(byte[] input) throws IOException {
     Files.write(workspace.inputFile(), input);
     validator.enqueue(failed(Map.of(SPEC + "7.1-3", 1, METADATA_RULE, 1)));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
     validator.enqueue(passed());
 
-    WorkerResult result = production().process(upload(WorkerRequest.Mode.FIX), workspace);
+    WorkerResult result = production().process(declaring(upload(WorkerRequest.Mode.FIX), true), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
     assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
-    assertEquals("not written: the copy has no tagged text (all content is decoration), which no machine check can judge", ua.reason());
+    assertEquals(PdfUaIdentifierStep.ENGINE_MADE_STRUCTURE, ua.reason());
     assertEquals(2, validator.calls.size(), "no identified copy is made or validated");
     assertEquals("", pdfUaPart());
     assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
@@ -170,7 +219,7 @@ class UploadIdentifierTest {
 
   /** PAC "Title in XMP metadata" (un-charter-aspose): the producer's empty dc:title is filled with the resolved title. */
   @Test
-  void anEmptyXmpTitleIsFilledWithTheFileNameTitleAndTheCopyIsIdentified() throws IOException {
+  void anEmptyXmpTitleIsFilledWithTheFileNameTitle() throws IOException {
     Files.write(workspace.inputFile(), SyntheticPdfFactory.withXmpPacket(SyntheticPdfFactory.untaggedEmbeddedFontArticle(), SyntheticPdfFactory.EMPTY_DC_TITLE_PACKET));
     validator.enqueue(failed(UNTAGGED_BASELINE));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
@@ -182,7 +231,8 @@ class UploadIdentifierTest {
     WorkerResult.Action title = action(result, RuleId.PDF_TITLE_V1);
     assertEquals("title taken from the file name; check it", title.reason());
     assertEquals("un-charter", dcTitle());
-    assertEquals(ActionOutcome.APPLIED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome());
+    assertEquals(ActionOutcome.SKIPPED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome(), "never declared by default");
+    assertEquals("", pdfUaPart());
     assertSchemaValid(result);
   }
 
@@ -199,7 +249,7 @@ class UploadIdentifierTest {
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
     WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
     assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
-    assertEquals("not written: the XMP metadata has no title", ua.reason());
+    assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, ua.reason());
     for (WorkerResult.Action a : result.actions()) {
       assertFalse(a.reason() != null && a.reason().contains("already has a title"), "no reason claims a title: " + a.reason());
       assertFalse(a.reason() != null && a.reason().contains("already has dc:title"), "no reason claims a title: " + a.reason());
@@ -254,26 +304,28 @@ class UploadIdentifierTest {
    * written when that copy's final validation fails only {@code 5-1} and the identified copy validates clean.
    */
   @Test
-  void aLadderRerunWhoseCopyIsCleanExceptTheIdentifierGetsIt() throws IOException {
+  void aLadderRerunWithBasicContentOrderTagsGetsNoIdentifierEvenWhenRequested() throws IOException {
     Files.write(workspace.inputFile(), SyntheticPdfFactory.untaggedEmbeddedFontArticle());
     validator.enqueue(failed(UNTAGGED_BASELINE));
     validator.enqueue(failed(Map.of(SPEC + "7.1-3", 1)));
     validator.enqueue(failed(Map.of(UAID_RULE, 1)));
     validator.enqueue(passed());
 
-    WorkerResult result = production().process(upload(WorkerRequest.Mode.FIX), workspace);
+    WorkerResult result = production().process(declaring(upload(WorkerRequest.Mode.FIX), true), workspace);
 
     assertEquals(Status.COMPLETED, result.status(), String.valueOf(result.error()));
-    assertEquals(4, validator.calls.size(), "baseline, the rolled-back run, the basic-tagger run, its identified copy");
+    assertEquals(3, validator.calls.size(), "baseline, the rolled-back run, the basic-tagger run; no identified copy");
     WorkerResult.Action inferred = action(result, RuleId.PDF_STRUCTURE_INFERRED_V1);
     assertEquals(ActionOutcome.ROLLED_BACK, inferred.outcome());
     assertTrue(inferred.reason().endsWith(PdfProcessor.STRUCTURE_NOTE), inferred.reason());
     assertEquals(ActionOutcome.APPLIED, action(result, RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1).outcome());
-    assertEquals(ActionOutcome.APPLIED, action(result, RuleId.PDF_UA_IDENTIFIER_V1).outcome());
+    WorkerResult.Action ua = action(result, RuleId.PDF_UA_IDENTIFIER_V1);
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), ua.reason());
+    assertEquals(PdfUaIdentifierStep.ENGINE_MADE_STRUCTURE, ua.reason());
     assertEquals(1, result.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_UA_IDENTIFIER_V1).count());
-    assertEquals("1", pdfUaPart());
-    assertEquals(ValidationStatus.PASSED, result.finalValidation().status());
-    assertTrue(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
+    assertEquals("", pdfUaPart());
+    assertEquals(ValidationStatus.FAILED, result.finalValidation().status());
+    assertFalse(has(result, FindingsBuilder.PDF_UA_IDENTIFIER_MACHINE_CHECKS_ONLY));
     assertTrue(result.manualReviewRequired());
     assertScratchClean();
     assertSchemaValid(result);
@@ -283,6 +335,13 @@ class UploadIdentifierTest {
 
   private PdfProcessor production() {
     return new PdfProcessor(new PdfPreflight(), validator, Main.productionRules());
+  }
+
+  /** {@code r} with {@code declarePdfUa: true} and the given human-review acknowledgement. */
+  static WorkerRequest declaring(WorkerRequest r, boolean acknowledged) {
+    return new WorkerRequest(
+        r.specVersion(), r.jobId(), r.inputPath(), r.outputDirectory(), r.mode(), r.profile(), r.explicitLanguage(), r.explicitTitle(), r.sourceFileName(),
+        r.origin(), r.limits(), true, acknowledged);
   }
 
   private static WorkerRequest upload(WorkerRequest.Mode mode) {

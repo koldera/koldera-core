@@ -32,7 +32,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * A {@code fix} run over each Chromium-generated fixture with the production rules and the real
  * veraPDF: the generated-structure and XMP rules apply, the no-increase gate passes, the only
- * check still failing is {@code 5-1}, so the identifier step writes {@code pdfuaid:part=1} and the
+ * check still failing is {@code 5-1}; the request asks for the declaration after human review
+ * ({@code declarePdfUa}, {@code humanReviewAcknowledged}), so the identifier step writes {@code pdfuaid:part=1} and the
  * identified copy validates with zero failures.
  */
 class GeneratedFixProcessorIT {
@@ -44,7 +45,7 @@ class GeneratedFixProcessorIT {
     "generated-untagged-text.pdf", "generated-forms.pdf", "generated-inline-blocks.pdf",
     "generated-irregular-tables.pdf", "generated-containers.pdf",
     "generated-headings.pdf", "generated-shaded-tables.pdf", "generated-link-runs.pdf", "generated-controls.pdf"})
-  void aGeneratedPdfIsNormalizedAndDeclaresPdfUaOneOnceMachineChecksAreClean(String fixture) throws IOException {
+  void aGeneratedPdfIsNormalizedAndDeclaresPdfUaOneWhenRequestedAfterReviewOnceMachineChecksAreClean(String fixture) throws IOException {
     Files.createDirectories(root.resolve("in"));
     JobWorkspace workspace = JobWorkspace.open(root);
     try (InputStream in = GeneratedFixProcessorIT.class.getResourceAsStream("/generated/" + fixture)) {
@@ -54,7 +55,7 @@ class GeneratedFixProcessorIT {
     WorkerRequest request = new WorkerRequest(
         "1.0", UUID.fromString("123e4567-e89b-42d3-a456-426614174000"), WorkerRequest.CANONICAL_INPUT_PATH,
         WorkerRequest.CANONICAL_OUTPUT_DIRECTORY, WorkerRequest.Mode.FIX, "ua1", null, null, "page.pdf",
-        WorkerRequest.Origin.HTML_GENERATED, new WorkerRequest.Limits(10_485_760, 20, 300));
+        WorkerRequest.Origin.HTML_GENERATED, new WorkerRequest.Limits(10_485_760, 20, 300), true, true);
 
     WorkerResult result = new PdfProcessor(new PdfPreflight(), VeraPdfCliValidator.fromEnvironment(), Main.productionRules()).process(request, workspace);
 

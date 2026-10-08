@@ -16,6 +16,8 @@
     "explicitTitle": {"type": ["string", "null"], "minLength": 1, "maxLength": 500},
     "sourceFileName": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
     "origin": {"enum": ["upload", "html_generated"]},
+    "declarePdfUa": {"type": "boolean", "description": "Opt-in: write pdfuaid:part=1 in fix mode. Honoured only with humanReviewAcknowledged true, no engine-made structure, no figure auto-marked as artifact and a clean final validation."},
+    "humanReviewAcknowledged": {"type": "boolean", "description": "The caller confirms a person reviewed the document; required for declarePdfUa."},
     "limits": {
       "type": "object", "additionalProperties": false,
       "properties": {
