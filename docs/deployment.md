@@ -3,7 +3,7 @@
 The image is built from `docker/Dockerfile`; `docker/compose.yaml` is the hardened single-host setup.
 
 ```bash
-export KOLDERA_IMAGE=ghcr.io/koldera/core:0.1.0   # required, no default tag
+export KOLDERA_IMAGE=koldera-core:0.1.0   # the default; loaded from the release bundle (docker load) or built from source
 export KOLDERA_TOKEN="$(openssl rand -base64 32)"
 docker compose -f docker/compose.yaml up -d
 curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info

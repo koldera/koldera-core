@@ -39,13 +39,14 @@ memory and lost on restart; it is a single instance and does not scale horizonta
 
 ## Quick start: Docker
 
-The image `ghcr.io/koldera/core:0.1.0` is published with the first release. Until then build it locally with
-`docker build -f docker/Dockerfile -t koldera-core .` and use `koldera-core` in place of the image name below.
+The image is not published to a public registry. Load it from your release bundle
+(`docker load -i koldera-core-v0.1.0-linux-amd64.tar`, which gives `koldera-core:0.1.0`) or build it from source with
+`docker build -f docker/Dockerfile -t koldera-core:0.1.0 .`.
 
 ```bash
 export KOLDERA_TOKEN="$(openssl rand -base64 32)"
 docker run -d --name koldera -p 8080:8080 -v koldera-data:/data \
-  -e KOLDERA_TOKEN ghcr.io/koldera/core:0.1.0
+  -e KOLDERA_TOKEN koldera-core:0.1.0
 curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info
 ```
 
@@ -89,7 +90,7 @@ The image contains the command-line tool, so no server is needed:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD:/work" -w /work ghcr.io/koldera/core:0.1.0 pdf report.pdf --fix
+  -v "$PWD:/work" -w /work koldera-core:0.1.0 pdf report.pdf --fix
 ```
 
 It writes `report.remediated.pdf` and the reports to the current directory (or to `--out <dir>`) and never touches the
@@ -109,7 +110,7 @@ GitHub Actions:
 - name: Check PDFs for PDF/UA-1 machine rules
   run: |
     docker run --rm --user "$(id -u):$(id -g)" \
-      -v "$PWD:/work" -w /work ghcr.io/koldera/core:0.1.0 pdf docs/report.pdf --out koldera-out
+      -v "$PWD:/work" -w /work koldera-core:0.1.0 pdf docs/report.pdf --out koldera-out
 ```
 
 The step fails on exit code 2 or 3. Remember that a pass is a machine check, not a review.
