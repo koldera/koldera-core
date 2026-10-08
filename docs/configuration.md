@@ -69,7 +69,7 @@ The image sets `KOLDERA_TYPST_CMD`, `VERAPDF_CMD`, `KOLDERA_CONTRACTS_DIR` and `
 
 `koldera pdf|html|scan|document` reads the same variables (data directory, limits, Typst and worker locations,
 `KOLDERA_WEB_PROXY`, `KOLDERA_WEB_ALLOW_HTTP`, `KOLDERA_CHROMIUM_SANDBOX`); `KOLDERA_DOCUMENT_MAX_BYTES` and
-`KOLDERA_IMAGE_MAX_BYTES` apply to the HTTP API only, since the command line reads files you chose. Exit codes: `0` machine check passed, `2` completed with failed
+`KOLDERA_IMAGE_MAX_BYTES` apply to the HTTP API only, since the command line reads files you chose. Exit codes: `0` machine check passed or `declaration_withheld` (only the PDF/UA identifier is missing, pending human review), `2` completed with failed
 machine rules, `3` job failed, unsupported or no machine verdict, `64` usage error, `130` interrupted (Ctrl+C).
 
 ## What survives a restart

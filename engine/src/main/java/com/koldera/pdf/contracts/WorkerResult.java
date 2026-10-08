@@ -49,7 +49,10 @@ public record WorkerResult(
     @JsonProperty("error")
     ERROR,
     @JsonProperty("not_run")
-    NOT_RUN
+    NOT_RUN,
+    /** A {@code fix} copy failing only {@code 5-1} because the PDF/UA identifier was withheld pending human review; never a pass. */
+    @JsonProperty("declaration_withheld")
+    DECLARATION_WITHHELD
   }
 
   public enum RemediationStatus {
@@ -78,6 +81,7 @@ public record WorkerResult(
     PDF_TITLE_V1,
     PDF_GENERATED_STRUCTURE_V1,
     PDF_UA_IDENTIFIER_V1,
+    PDF_UA_IDENTIFIER_WITHDRAWN_V1,
     PDF_ROLE_MAP_V1,
     PDF_TAB_ORDER_V1,
     PDF_LANG_CORRECTED_FROM_TEXT_V1,

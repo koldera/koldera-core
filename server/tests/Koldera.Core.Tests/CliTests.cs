@@ -217,7 +217,7 @@ public class CliTests
     }
 
     private static StubWorkerFactory Doc(IWorkerProcess? pdf = null, IWorkerProcess? render = null) =>
-        new() { PdfProcess = pdf ?? StubResults.PdfAnalyzeClean(), DocumentRender = render ?? StubResults.DocumentRenderCompleted() };
+        new() { PdfProcess = pdf ?? StubResults.PdfDocumentWithdrawn(), DocumentRender = render ?? StubResults.DocumentRenderCompleted() };
 
     private static byte[] Png() => File.ReadAllBytes("Fixtures/documents/logo.png");
 
@@ -231,8 +231,10 @@ public class CliTests
         var outDir = NewDir();
         var (code, stdout, _) = await CliRun.Run(Doc(), "document", Path.Combine(dir, "doc.json"), "--out", outDir);
         Assert.Equal(0, code);
-        Assert.True(File.Exists(Path.Combine(outDir, "doc.generated_pdf.pdf")));
-        Assert.Contains("PDF/UA-1 machine check: passed", stdout);
+        Assert.Equal(Fixtures.OtherPdf(), File.ReadAllBytes(Path.Combine(outDir, "doc.generated_pdf.pdf"))); // the withdrawn copy
+        Assert.Contains("PDF/UA-1 machine check: declaration_withheld", stdout);
+        Assert.Contains("declaring PDF/UA requires a human review. This is not a pass.", stdout);
+        Assert.DoesNotContain("machine check: passed", stdout);
     }
 
     [Fact]
@@ -322,7 +324,8 @@ public class CliTests
     {
         var dir = DocDir(File.ReadAllText("Fixtures/documents/invoice.json"));
         var outDir = NewDir();
-        var (code, stdout, _) = await CliRun.Run(Doc(pdf: StubResults.PdfAnalyzeCompleted()), "document", Path.Combine(dir, "doc.json"), "--out", outDir);
+        var pdf = StubResults.PdfDocumentWithdrawn(r => r["finalValidation"] = StubResults.ValidationOf("failed", ("7.1-3", 2), ("ISO 14289-1:2014 5-1", 1)));
+        var (code, stdout, _) = await CliRun.Run(Doc(pdf: pdf), "document", Path.Combine(dir, "doc.json"), "--out", outDir);
         Assert.Equal(2, code); // DOCUMENT_VALIDATION_FAILED counts as failed machine rules
         Assert.Contains("DOCUMENT_VALIDATION_FAILED", stdout);
         Assert.True(File.Exists(Path.Combine(outDir, "doc.generated_pdf.pdf")));

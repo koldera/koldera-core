@@ -33,16 +33,22 @@ public sealed class DocumentEngineIntegrationTests
         var id = (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         var job = await f.WaitForJob(id);
         Assert.True(job.GetProperty("state").GetString() == "completed", job.GetRawText());
-        Assert.Empty(job.GetProperty("validation").GetProperty("failedRules").EnumerateArray());
+        // Typst declares PDF/UA itself; the engine withdraws that, so the only failing rule is the missing identifier.
+        Assert.Equal("declaration_withheld", job.GetProperty("validation").GetProperty("status").GetString());
+        Assert.Equal(["ISO 14289-1:2014 5-1"], job.GetProperty("validation").GetProperty("failedRules").EnumerateArray().Select(r => r.GetProperty("ruleId").GetString()));
+        Assert.Equal("passed", job.GetProperty("baselineValidation").GetProperty("status").GetString());
+        var artifacts = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/artifacts");
+        var url = Assert.Single(artifacts.GetProperty("items").EnumerateArray(), a => a.GetProperty("kind").GetString() == "generated_pdf").GetProperty("downloadUrl").GetString()!;
+        var pdf = await f.CreateClient().GetByteArrayAsync(url);
+        Assert.DoesNotContain("pdfuaid:part>", Encoding.Latin1.GetString(pdf));
         return job;
     }
 
     [DocumentToolsFact]
-    public async Task The_invoice_renders_to_a_pdf_with_no_failed_veraPDF_rule()
+    public async Task The_invoice_renders_to_a_pdf_that_fails_only_the_withheld_declaration()
     {
         using var f = RealFactory();
-        var job = await Run(f, File.ReadAllText("Fixtures/documents/invoice.json"));
-        Assert.Equal("passed", job.GetProperty("validation").GetProperty("status").GetString());
+        await Run(f, File.ReadAllText("Fixtures/documents/invoice.json"));
     }
 
     [DocumentToolsFact]
