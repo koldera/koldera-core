@@ -677,11 +677,9 @@ public final class PdfProcessor implements Main.JobRunner {
   }
 
   /**
-   * After the gate passed on a {@code fix} copy whose request asked for the declaration after human review (and whose
-   * structure and figures the engine did not make up, {@link PdfUaIdentifierStep#requestBlocker}): when {@code 5-1} is the only failing check and the PAC-only structure rules
-   * report nothing, writes {@code pdfuaid:part=1} into a second scratch copy, re-checks integrity and validates it again.
-   * Only zero failures make that copy the one to publish; every other outcome leaves the gate-approved copy untouched and
-   * records why the identifier was not written.
+   * Writes {@code pdfuaid:part=1} into a second scratch copy when {@link PdfUaIdentifierStep#requestBlocker} and the
+   * final-validation blockers allow it, then re-checks integrity and validates again. Only zero failures publish that copy;
+   * otherwise the gate-approved copy stays and the reason the identifier was not written is recorded.
    */
   private IdentifierRun identify(
       WorkerRequest request, JobWorkspace workspace, PreflightOutcome pre, CopyIntegrity.Report integrityBefore, ValidationOutcome fin, Path candidate,

@@ -22,12 +22,10 @@ import org.apache.xmpbox.xml.XmpParsingException;
 import org.apache.xmpbox.xml.XmpSerializer;
 
 /**
- * {@code PDF_UA_IDENTIFIER_V1}: a step, not a {@link RemediationRule}, since it depends on the final validation. {@code pdfuaid:part=1}
- * is a PDF/UA-1 conformance declaration to every reader of the file, so it is never written by default ({@link #NOT_REQUESTED}). Only
- * a {@code fix} request with {@code declarePdfUa} and {@code humanReviewAcknowledged} may get it, and never when the run made the
- * structure tags itself or marked a figure as artifact ({@link #requestBlocker}); then only when the only failing check is
- * {@code 5-1} and no {@link StructureRules} check fails (uploads also need tagged text, {@link #textBlocker}; every copy needs an XMP
- * title, {@link #titleBlocker}). The identified copy is re-validated and published only with zero failures.
+ * {@code PDF_UA_IDENTIFIER_V1}: {@code pdfuaid:part=1} is a PDF/UA-1 conformance declaration, so it is never written by default
+ * ({@link #NOT_REQUESTED}). A {@code fix} request needs {@code declarePdfUa} and {@code humanReviewAcknowledged}, and the run must not
+ * have made the structure or artifacted a figure ({@link #requestBlocker}); then {@code 5-1} must be the only failing check
+ * ({@link #blocker}, {@link #textBlocker}, {@link #titleBlocker}). The identified copy is published only with zero failures.
  */
 public final class PdfUaIdentifierStep {
 
