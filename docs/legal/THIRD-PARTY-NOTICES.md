@@ -43,7 +43,7 @@ Licence elections are stated where a component offers a choice.
 | Node.js | 22.23.3 | MIT and the licences of its bundled components, in `node-LICENSE` | runs the renderer and scanner workers | https://github.com/nodejs/node, tag `v22.23.3` |
 | Eclipse Temurin JRE | 21 (image digest pinned in `docker/Dockerfile`) | GPL-2.0 with Classpath Exception | runs the PDF engine and veraPDF | https://github.com/adoptium/jdk21u |
 | .NET and ASP.NET Core runtime | 10.0 | MIT | runs the server | https://github.com/dotnet/runtime |
-| Ubuntu 24.04 base and packages (Chromium's system libraries, fonts, `curl`, CA certificates) | as installed in the image | various, mostly GPL, LGPL and permissive; each package's `copyright` file | unmodified distribution packages | https://archive.ubuntu.com/ubuntu/ (`apt-get source <package>`) |
+| Ubuntu 24.04 base and packages (Chromium's system libraries, fonts, `curl`, the CA trust store) | as installed in the image | various, mostly GPL, LGPL and permissive; each package's `copyright` file | unmodified distribution packages | https://archive.ubuntu.com/ubuntu/ (`apt-get source <package>`) |
 
 veraPDF is used as shipped upstream, with one change: the Jackson libraries inside its fat jar may be replaced by
 newer patch releases of the same library (the versions are in `verapdf-bundled-components.txt`). No veraPDF class is
