@@ -5,6 +5,10 @@ dated on the day its tag is created.
 
 ## Unreleased
 
+- Security: `docker/compose.sandbox.yaml` and `docker/seccomp-chromium.json` run Chromium with its own sandbox inside
+  the hardened container (Docker's default seccomp profile plus `clone`, `unshare`, `setns`, `chroot`). Recommended
+  when the renderer or the web scanner handle untrusted input; it fails closed on hosts without user namespaces.
+
 - Commercial release bundle: `scripts/package-release.mjs` builds the source archive, image archive, SBOM, licence
   texts, release manifest and `SHA256SUMS` for one tag; the release workflow attaches the bundle to the private
   GitHub Release and no longer pushes images to a registry.
