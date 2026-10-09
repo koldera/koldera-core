@@ -4,5 +4,4 @@
 #     paths: ["app/scanner/node_modules/example/package.json"]
 #     statement: "only reachable through X, which the server never calls; reviewed by <name> on <date>"
 #     expired_at: 2027-01-01
-# (none)
 vulnerabilities: []
