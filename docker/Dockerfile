@@ -98,7 +98,13 @@ RUN case "${TARGETARCH:-amd64}" in \
     && tar -xJf typst.tar.xz --strip-components=1 \
     && install -D -m 0755 typst /out/opt/typst/typst \
     && install -D -m 0644 LICENSE /out/licenses/typst-LICENSE \
+    && install -D -m 0644 NOTICE /out/licenses/typst-NOTICE \
     && /out/opt/typst/typst --version
+
+# The Typst binary embeds fonts and ICC profiles; their licences are in the NOTICE of the typst-assets crate that the
+# pinned Typst release depends on (typst 0.15.1 -> typst-assets 0.15.1), checksum-pinned.
+RUN curl -fsSL -o /out/licenses/typst-assets-NOTICE https://raw.githubusercontent.com/typst/typst-assets/v0.15.1/NOTICE \
+    && echo "80ac46fb7d70f1c30bf0c14d3408e6a6f0f9cc9997a00b592aa0d2c8a5243a9d  /out/licenses/typst-assets-NOTICE" | sha256sum -c -
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
 FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
@@ -147,6 +153,9 @@ COPY contracts /app/contracts
 # Licence texts: the koldera-core licence notice and the third-party licences of what is bundled.
 COPY LICENSE NOTICE /usr/share/licenses/koldera/
 COPY renderer/fonts/OFL.txt /usr/share/licenses/koldera/fonts-noto-OFL.txt
+COPY docs/legal/THIRD-PARTY-NOTICES.md /usr/share/licenses/koldera/THIRD-PARTY-NOTICES.md
+# Licence texts of what is bundled without carrying its own (Node.js, the shaded engine jar's libraries).
+COPY docs/legal/third-party/ /usr/share/licenses/koldera/third-party/
 COPY engine/src/main/resources/fonts/liberation/LICENSE /usr/share/licenses/koldera/fonts-liberation-LICENSE
 COPY --from=node /licenses/ /usr/share/licenses/koldera/
 COPY --from=verapdf /licenses/ /usr/share/licenses/koldera/
@@ -160,6 +169,18 @@ RUN printf '%s\n' '#!/bin/sh' 'exec dotnet /app/server/Koldera.Core.dll "$@"' > 
 # headless shell is what headless:true launches; --with-deps adds the system libraries it needs.
 RUN node /app/renderer/node_modules/playwright/cli.js install --with-deps --only-shell chromium \
     && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
+
+# Chromium's credits file (the licence of every third-party component in the browser build) travels with the image.
+# Playwright also installs an ffmpeg build (LGPL-2.1, used only to record video, which no worker does); it is removed
+# rather than shipped, and ffmpeg is not needed to launch the headless shell.
+RUN cp /ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/LICENSE.headless_shell \
+       /usr/share/licenses/koldera/chromium-headless-shell-LICENSE \
+    && rm -rf /ms-playwright/ffmpeg-*
+
+# The Node.js licence text in docs/legal/third-party/node-LICENSE is the one of this release. A base-image update that
+# changes the Node version fails here until that file and docs/legal/THIRD-PARTY-NOTICES.md are updated with it.
+ARG NODE_VERSION=22.23.3
+RUN test "$(node --version)" = "v${NODE_VERSION}"
 
 # The Node workers resolve ../contracts and ../fonts relative to their package; the variables make that explicit.
 ENV ASPNETCORE_URLS=http://+:8080 \
