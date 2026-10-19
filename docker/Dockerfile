@@ -20,7 +20,7 @@
 ARG KOLDERA_VERSION=0.1.0
 
 # ---------- PDF engine jar ----------
-FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
+FROM maven:3.9-eclipse-temurin-26@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS engine
 ARG KOLDERA_VERSION
 WORKDIR /src
 COPY engine/pom.xml .
@@ -108,7 +108,7 @@ FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddf
 # ---------- runtime ----------
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
 # WebKit too, and deleting them in a later layer would not make the image smaller.
-FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+FROM ubuntu:24.10@sha256:cdf755952ed117f6126ff4e65810bf93767d4c38f5c7185b50ec1f1078b464cc
 ARG KOLDERA_VERSION
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
