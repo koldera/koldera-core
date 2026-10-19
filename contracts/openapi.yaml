@@ -12,8 +12,8 @@ info:
     idempotency keys and client-session budgets are kept in memory or in the data directory of one instance;
     they are lost on restart and not shared between instances.
   license:
-    name: Proprietary — Koldera Commercial License
-    url: https://github.com/koldera/koldera-core/blob/main/COMMERCIAL.md
+    name: AGPL-3.0-only
+    url: https://github.com/koldera/koldera-core/blob/main/LICENSE
 servers:
   - url: http://localhost:8080
     description: Default address of the container image

@@ -1,6 +1,6 @@
 koldera-core
 Copyright (c) 2026 makulatura78
-Proprietary software. Use requires a signed Koldera Commercial License Agreement (see LICENSE and COMMERCIAL.md).
+Koldera Core is licensed under AGPL-3.0-only (see LICENSE).
 
 koldera-core uses or ships the third-party components below. They keep their own licences. This list names the
 major components; each package's own licence text is in its distribution. Exact versions are pinned in

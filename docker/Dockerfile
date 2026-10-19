@@ -13,7 +13,7 @@
 #     typst-x86_64-unknown-linux-musl.tar.xz   sha256 a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
 #     typst-aarch64-unknown-linux-musl.tar.xz  sha256 5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee
 #   Licenses: veraPDF GPLv3+/MPLv2+ (dual) and Typst Apache-2.0 run as separate processes; PDFBox Apache-2.0;
-#   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is proprietary (see LICENSE).
+#   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core is AGPL-3.0-only (see LICENSE).
 
 # The one version of the image (server, engine, label): the default for local builds; release.yml and
 # scripts/package-release.mjs pass the release tag. It must match <Version> in server/Directory.Build.props and engine/pom.xml.
@@ -113,7 +113,7 @@ ARG KOLDERA_VERSION
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
-      org.opencontainers.image.licenses="LicenseRef-Koldera-Commercial" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.documentation="https://github.com/koldera/koldera-core/blob/main/NOTICE" \
       org.opencontainers.image.version="${KOLDERA_VERSION}" \
       dev.koldera.third-party-licenses="/usr/share/licenses/koldera"

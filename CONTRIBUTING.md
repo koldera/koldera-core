@@ -4,7 +4,7 @@ This page describes how koldera-core is developed. Please read it and the [Code 
 
 ## Before you start
 
-- For a bug, open an issue or write to the address in your agreement.
+- For a bug, open an issue with a synthetic reproducer.
 - For a new feature or a change to the API, open an issue first so we can agree on the shape before you write code.
 - Report security problems privately, see [SECURITY.md](SECURITY.md).
 - What the project promises, and what it never does, is in the [README](README.md). Changes must not add claims
@@ -12,10 +12,9 @@ This page describes how koldera-core is developed. Please read it and the [Code 
 
 ## External contributions
 
-koldera-core is proprietary software ([LICENSE](LICENSE)). Pull requests and patches from outside the Koldera team are
-not accepted without a separate written agreement with the licensor that covers the rights in the contribution. Bug
-reports and feature requests are welcome. Customers may keep their own modifications as their licence allows; see
-[COMMERCIAL.md](COMMERCIAL.md).
+Issues and pull requests are welcome. By submitting a contribution, you agree to license that contribution under
+[AGPL-3.0-only](LICENSE) and confirm that you have the right to do so. Include the applicable copyright and licence
+notices for code you add. Please open an issue before a large change so the design can be discussed.
 
 ## Repository layout and setup
 
