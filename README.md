@@ -41,9 +41,16 @@ memory and lost on restart; it is a single instance and does not scale horizonta
 
 ## Quick start: Docker
 
-The image is not published to a public registry. Load it from your release bundle
-(`docker load -i koldera-core-v0.1.0-linux-amd64.tar`, which gives `koldera-core:0.1.0`) or build it from source with
-`docker build -f docker/Dockerfile -t koldera-core:0.1.0 .`.
+No prebuilt image or GitHub Release is available yet. Clone this repository and build the image from source:
+
+```bash
+git clone https://github.com/koldera/koldera-core.git
+cd koldera-core
+docker build -f docker/Dockerfile -t koldera-core:0.1.0 .
+```
+
+The build downloads pinned upstream tools and can take time. Review [deployment guidance](docs/deployment.md) before
+serving untrusted users.
 
 ```bash
 export KOLDERA_TOKEN="$(openssl rand -base64 32)"
@@ -144,12 +151,13 @@ To run on AWS Lambda see [docs/aws-lambda.md](docs/aws-lambda.md).
 
 ## SDKs and command-line client
 
-These are separate projects under the Apache-2.0 licence, planned and not yet published:
+These are separate Apache-2.0 projects. Their source repositories are being prepared for public access; registry
+packages are not published yet:
 
 - `koldera-cli`, a Rust command-line client for a remote server or the local Docker image
 - `koldera-js` (TypeScript and Node.js, with React), `koldera-python`, `koldera-dotnet`, `koldera-go`
 
-They will live under github.com/koldera. Until they are published, use the HTTP API directly.
+Use the HTTP API directly until their repositories are public.
 
 ## Components
 
@@ -164,17 +172,16 @@ They will live under github.com/koldera. Until they are published, use the HTTP 
 
 ## Licensing
 
-> Draft — pending legal review.
-
-koldera-core is proprietary, commercial, source-available software ([LICENSE](LICENSE)). Using, modifying or deploying
-it requires a signed Koldera Commercial License Agreement. Customers receive the source, may modify and build it for
-their internal business purposes and run it on their own infrastructure; redistribution, resale and OEM embedding
-need a separate agreement. See [COMMERCIAL.md](COMMERCIAL.md) or write to licensing@koldera-accessibility.dev.
-Third-party components keep their own licences, listed in [NOTICE](NOTICE).
+koldera-core is open source under the [GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only).
+You may use, modify and redistribute it under that licence. If you modify the server and let users interact with it
+over a network, AGPL section 13 requires you to offer those users the corresponding source of your version.
+The SDKs, CLI and contract kit have their own Apache-2.0 licences. Third-party components keep their own licences,
+listed in [NOTICE](NOTICE). For a separate commercial licence, contact licensing@koldera-accessibility.dev;
+no commercial licence is required to use Core under AGPL-3.0-only.
 
 ## Contributing and security
 
-External contributions are not accepted without a separate written agreement; see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
+Contributions are welcome under AGPL-3.0-only; see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
 described in [SECURITY.md](SECURITY.md), not in a public issue. Participation is governed by the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 

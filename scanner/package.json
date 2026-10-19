@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Isolated one-page accessibility scan worker (Playwright + axe-core)",
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "engines": { "node": ">=22" },
   "bin": { "koldera-web-scanner": "dist/cli.js" },

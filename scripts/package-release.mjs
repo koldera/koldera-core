@@ -1,4 +1,4 @@
-// Builds the private customer bundle for one release tag. Usage and the bundle layout: RELEASING.md.
+// Builds the public release bundle for one release tag. Usage and the bundle layout: RELEASING.md.
 //   node scripts/package-release.mjs vX.Y.Z [--out dir] [--image ref] [--skip-image]
 // The source archive and the image come from the same commit: the tree must be clean, HEAD must be the tag,
 // and the image must carry that commit in org.opencontainers.image.revision.
