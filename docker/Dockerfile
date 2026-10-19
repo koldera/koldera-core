@@ -49,7 +49,7 @@ RUN pnpm run build && pnpm prune --prod
 RUN mkdir -p /licenses && cp -L node_modules/axe-core/LICENSE /licenses/axe-core-LICENSE
 
 # ---------- ASP.NET server ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317 AS server
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS server
 ARG KOLDERA_VERSION
 WORKDIR /src
 COPY server/Directory.Build.props server/Directory.Packages.props ./server/
@@ -102,7 +102,7 @@ RUN case "${TARGETARCH:-amd64}" in \
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
 FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4 AS dotnet
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS dotnet
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS nodejs
 
 # ---------- runtime ----------
