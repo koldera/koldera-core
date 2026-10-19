@@ -6,7 +6,7 @@ rendered to tagged PDF, and axe-core scans of web pages. One container, an HTTP 
 Everything it reports is a **machine check**: PDF/UA-1 rules through veraPDF and WCAG 2.2 AA automated rules through
 axe-core. Automated checks cannot decide everything, so a person still has to review the result.
 
-Status: early release (0.1.0). The API may change before 1.0.
+**Status:** 0.1 source preview. No prebuilt image or GitHub Release is available yet; the API may change before 1.0.
 
 No telemetry: koldera-core does not send data anywhere; documents stay on your server.
 
