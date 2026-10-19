@@ -1,6 +1,6 @@
 * text=auto eol=lf
 
-# Paths left out of `git archive`, i.e. out of the source/ folder of the customer bundle (scripts/package-release.mjs).
+# Paths left out of `git archive`, i.e. out of the source/ folder of the release bundle (scripts/package-release.mjs).
 # Kept: everything needed to build the image and run every test suite (engine, renderer, scanner, server, scripts).
 # Left out: CI and GitHub configuration, the release tooling and its runbook, and the internal wording lint
 # (it lists hosted-service names that are not part of the product).
