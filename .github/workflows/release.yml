@@ -7,9 +7,8 @@ on:
 permissions:
   contents: read
 
-# Commercial releases are delivered privately: the bundle goes to a draft GitHub Release of this private repository
-# and nowhere else. No image is pushed to any registry (a registry package can be made public by one setting change,
-# and keyless signing would write this repository's identity to the public Sigstore log). See RELEASING.md.
+# A tagged AGPL release is packaged into a draft GitHub Release for review before publication. The image is
+# included in the bundle; no image is pushed to a registry. See RELEASING.md.
 jobs:
   # The full CI workflow for the tagged commit: nothing is packaged unless every test job passes.
   ci:
@@ -92,7 +91,7 @@ jobs:
           name: release-bundle
           path: ${{ runner.temp }}/release/assets/
           if-no-files-found: error
-          retention-days: 1 # the draft release keeps the copy; artifact storage of a private repo is metered
+          retention-days: 1 # the draft release keeps the copy
           compression-level: 0 # already gzipped
 
   release:
@@ -100,7 +99,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
-      contents: write # gh release create (draft, private repository)
+      contents: write # gh release create (draft)
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -112,7 +111,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          test "$(gh api "repos/$GH_REPO" --jq .private)" = "true" || { echo "repository is not private: refusing to attach a commercial bundle"; exit 1; }
           sha256sum -c "koldera-core-${GITHUB_REF_NAME}.tar.gz.sha256"
           flags=""
           case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac

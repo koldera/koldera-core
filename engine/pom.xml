@@ -11,6 +11,13 @@
 
   <name>Koldera PDF Engine</name>
   <description>Isolated PDF/UA-1 analysis and conservative remediation worker (PDFBox + veraPDF).</description>
+  <licenses>
+    <license>
+      <name>GNU Affero General Public License v3.0 only</name>
+      <url>https://github.com/koldera/koldera-core/blob/main/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
 
   <properties>
     <maven.compiler.release>21</maven.compiler.release>

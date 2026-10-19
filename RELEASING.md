@@ -1,8 +1,11 @@
 # Releasing koldera-core
 
-Commercial releases are delivered privately to customers. Nothing is pushed to a public registry: no `latest` tag, no
-image on GHCR or Docker Hub, no public release. The deliverable is one bundle attached to a **draft** GitHub Release of
-this private repository, sent to each customer through a private channel.
+Core is licensed under AGPL-3.0-only. The release workflow builds a source and image bundle and attaches it to a
+**draft** GitHub Release for verification. Publishing the draft makes the bundle publicly downloadable. No image is
+pushed to GHCR or Docker Hub, and there is no `latest` tag.
+
+Do not tag a release until the third-party image licence pack has been reviewed and merged, the full CI is green,
+and the bundle has been tested on a clean host. See the open release issues and the [NOTICE](NOTICE).
 
 ## Bundle layout
 
@@ -44,10 +47,9 @@ source and the image always come from the same commit. It also refuses a source 
    `scripts/package-release.mjs`, verifies the checksums and creates a **draft** release with
    `koldera-core-vX.Y.Z.tar.gz`, its `.sha256`, and copies of `SHA256SUMS`, `release-manifest.json` and the SBOM.
 4. Check the draft: download the tarball, run `sha256sum -c` on it and on `SHA256SUMS`, and follow
-   `docs/release/INSTALL.md` on a clean host (`/v1/info` must report `X.Y.Z`). Then publish the draft. The repository
-   is private, so the release and its assets stay visible to repository members only.
-5. Deliver the tarball and its `.sha256` to each entitled customer through the agreed private channel, and record
-   which customer received which version and SHA-256.
+   `docs/release/INSTALL.md` on a clean host (`/v1/info` must report `X.Y.Z`). Check that the bundle contains the
+   corresponding source and the required third-party notices. Then publish the draft.
+5. Announce the public release with a link to the tag, release assets, checksums and any known limitations.
 
 ## Building a bundle locally
 
@@ -65,5 +67,5 @@ Needs git, tar, Node 22, Docker (linux/amd64 builds) and syft (or Docker to run 
 
 - A failed workflow run publishes nothing. Fix the problem on `main`, delete the tag (`git push origin :refs/tags/vX.Y.Z`
   and `git tag -d vX.Y.Z`) only if no bundle was delivered, and tag again; otherwise release the next patch version.
-- A bad bundle that was delivered is never replaced under the same version: ship a new patch version and tell the
-  customers which SHA-256 to discard.
+- A bad published bundle is never replaced under the same version: ship a new patch version and identify the old
+  SHA-256 in the release notes.
