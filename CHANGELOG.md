@@ -10,7 +10,7 @@ dated on the day its tag is created.
   (checksum-pinned) beside it; no veraPDF class changes. The veraPDF Swing GUI and installer uninstaller are removed
   from the image. `.trivyignore.yaml` is empty again.
 
-- Commercial release bundle: `scripts/package-release.mjs` builds the source archive, image archive, SBOM, licence
+- Release bundle: `scripts/package-release.mjs` builds the source archive, image archive, SBOM, licence
   texts, release manifest and `SHA256SUMS` for one tag; the release workflow attaches the bundle to the private
   GitHub Release and no longer pushes images to a registry.
 
