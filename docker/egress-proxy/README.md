@@ -19,5 +19,5 @@ as the image is distributed:
 
 If you cannot get the source from these places, write to licensing@koldera-accessibility.dev and name the image
 digest; the Koldera team will send you the source. The files in this directory (`squid.conf`, the error template and the
-Dockerfile) are part of koldera-core and are proprietary (see [LICENSE](../../LICENSE)); Squid itself stays
+Dockerfile) are part of koldera-core and are AGPL-3.0-only (see [LICENSE](../../LICENSE)); Squid itself stays
 under GPL-2.0-or-later.

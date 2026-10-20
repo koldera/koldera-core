@@ -1,5 +1,5 @@
-// Licence gate over the Maven, pnpm and NuGet dependency lists. koldera-core is distributed under proprietary terms,
-// so every dependency must be compatible with proprietary distribution: permissive licences only. Anything else
+// Licence gate over the Maven, pnpm and NuGet dependency lists. Keep the existing conservative dependency policy:
+// permissive licences are accepted automatically, while other licences require an explicit review. Anything else
 // (copyleft, weak copyleft or unknown) fails until a person reviews that one package into EXCEPTIONS.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
