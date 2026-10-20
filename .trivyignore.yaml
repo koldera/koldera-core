@@ -4,36 +4,4 @@
 #     paths: ["app/scanner/node_modules/example/package.json"]
 #     statement: "only reachable through X, which the server never calls; reviewed by <name> on <date>"
 #     expired_at: 2027-01-01
-vulnerabilities:
-  - id: CVE-2026-68494
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-89407
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-89425
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-54512
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-54513
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-68497
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-91776
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
-  - id: CVE-2026-91777
-    paths: ["opt/verapdf/bin/cli-1.30.2.jar", "opt/verapdf/bin/gui-1.30.2.jar"]
-    statement: "Jackson 2.21.1 bundled inside upstream veraPDF 1.30.2, the latest release; no fixed veraPDF yet. Temporary, owner review required (see PR)."
-    expired_at: 2026-12-31
+vulnerabilities: []

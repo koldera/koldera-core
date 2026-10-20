@@ -72,6 +72,40 @@ COPY docker/verapdf-auto-install.xml auto-install.xml
 RUN java -jar "verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar" auto-install.xml \
     && /opt/verapdf/verapdf --version
 
+# The image runs the command line only: drop the Swing GUI and the installer's uninstaller (two more jars to patch and
+# to list in the notices for nothing).
+RUN rm -rf "/opt/verapdf/bin/gui-${VERAPDF_VERSION}.jar" /opt/verapdf/verapdf-gui /opt/verapdf/Uninstaller
+
+# veraPDF 1.30.2 is the latest release and its fat jar bundles Jackson 2.21.1 (eight HIGH CVEs, fixed in 2.21.7).
+# veraPDF only uses Jackson to write its JSON report, but the fix is cheap: cut jackson-core and jackson-databind out of
+# the fat jar and add the patched jars beside it (the launcher puts bin/* on the classpath). No veraPDF class is
+# touched. Remove this block when a veraPDF release bundles Jackson >= 2.21.7 (docs/legal/THIRD-PARTY-NOTICES.md).
+ARG JACKSON_VERSION=2.21.7
+ARG JACKSON_CORE_SHA256=8c5623b98f32d5f7e1287ff61ed50e08ab7b11381e991fff89327faabba42261
+ARG JACKSON_DATABIND_SHA256=1290c2795e93e8a6861a6c4d9ff0d844d32f5ea178362cb2721edf5561e828b1
+RUN set -eu; \
+    cd /opt/verapdf/bin; \
+    for a in core databind; do \
+      case "$a" in core) sha="${JACKSON_CORE_SHA256}" ;; databind) sha="${JACKSON_DATABIND_SHA256}" ;; esac; \
+      curl -fsSL -o "jackson-$a-${JACKSON_VERSION}.jar" "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-$a/${JACKSON_VERSION}/jackson-$a-${JACKSON_VERSION}.jar"; \
+      echo "$sha  jackson-$a-${JACKSON_VERSION}.jar" | sha256sum -c -; \
+    done; \
+    mkdir /tmp/cli && cd /tmp/cli && jar xf "/opt/verapdf/bin/cli-${VERAPDF_VERSION}.jar"; \
+    rm -rf com/fasterxml/jackson/core com/fasterxml/jackson/databind \
+           META-INF/maven/com.fasterxml.jackson.core/jackson-core META-INF/maven/com.fasterxml.jackson.core/jackson-databind \
+           META-INF/services/com.fasterxml.jackson.core.JsonFactory META-INF/services/com.fasterxml.jackson.core.ObjectCodec; \
+    rm -rf META-INF/versions/*/com/fasterxml/jackson/core META-INF/versions/*/com/fasterxml/jackson/databind; \
+    mv META-INF/MANIFEST.MF /tmp/MANIFEST.MF; \
+    jar --create --file "/opt/verapdf/bin/cli-${VERAPDF_VERSION}.jar" --manifest /tmp/MANIFEST.MF -C /tmp/cli .; \
+    cd / && rm -rf /tmp/cli /tmp/MANIFEST.MF; \
+    /opt/verapdf/verapdf --version
+
+# What the fat jar and the added jars bundle, for docs/legal/THIRD-PARTY-NOTICES.md and the customer's own audit.
+RUN mkdir -p /licenses && cd /opt/verapdf/bin && for j in *.jar; do \
+      echo "== $j"; \
+      unzip -Z1 "$j" 'META-INF/maven/*/*/pom.properties' | while read -r p; do unzip -p "$j" "$p" | tr -d '\r' | awk -F= '/^groupId=/{g=$2} /^artifactId=/{a=$2} /^version=/{v=$2} END{print "  " g ":" a ":" v}'; done | sort; \
+    done > /licenses/verapdf-bundled-components.txt
+
 # The installer ships no licence files; the dual licence texts come from the tagged upstream source, checksum-pinned.
 RUN mkdir -p /licenses \
     && curl -fsSL -o /licenses/verapdf-LICENSE.GPL https://raw.githubusercontent.com/veraPDF/veraPDF-library/v${VERAPDF_VERSION}/LICENSE.GPL \
