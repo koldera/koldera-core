@@ -26,9 +26,9 @@ public sealed record DocumentRenderError(
     [property: JsonPropertyName("message")] string Message);
 
 /// <summary>
-/// One structured-document job: Typst renders the stored document (plus the image uploads it names) to a
-/// tagged PDF, then the PDF engine analyzes that file. A failed veraPDF rule fails the job with
-/// <see cref="ValidationFailed"/> but keeps the PDF and the findings, so a person can inspect them.
+/// One structured-document job: Typst renders the stored document (plus the image uploads it names) to a tagged PDF, then the
+/// PDF engine withdraws the PDF/UA identifier Typst writes and validates the copy. A failed veraPDF rule fails the job with
+/// <see cref="ValidationFailed"/> but keeps the PDF and the findings; a copy failing only the withheld identifier completes.
 /// </summary>
 public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, PdfWorkers pdf, CoreOptions options, TimeProvider clock) : IJobExecutor
 {
@@ -99,33 +99,54 @@ public sealed class DocumentExecutor(DataStore store, DocumentWorkers document, 
         var outDir = Path.Combine(store.JobDir(job.Id), "out");
         var generated = await ArtifactFiles.VerifyAndKeepAsync(Path.Combine(scratch, "out", generatedName), "generated_pdf", declared.Sha256, declared.Bytes, outDir, now, retention, ct);
 
-        // The engine runs in its own scratch layout, always in analyze mode: the renderer's output is what is judged, never repaired.
+        // The engine runs in its own scratch layout. Typst's ua-1 output declares PDF/UA itself; the engine's fix for this origin
+        // withdraws that identifier and changes nothing else: the renderer's output is what is judged, never repaired.
         var pdfScratch = Path.Combine(scratch, "pdf");
         Directory.CreateDirectory(Path.Combine(pdfScratch, "in"));
         Directory.CreateDirectory(Path.Combine(pdfScratch, "out"));
-        var engineJob = new CoreJob { Id = job.Id, Mode = "analyze", Profile = job.Profile ?? "ua1", SourceFileName = job.SourceFileName };
-        var engine = await PdfWorkerRun.ExecuteAsync(pdf.Process, engineJob, Path.Combine(outDir, generated.FileName), generated.Sha256, generated.Bytes, WorkerOrigin.Upload,
+        var engineJob = new CoreJob { Id = job.Id, Mode = "fix", Profile = job.Profile ?? "ua1", SourceFileName = job.SourceFileName };
+        var engine = await PdfWorkerRun.ExecuteAsync(pdf.Process, engineJob, Path.Combine(outDir, generated.FileName), generated.Sha256, generated.Bytes, WorkerOrigin.DocumentGenerated,
             PdfJobExecutor.LimitsFrom(options.Limits), pdfScratch, outDir, now, retention, timeout, ct);
 
         var version = HtmlToPdfExecutor.Truncate(string.IsNullOrEmpty(engine.EngineVersion) ? rendered.EngineVersion : rendered.EngineVersion + "; " + engine.EngineVersion);
-        var artifacts = new List<CoreArtifact> { generated };
-        artifacts.AddRange(engine.Artifacts);
+        var artifacts = Published(generated, engine, outDir);
         if (engine.State != CoreJobState.Completed)
             return new JobOutcome(engine.State, engine.ResultStatus, engine.ErrorCode, engine.ErrorMessage, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
 
         // Only a verdict counts: error / not_run / missing is "unknown", never "clean".
         var (status, failed) = Verdict(engine.FinalValidationJson ?? engine.BaselineValidationJson);
-        if (status is not ("passed" or "failed"))
+        if (status is not ("passed" or "failed" or MachineValidationResponse.DeclarationWithheld))
         {
             var message = "veraPDF gave no verdict on the generated PDF (" + (status ?? "missing") + "); the file is kept but not treated as valid";
             return new JobOutcome(CoreJobState.Failed, "failed", ValidationUnavailable, message, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
         }
-        if (status == "failed" || failed.Count > 0)
+        var onlyIdentifier = status == MachineValidationResponse.DeclarationWithheld && failed.All(r => r == "5-1" || r.EndsWith(" 5-1", StringComparison.Ordinal));
+        if (status == "failed" || (failed.Count > 0 && !onlyIdentifier))
         {
             var message = $"the generated PDF fails {failed.Count} veraPDF rule(s): {string.Join(", ", failed.Take(10))}; the file and the findings are kept for inspection";
             return new JobOutcome(CoreJobState.Failed, "failed", ValidationFailed, message, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
         }
         return new JobOutcome(CoreJobState.Completed, engine.ResultStatus, null, null, engine.RemediationStatus, version, engine.BaselineValidationJson, engine.FinalValidationJson, engine.Findings, engine.Actions, artifacts);
+    }
+
+    /// <summary>
+    /// The engine's copy without the renderer's identifier replaces the rendered file as <c>generated_pdf</c>. Without such a copy
+    /// the rendered file is kept only when the engine found no identifier to withdraw; otherwise it would still declare PDF/UA.
+    /// </summary>
+    private static List<CoreArtifact> Published(CoreArtifact generated, PdfWorkerRunResult engine, string outDir)
+    {
+        var withdrawn = engine.Artifacts.SingleOrDefault(a => a.Kind == "remediated");
+        var artifacts = engine.Artifacts.Where(a => a != withdrawn).ToList();
+        if (withdrawn is not null || engine.RemediationStatus != "no_applicable_fix")
+        {
+            File.Delete(Path.Combine(outDir, generated.FileName));
+            if (withdrawn is not null) artifacts.Insert(0, withdrawn with { Kind = "generated_pdf" });
+        }
+        else
+        {
+            artifacts.Insert(0, generated);
+        }
+        return artifacts;
     }
 
     private static (string? Status, List<string> FailedRules) Verdict(string? validationJson)

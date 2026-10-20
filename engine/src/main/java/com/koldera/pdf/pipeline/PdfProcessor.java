@@ -602,6 +602,9 @@ public final class PdfProcessor implements Main.JobRunner {
     } else if (request.isFix() && request.isHtmlGenerated()) {
       generatedGate = true;
       regression = generatedRegression(baseline.failedRuleCounts(), fin.failedRuleCounts(), applied(actions, RuleId.PDF_XMP_METADATA_FROM_INFO_V1));
+    } else if (request.isDocumentGenerated()) {
+      // Withdrawing the identifier can only add 5-1; anything else that fails more often is a regression.
+      regression = generatedRegression(baseline.failedRuleCounts(), fin.failedRuleCounts(), applied(actions, RuleId.PDF_UA_IDENTIFIER_WITHDRAWN_V1));
     } else {
       regression = regression(baseline.failedRuleCounts(), fin.failedRuleCounts(), packetWritten(actions));
     }
@@ -619,6 +622,8 @@ public final class PdfProcessor implements Main.JobRunner {
         toPublish = workspace.scratchDirectory().resolve(IDENTIFIED);
         fin = ua.validation();
         findings.pdfUaIdentifierFromMachineChecks();
+      } else if (ua.withheld()) {
+        result.declarationWithheld();
       }
     }
     try {
@@ -661,22 +666,25 @@ public final class PdfProcessor implements Main.JobRunner {
     return Attempt.done(result.build(Status.COMPLETED, RemediationStatus.APPLIED, null, null));
   }
 
-  /** The identifier step's action; {@code validation} is the identified copy's, set only when it is to be published. */
-  private record IdentifierRun(Action action, ValidationOutcome validation) {
+  /**
+   * The identifier step's action; {@code validation} is the identified copy's, set only when it is to be published;
+   * {@code withheld} when only the request terms kept it out ({@link PdfUaIdentifierStep#requestBlocker}) of a copy every machine check would let through.
+   */
+  private record IdentifierRun(Action action, ValidationOutcome validation, boolean withheld) {
     static IdentifierRun skipped(String reason) {
-      return new IdentifierRun(new Action(RuleId.PDF_UA_IDENTIFIER_V1, ActionOutcome.SKIPPED, reason, null, null), null);
+      return new IdentifierRun(new Action(RuleId.PDF_UA_IDENTIFIER_V1, ActionOutcome.SKIPPED, reason, null, null), null, false);
     }
   }
 
   /**
-   * After the gate passed on a {@code fix} copy: when {@code 5-1} is the only failing check and the PAC-only structure rules
-   * report nothing, writes {@code pdfuaid:part=1} into a second scratch copy, re-checks integrity and validates it again.
-   * Only zero failures make that copy the one to publish; every other outcome leaves the gate-approved copy untouched and
-   * records why the identifier was not written.
+   * Writes {@code pdfuaid:part=1} into a second scratch copy when {@link PdfUaIdentifierStep#requestBlocker} and the
+   * final-validation blockers allow it, then re-checks integrity and validates again. Only zero failures publish that copy;
+   * otherwise the gate-approved copy stays and the reason the identifier was not written is recorded.
    */
   private IdentifierRun identify(
       WorkerRequest request, JobWorkspace workspace, PreflightOutcome pre, CopyIntegrity.Report integrityBefore, ValidationOutcome fin, Path candidate,
       Instant deadline, List<Action> actions, byte[] originalBytes) {
+    // The machine checks run whether or not the declaration was requested: they decide between declaration_withheld and failed.
     String blocked = PdfUaIdentifierStep.blocker(fin.failedRuleCounts());
     if (blocked == null) {
       blocked = PdfUaIdentifierStep.titleBlocker(candidate);
@@ -686,6 +694,10 @@ public final class PdfProcessor implements Main.JobRunner {
     }
     if (blocked == null) {
       blocked = PdfUaIdentifierStep.structureBlocker(candidate);
+    }
+    String refused = PdfUaIdentifierStep.requestBlocker(request, actions);
+    if (refused != null) {
+      return new IdentifierRun(IdentifierRun.skipped(refused).action(), null, blocked == null);
     }
     if (blocked != null) {
       return IdentifierRun.skipped(blocked);
@@ -725,11 +737,11 @@ public final class PdfProcessor implements Main.JobRunner {
         new Action(
             RuleId.PDF_UA_IDENTIFIER_V1,
             ActionOutcome.APPLIED,
-            "added pdfuaid:part=1 to the XMP packet: the automated PDF/UA-1 machine checks report no failures on this copy;"
-                + " the checks cover only part of PDF/UA-1 and the document still requires human review",
+            "added pdfuaid:part=1 to the XMP packet as requested after human review: the automated PDF/UA-1 machine checks report no"
+                + " failures on this copy; they cover only part of PDF/UA-1",
             "no PDF/UA identifier",
             "pdfuaid:part=1"),
-        identifiedValidation);
+        identifiedValidation, false);
   }
 
   /**
@@ -738,7 +750,7 @@ public final class PdfProcessor implements Main.JobRunner {
    * repeat that left it out.
    */
   private boolean surveysFonts(WorkerRequest request) {
-    return rules.stream().anyMatch(r -> r.id() == RuleId.PDF_FONT_TOUNICODE_V1 && r.participates(request));
+    return !request.isDocumentGenerated() && rules.stream().anyMatch(r -> r.id() == RuleId.PDF_FONT_TOUNICODE_V1 && r.participates(request));
   }
 
   /** The XMP rule wrote a packet where the catalog had none (not an addition to an existing packet). */
@@ -759,6 +771,10 @@ public final class PdfProcessor implements Main.JobRunner {
 
   /** Only the rules that participate in the request's mode are inspected, applied and listed. */
   private List<Action> planAndApply(PDDocument document, WorkerRequest request, Set<RuleId> excluded) {
+    if (request.isDocumentGenerated()) {
+      // A Typst document is judged as rendered, never repaired: the one change is withdrawing the renderer's declaration.
+      return new ArrayList<>(List.of(PdfUaIdentifierStep.withdraw(document)));
+    }
     List<RemediationRule> participating = rules.stream().filter(rule -> rule.participates(request, excluded)).toList();
     List<RuleDecision> decisions = new ArrayList<>();
     for (RemediationRule rule : participating) {

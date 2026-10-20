@@ -1,9 +1,11 @@
 package com.koldera.pdf.rules;
 
 import com.koldera.pdf.contracts.WorkerRequest;
+import com.koldera.pdf.contracts.WorkerResult;
 import com.koldera.pdf.generated.StructureRules;
 import com.koldera.pdf.inference.StructureStrategy;
 import com.koldera.pdf.integrity.CopyWriter;
+import com.koldera.pdf.repair.FiguresWithoutAltRule;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,10 +22,10 @@ import org.apache.xmpbox.xml.XmpParsingException;
 import org.apache.xmpbox.xml.XmpSerializer;
 
 /**
- * {@code PDF_UA_IDENTIFIER_V1}: a step, not a {@link RemediationRule}, since it depends on the final validation. In a {@code fix}
- * run, when the only failing check is {@code 5-1} and no {@link StructureRules} check fails, it adds {@code pdfuaid:part=1} to the
- * XMP packet (uploads also need tagged text, {@link #textBlocker}; every copy needs an XMP title, {@link #titleBlocker}). The
- * identified copy is re-validated and published only with zero failures. A machine-check declaration, not a conformance claim.
+ * {@code PDF_UA_IDENTIFIER_V1}: {@code pdfuaid:part=1} is a PDF/UA-1 conformance declaration, so it is never written by default
+ * ({@link #NOT_REQUESTED}). A {@code fix} request needs {@code declarePdfUa} and {@code humanReviewAcknowledged}, and the run must not
+ * have made the structure or artifacted a figure ({@link #requestBlocker}); then {@code 5-1} must be the only failing check
+ * ({@link #blocker}, {@link #textBlocker}, {@link #titleBlocker}). The identified copy is published only with zero failures.
  */
 public final class PdfUaIdentifierStep {
 
@@ -33,11 +35,47 @@ public final class PdfUaIdentifierStep {
   /** veraPDF's PDF/UA-1 test for the missing identification schema (ISO 14289-1:2014 clause 5). */
   public static final String IDENTIFIER_CHECK = "5-1";
 
+  /** Default: the identifier is a conformance declaration, so it is only written when the caller asks for it after review. */
+  public static final String NOT_REQUESTED =
+      "not written: pdfuaid:part=1 declares PDF/UA-1 conformance to every reader, so it is written only on request (declarePdfUa) after a person has"
+          + " reviewed the document (humanReviewAcknowledged)";
+
+  public static final String NOT_ACKNOWLEDGED =
+      "not written: declarePdfUa was requested without humanReviewAcknowledged; the declaration needs a person to have reviewed the document";
+
+  public static final String ENGINE_MADE_STRUCTURE =
+      "not written: the structure tags were made by the engine (inferred from the layout or basic content-order tags), not by the author;"
+          + " such a copy is never declared PDF/UA";
+
+  public static final String FIGURES_MARKED_ARTIFACT =
+      "not written: figures without alternative text were marked as decoration (artifact) by the engine; such a copy is never declared PDF/UA";
+
   private PdfUaIdentifierStep() {}
 
   /** Mode {@code fix} only, for uploads and generated PDFs alike; the deprecated modes never. */
   public static boolean participates(WorkerRequest request) {
     return request.isFix();
+  }
+
+  /**
+   * Checked before anything else: {@code null} only when the request asks for the declaration with the human-review
+   * acknowledgement and this run neither made the structure tags itself nor marked a figure as artifact; otherwise why not.
+   */
+  public static String requestBlocker(WorkerRequest request, List<WorkerResult.Action> actions) {
+    if (!Boolean.TRUE.equals(request.declarePdfUa())) {
+      return NOT_REQUESTED;
+    }
+    if (!request.declaresPdfUaAfterReview()) {
+      return NOT_ACKNOWLEDGED;
+    }
+    if (actions.stream().anyMatch(a -> a.outcome() == WorkerResult.ActionOutcome.APPLIED
+        && (a.ruleId() == WorkerResult.RuleId.PDF_STRUCTURE_INFERRED_V1 || a.ruleId() == WorkerResult.RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1))) {
+      return ENGINE_MADE_STRUCTURE;
+    }
+    if (actions.stream().anyMatch(a -> FiguresWithoutAltRule.artifactedPerPage(a).map(perPage -> !perPage.isEmpty()).orElse(false))) {
+      return FIGURES_MARKED_ARTIFACT;
+    }
+    return null;
   }
 
   /**
@@ -137,6 +175,31 @@ public final class PdfUaIdentifierStep {
     } catch (IOException | RuntimeException e) {
       Files.deleteIfExists(target);
       throw e instanceof IOException io ? io : new IOException(e);
+    }
+  }
+
+  public static final String WITHDRAWN =
+      "removed the pdfuaid identifier the renderer wrote: it declares PDF/UA-1 conformance to every reader, so a rendered document is"
+          + " declared only on request (declarePdfUa) after human review; every other byte of the XMP packet is kept";
+
+  /**
+   * {@code PDF_UA_IDENTIFIER_WITHDRAWN_V1}, documents rendered by Typst only ({@code --pdf-standard ua-1} writes the identifier
+   * itself): removes the {@code pdfuaid} properties from the XMP packet in place ({@link XmpPacketEditor#withoutProperties}),
+   * nothing else. Skipped when there are none; failed when the packet cannot be edited safely. The identifier step may add
+   * the identifier back afterwards, on the same terms as for any other copy.
+   */
+  public static WorkerResult.Action withdraw(PDDocument document) {
+    WorkerResult.RuleId id = WorkerResult.RuleId.PDF_UA_IDENTIFIER_WITHDRAWN_V1;
+    PDMetadata metadata = document.getDocumentCatalog().getMetadata();
+    try {
+      byte[] edited = metadata == null ? null : XmpPacketEditor.withoutProperties(metadata.toByteArray(), NAMESPACE);
+      if (edited == null) {
+        return new WorkerResult.Action(id, WorkerResult.ActionOutcome.SKIPPED, "the XMP metadata has no PDF/UA identifier to withdraw", null, null);
+      }
+      metadata.importXMPMetadata(edited);
+      return new WorkerResult.Action(id, WorkerResult.ActionOutcome.APPLIED, WITHDRAWN, "pdfuaid identifier written by the renderer", "no PDF/UA identifier");
+    } catch (IOException | RuntimeException e) {
+      return new WorkerResult.Action(id, WorkerResult.ActionOutcome.FAILED, "could not withdraw the renderer's PDF/UA identifier (" + e.getMessage() + ")", null, null);
     }
   }
 

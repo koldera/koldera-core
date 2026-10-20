@@ -57,7 +57,7 @@ The `uploadId` must come from an image upload you completed first (`image/png`, 
 | `heading` | `level` (1-6), `text` | The first heading in the body is level 1 or 2; each later one is at most one level deeper than the previous. Headings in `header` and `footer` do not count. |
 | `paragraph` | `content` | Inline pieces: a string, `{"strong": ...}`, `{"emphasis": ...}` or `{"link": {"text", "url"}}`. Optional `lang` and `font` for a passage in another language. |
 | `list` | `items` | `ordered` for numbers. An item is an array of inline pieces, optionally ending with `{"list": {...}}` for a nested list. |
-| `table` | `caption`, `header`, `rows` | At least one header row. `rowHeaders: true` when the first cell of each body row is a row header. `columnAlign` per column. |
+| `table` | `caption`, `header`, `rows` | At least one header row. `columnAlign` per column. `rowHeaders: true` is refused for now (see below); omit it or set `false`. |
 | `image` | one of `uploadId` or `file`, and `alt` or `decorative: true` | `file` is for the command-line tool only (path relative to the JSON file). Over HTTP use `uploadId`. |
 | `link` | `text`, `url` | A paragraph consisting of one link. URLs are `http`, `https` or `mailto`. |
 | `keyValue` | `rows` | Pairs of `[label, value]`. |
@@ -75,7 +75,7 @@ A failing document answers `422 VALIDATION_ERROR`; `errors[]` has one entry per 
 
 | Code | Meaning |
 | --- | --- |
-| `SCHEMA` | The document does not match the schema (missing or unknown property, wrong type, bad value, an image with both or neither source, an image with both `alt` and `decorative`). |
+| `SCHEMA` | The document does not match the schema (missing or unknown property, wrong type, bad value, an image with both or neither source, an image with both `alt` and `decorative`), or a table sets `rowHeaders: true` (path `.../rowHeaders`). |
 | `HEADING_LEVEL_SKIPPED` | A heading is deeper than one level below the previous one, or the first is deeper than level 2. |
 | `TABLE_HEADER_EMPTY` | A table has no header row, or a header row has only blank cells. |
 | `TABLE_ROW_LENGTH_MISMATCH` | A header or body row has a different number of cells from the first header row, or `columnAlign` has a different number of entries from the column count. |
@@ -88,12 +88,19 @@ A failing document answers `422 VALIDATION_ERROR`; `errors[]` has one entry per 
 
 ## What the Typst path does and does not do
 
-- The PDF is checked after rendering. If veraPDF reports a failed rule, the job fails with
+- Typst's `--pdf-standard ua-1` writes the PDF/UA identifier (`pdfuaid:part`) itself. koldera-core removes exactly
+  that XMP property and nothing else (action `PDF_UA_IDENTIFIER_WITHDRAWN_V1`), checks that pages and text are
+  unchanged and validates the copy, which becomes the `generated_pdf`. Declaring PDF/UA needs a human review, so a
+  copy whose only failing check is that identifier completes with `validation.status` `declaration_withheld`.
+- The PDF is checked after rendering. If veraPDF reports any other failed rule, the job fails with
   `DOCUMENT_VALIDATION_FAILED` and the findings list the rules; if the validator cannot run, with
   `DOCUMENT_VALIDATION_UNAVAILABLE`. A passing machine check is not a statement that the document is accessible:
   `manualReviewRequired` stays `true`.
-- Typst 0.15.1 cannot tag a body cell as a header cell, so the **row headers are set in bold and tagged as ordinary
-  data cells (TD), not as TH**. Column headers are real header cells.
+- Typst 0.15.1 cannot tag a body cell as a header cell: it would tag a row header as an ordinary data cell (TD), and
+  veraPDF does not detect that. So **`rowHeaders: true` is refused** with `SCHEMA` at `/body/<n>/rowHeaders` (the
+  renderer refuses it too, as `DOCUMENT_REFUSED`). The property stays in the schema and will be accepted once the pinned
+  Typst tags those cells as TH. Column headers are real header cells (TH); a test checks this against real Typst output.
+- The renderer runs only the pinned Typst 0.15.x: any other `typst --version` fails the job with `WORKER_ERROR`.
 - **Links in the header and footer are rendered as plain text**, not as links.
 - No alternative text is generated and no structure is guessed: what you do not declare is not added.
 - Typst runs as a separate process with only the bundled Noto fonts, the job directory as its root, a fixed creation

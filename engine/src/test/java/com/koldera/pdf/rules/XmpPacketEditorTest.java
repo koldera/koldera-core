@@ -97,4 +97,31 @@ public class XmpPacketEditorTest {
     assertEquals("the end of rdf:RDF cannot be located exactly once", XmpPacketEditor.read(bytes(twice)).unreadable());
     assertThrows(IOException.class, () -> XmpPacketEditor.add(bytes(twice), "T", null));
   }
+
+  private static final String UA = "http://www.aiim.org/pdfua/ns/id/";
+
+  @Test
+  void removesOnlyThePdfUaPropertiesAndKeepsEveryOtherByte() throws IOException {
+    String element = HEAD.replace("xmp:CreatorTool=", "xmlns:pdfuaid=\"" + UA + "\" xmp:CreatorTool=")
+        .replace("   <xmp:Custom>", "   <pdfuaid:part>1</pdfuaid:part><pdfuaid:corr>2</pdfuaid:corr> <xmp:Custom>") + TAIL;
+    String removed = new String(XmpPacketEditor.withoutProperties(bytes(element), UA), StandardCharsets.UTF_8);
+    assertEquals(element.replace("<pdfuaid:part>1</pdfuaid:part><pdfuaid:corr>2</pdfuaid:corr>", ""), removed);
+
+    String attribute = HEAD.replace("xmp:CreatorTool=", "xmlns:pdfuaid=\"" + UA + "\" pdfuaid:part=\"1\" xmp:CreatorTool=") + TAIL;
+    assertEquals(attribute.replace(" pdfuaid:part=\"1\"", ""), new String(XmpPacketEditor.withoutProperties(bytes(attribute), UA), StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void aPacketWithoutPdfUaPropertiesHasNothingToRemove() throws IOException {
+    assertNull(XmpPacketEditor.withoutProperties(bytes(HEAD + TAIL), UA));
+  }
+
+  @Test
+  void propertiesThatCannotBeLocatedExactlyAreLeftAlone() {
+    String nested = HEAD.replace("xmp:CreatorTool=", "xmlns:pdfuaid=\"" + UA + "\" xmp:CreatorTool=")
+        .replace("   <xmp:Custom>", "   <pdfuaid:part><rdf:Seq><rdf:li>1</rdf:li></rdf:Seq></pdfuaid:part> <xmp:Custom>") + TAIL;
+    assertThrows(IOException.class, () -> XmpPacketEditor.withoutProperties(bytes(nested), UA));
+    String defaultNamespace = HEAD.replace("   <xmp:Custom>", "   <part xmlns=\"" + UA + "\">1</part> <xmp:Custom>") + TAIL;
+    assertThrows(IOException.class, () -> XmpPacketEditor.withoutProperties(bytes(defaultNamespace), UA));
+  }
 }

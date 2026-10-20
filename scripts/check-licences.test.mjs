@@ -40,3 +40,10 @@ test("nuspec licence expression and url forms", () => {
   assert.equal(parseNuspecLicence("<package><metadata><licenseUrl>https://licenses.nuget.org/MIT</licenseUrl></metadata></package>"), "MIT");
   assert.equal(parseNuspecLicence("<package><metadata></metadata></package>"), "");
 });
+
+test("copyleft and weak copyleft fail unless the package has its own reviewed exception", () => {
+  const bad = evaluate([entry("x", "AGPL-3.0-only"), entry("y", "LGPL-3.0-or-later"), entry("z", "MPL-2.0"), entry("w", "EPL-2.0", "maven")]);
+  assert.deepEqual(bad.map((v) => v.name), ["x", "y", "z", "w"]);
+  assert.deepEqual(evaluate([entry("axe-core", "MPL-2.0"), entry("org.junit.jupiter:junit-jupiter-api", "EPL-2.0", "maven")]), []);
+  assert.deepEqual(evaluate([entry("a", "(MPL-2.0 OR Apache-2.0)")]), []);
+});

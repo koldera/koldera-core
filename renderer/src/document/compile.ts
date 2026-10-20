@@ -53,6 +53,14 @@ export async function typstVersion(command: string, cwd: string): Promise<string
   return r.code === 0 && line ? line : "unknown";
 }
 
+/** The pinned Typst line (docker/Dockerfile, .github/actions/install-typst). Template and tagging behaviour are verified against it. */
+const PINNED_TYPST = /^typst 0\.15\.\d+(\s|$)/;
+
+/** Why a `typst --version` line is not the pinned Typst, or null when it is. */
+export function typstVersionProblem(version: string): string | null {
+  return PINNED_TYPST.test(version) ? null : `Typst 0.15.x is required, found ${JSON.stringify(version.slice(0, 80))}`;
+}
+
 /** Keeps Typst's first error line, without host paths. */
 export function firstErrorLine(stderr: string, workRoot: string): string {
   const lines = stderr.split(/\r?\n/);

@@ -1,21 +1,31 @@
-// Licence gate over the Maven, pnpm and NuGet dependency lists. koldera-core is AGPL-3.0-only, so everything it
-// links or ships must be on this list; anything else (or unknown) fails until a person reviews it into EXCEPTIONS.
+// Licence gate over the Maven, pnpm and NuGet dependency lists. Keep the existing conservative dependency policy:
+// permissive licences are accepted automatically, while other licences require an explicit review. Anything else
+// (copyleft, weak copyleft or unknown) fails until a person reviews that one package into EXCEPTIONS.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// No GPL/AGPL, and no LGPL/MPL/EPL here: weak-copyleft packages are allowed one by one in EXCEPTIONS.
 export const ALLOWED = new Set([
-  "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MPL-2.0", "EPL-2.0", "0BSD", "OFL-1.1", "AGPL-3.0",
-  "LGPL-2.1-or-later", "LGPL-3.0", "CC0-1.0", "Unlicense", "BlueOak-1.0.0", "Python-2.0",
+  "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "OFL-1.1",
+  "CC0-1.0", "Unlicense", "BlueOak-1.0.0", "Python-2.0",
   // Plain MIT/zlib-style grants found in the tree.
   "MIT-0", "Zlib",
 ]);
 
 // Reviewed by hand: "ecosystem:name" -> why it is acceptable. Keep short.
+const TEST_ONLY_EPL = "EPL-2.0, test scope only: not in the engine jar or the image";
+const DEV_ONLY_MPL = "MPL-2.0, build/test tool (vitest -> vite) only: pruned from the image, never distributed";
 export const EXCEPTIONS = {
   "nuget:xunit.abstractions": "test-only; nuspec has a licenseUrl only, the xunit project is Apache-2.0",
+  "npm:axe-core": "MPL-2.0, shipped unmodified as a separate file; licence text in the image, source at github.com/dequelabs/axe-core",
+  "npm:@axe-core/playwright": "MPL-2.0, shipped unmodified as a separate file; same terms and source as axe-core",
+  ...Object.fromEntries(["junit-jupiter", "junit-jupiter-api", "junit-jupiter-params", "junit-jupiter-engine"].map((a) => [`maven:org.junit.jupiter:${a}`, TEST_ONLY_EPL])),
+  ...Object.fromEntries(["junit-platform-commons", "junit-platform-launcher", "junit-platform-engine"].map((a) => [`maven:org.junit.platform:${a}`, TEST_ONLY_EPL])),
+  // lightningcss publishes one native package per platform; pnpm installs only the host's.
+  ...Object.fromEntries(["", "-darwin-arm64", "-darwin-x64", "-linux-arm64-gnu", "-linux-x64-gnu", "-linux-x64-musl", "-win32-x64-msvc"].map((p) => [`npm:lightningcss${p}`, DEV_ONLY_MPL])),
 };
 
 const ALIASES = [

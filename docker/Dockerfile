@@ -13,15 +13,20 @@
 #     typst-x86_64-unknown-linux-musl.tar.xz   sha256 a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
 #     typst-aarch64-unknown-linux-musl.tar.xz  sha256 5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee
 #   Licenses: veraPDF GPLv3+/MPLv2+ (dual) and Typst Apache-2.0 run as separate processes; PDFBox Apache-2.0;
-#   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core itself is AGPL-3.0-only.
+#   Noto fonts and Liberation fonts SIL OFL 1.1. koldera-core is AGPL-3.0-only (see LICENSE).
+
+# The one version of the image (server, engine, label): the default for local builds; release.yml and
+# scripts/package-release.mjs pass the release tag. It must match <Version> in server/Directory.Build.props and engine/pom.xml.
+ARG KOLDERA_VERSION=0.1.0
 
 # ---------- PDF engine jar ----------
 FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
+ARG KOLDERA_VERSION
 WORKDIR /src
 COPY engine/pom.xml .
 RUN mvn -q -B dependency:go-offline
 COPY engine/src ./src
-RUN mvn -q -B -DskipTests package
+RUN mvn -q -B -DskipTests -Dkoldera.version="${KOLDERA_VERSION}" package
 
 # ---------- renderer and scanner: build, then keep production dependencies only ----------
 FROM node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7 AS node
@@ -44,12 +49,13 @@ RUN pnpm run build && pnpm prune --prod
 RUN mkdir -p /licenses && cp -L node_modules/axe-core/LICENSE /licenses/axe-core-LICENSE
 
 # ---------- ASP.NET server ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317 AS server
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS server
+ARG KOLDERA_VERSION
 WORKDIR /src
 COPY server/Directory.Build.props server/Directory.Packages.props ./server/
 COPY server/src ./server/src
 COPY contracts ./contracts
-RUN dotnet publish server/src/Koldera.Core/Koldera.Core.csproj -c Release -o /out/server --no-self-contained -p:UseAppHost=false
+RUN dotnet publish server/src/Koldera.Core/Koldera.Core.csproj -c Release -o /out/server --no-self-contained -p:UseAppHost=false -p:Version="${KOLDERA_VERSION}"
 
 # ---------- veraPDF (unattended IzPack install) ----------
 FROM eclipse-temurin:21-jdk-noble@sha256:b468c3fc688b14450571494f588bd939378e7fd542ed5a73f8efc13f17872a87 AS verapdf
@@ -96,20 +102,21 @@ RUN case "${TARGETARCH:-amd64}" in \
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
 FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4 AS dotnet
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS dotnet
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS nodejs
 
 # ---------- runtime ----------
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
 # WebKit too, and deleting them in a later layer would not make the image smaller.
 FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+ARG KOLDERA_VERSION
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
       org.opencontainers.image.source="https://github.com/koldera/koldera-core" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.documentation="https://github.com/koldera/koldera-core/blob/main/NOTICE" \
-      org.opencontainers.image.version="0.1.0" \
-      dev.koldera.source-offer="Corresponding source (AGPL-3.0 sections 6 and 13): the git tag of this image's version in https://github.com/koldera/koldera-core; licence texts of bundled components: /usr/share/licenses/koldera"
+      org.opencontainers.image.version="${KOLDERA_VERSION}" \
+      dev.koldera.third-party-licenses="/usr/share/licenses/koldera"
 
 COPY --from=jre /opt/java/openjdk /opt/java/openjdk
 COPY --from=dotnet /usr/share/dotnet /usr/share/dotnet
@@ -137,7 +144,7 @@ COPY --from=node /src/scanner/node_modules /app/scanner/node_modules
 COPY --from=node /src/scanner/package.json /app/scanner/package.json
 COPY --from=server /out/server /app/server
 COPY contracts /app/contracts
-# Licence texts (AGPL-3.0 for koldera-core, third-party licences of what is bundled). Source: the tagged GitHub release.
+# Licence texts: the koldera-core licence notice and the third-party licences of what is bundled.
 COPY LICENSE NOTICE /usr/share/licenses/koldera/
 COPY renderer/fonts/OFL.txt /usr/share/licenses/koldera/fonts-noto-OFL.txt
 COPY engine/src/main/resources/fonts/liberation/LICENSE /usr/share/licenses/koldera/fonts-liberation-LICENSE

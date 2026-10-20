@@ -15,7 +15,7 @@ public class DocumentJobTests
     private static byte[] Png() => File.ReadAllBytes("Fixtures/documents/logo.png");
 
     private static CoreFactory Factory(IWorkerProcess? render = null, IWorkerProcess? pdf = null, string? features = null, Dictionary<string, string?>? env = null) =>
-        CoreFactory.WithStubWorkers(pdf ?? StubResults.PdfAnalyzeClean(), env: env, features: features,
+        CoreFactory.WithStubWorkers(pdf ?? StubResults.PdfDocumentWithdrawn(), env: env, features: features,
             documentRender: render ?? StubResults.DocumentRenderCompleted());
 
     private static Task<HttpResponseMessage> Post(CoreFactory f, string json) =>
@@ -190,9 +190,75 @@ public class DocumentJobTests
     }
 
     [Fact]
+    public async Task The_engine_withdraws_the_renderers_identifier_and_the_job_completes_as_declaration_withheld()
+    {
+        var pdf = StubResults.PdfDocumentWithdrawn();
+        using var f = Factory(pdf: pdf);
+        var id = await JobId(await Post(f, Golden()));
+        var job = await f.WaitForJob(id);
+        Assert.Equal("completed", job.GetProperty("state").GetString());
+        Assert.Equal("declaration_withheld", job.GetProperty("validation").GetProperty("status").GetString());
+        Assert.Equal("ISO 14289-1:2014 5-1", Assert.Single(job.GetProperty("validation").GetProperty("failedRules").EnumerateArray()).GetProperty("ruleId").GetString());
+        var request = JsonDocument.Parse(Assert.Single(pdf.Calls).RequestJson).RootElement;
+        Assert.Equal("fix", request.GetProperty("mode").GetString());
+        Assert.Equal("document_generated", request.GetProperty("origin").GetString());
+        Assert.False(request.TryGetProperty("declarePdfUa", out _), "the server never requests the declaration");
+
+        // The withdrawn copy is the one generated_pdf; the rendered file, which still declares PDF/UA, is not kept.
+        var items = (await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/artifacts")).GetProperty("items").EnumerateArray().ToList();
+        var generated = Assert.Single(items, a => a.GetProperty("kind").GetString() == "generated_pdf");
+        Assert.Equal(Fixtures.Sha256(Fixtures.OtherPdf()), generated.GetProperty("sha256").GetString());
+        Assert.DoesNotContain(items, a => a.GetProperty("kind").GetString() == "remediated");
+        Assert.False(File.Exists(Path.Combine(f.Store.JobDir(id), "out", "document.pdf")));
+        var actions = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/actions");
+        Assert.Contains(actions.GetProperty("items").EnumerateArray(), a => a.GetProperty("ruleId").GetString() == "PDF_UA_IDENTIFIER_WITHDRAWN_V1");
+    }
+
+    [Fact]
+    public async Task A_withheld_verdict_listing_another_rule_is_still_a_failed_rule()
+    {
+        using var f = Factory(pdf: StubResults.PdfDocumentWithdrawn(r => r["finalValidation"] = StubResults.ValidationOf("declaration_withheld", ("7.1-3", 1), ("ISO 14289-1:2014 5-1", 1))));
+        var job = await f.WaitForJob(await JobId(await Post(f, Golden())));
+        Assert.Equal("failed", job.GetProperty("state").GetString());
+        Assert.Equal("DOCUMENT_VALIDATION_FAILED", job.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task A_rolled_back_withdrawal_fails_the_job_and_keeps_no_declared_pdf()
+    {
+        var pdf = StubResults.PdfCustom(r =>
+        {
+            r["status"] = "failed";
+            r["remediationStatus"] = "rolled_back";
+            r["error"] = new JsonObject { ["code"] = "INTEGRITY_REGRESSION", ["message"] = "generated gate: newly failing rule 7.1-3 (1)" };
+        });
+        using var f = Factory(pdf: pdf);
+        var id = await JobId(await Post(f, Golden()));
+        Assert.Equal("failed", (await f.WaitForJob(id)).GetProperty("state").GetString());
+        var artifacts = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/artifacts");
+        Assert.DoesNotContain(artifacts.GetProperty("items").EnumerateArray(), a => a.GetProperty("kind").GetString() == "generated_pdf");
+    }
+
+    [Fact]
+    public async Task A_rendered_pdf_without_an_identifier_is_kept_as_it_is()
+    {
+        var pdf = StubResults.PdfCustom(r =>
+        {
+            r["remediationStatus"] = "no_applicable_fix";
+            r["baseline"] = StubResults.ValidationOf("passed");
+        });
+        using var f = Factory(pdf: pdf);
+        var id = await JobId(await Post(f, Golden()));
+        Assert.Equal("completed", (await f.WaitForJob(id)).GetProperty("state").GetString());
+        var artifacts = await f.AuthorizedClient().GetFromJsonAsync<JsonElement>($"/v1/jobs/{id}/artifacts");
+        var generated = Assert.Single(artifacts.GetProperty("items").EnumerateArray(), a => a.GetProperty("kind").GetString() == "generated_pdf");
+        Assert.Equal(Fixtures.Sha256(Fixtures.SmallPdf()), generated.GetProperty("sha256").GetString());
+    }
+
+    [Fact]
     public async Task A_failed_veraPDF_rule_fails_the_job_but_keeps_the_pdf_and_the_findings()
     {
-        using var f = Factory(pdf: StubResults.PdfAnalyzeCompleted()); // its baseline fails rule 7.1-3
+        using var f = Factory(pdf: StubResults.PdfDocumentWithdrawn(r => r["finalValidation"] = StubResults.ValidationOf("failed", ("7.1-3", 2), ("ISO 14289-1:2014 5-1", 1))));
         var id = await JobId(await Post(f, Golden()));
         var job = await f.WaitForJob(id);
         Assert.Equal("failed", job.GetProperty("state").GetString());
@@ -209,7 +275,7 @@ public class DocumentJobTests
     [InlineData("error")]
     public async Task A_veraPDF_run_without_a_verdict_does_not_complete_the_job(string status)
     {
-        var pdf = StubResults.PdfCustom(r => r["baseline"] = new JsonObject { ["profile"] = "ua1", ["status"] = status, ["failedRules"] = new JsonArray() });
+        var pdf = StubResults.PdfDocumentWithdrawn(r => r["finalValidation"] = new JsonObject { ["profile"] = "ua1", ["status"] = status, ["failedRules"] = new JsonArray() });
         using var f = Factory(pdf: pdf);
         var id = await JobId(await Post(f, Golden()));
         var job = await f.WaitForJob(id);
