@@ -31,6 +31,16 @@ public class CliContractTests
     }
 
     [Fact]
+    public async Task A_fix_whose_only_failure_is_the_withheld_declaration_exits_0_and_says_it_is_not_a_pass()
+    {
+        var pdf = StubResults.PdfCustom(r => r["finalValidation"] = StubResults.ValidationOf("declaration_withheld", ("ISO 14289-1:2014 5-1", 1)));
+        var (code, stdout, _) = await CliRun.Run(pdf, "pdf", WriteTemp(Fixtures.SmallPdf(), "a.pdf"));
+        Assert.Equal(0, code);
+        Assert.Contains("PDF/UA-1 machine check: declaration_withheld (1 rule failed: ISO 14289-1:2014 5-1 x1)", stdout);
+        Assert.Contains("The PDF/UA identifier (pdfuaid) was not written: declaring PDF/UA requires a human review. This is not a pass.", stdout);
+    }
+
+    [Fact]
     public async Task A_completed_pdf_job_with_a_missing_verdict_exits_3()
     {
         var pdf = StubResults.PdfCustom(r => r["baseline"] = null);

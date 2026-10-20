@@ -33,6 +33,12 @@ Author, Subject or Keywords entry is present in any of them.
 | `engine/src/test/resources/generated/generated-trailing-field.pdf` | 1 | A feedback paragraph with a form field as the last element and a "Printed from example.org" footer. |
 | `engine/src/test/resources/generated/generated-untagged-text.pdf` | 2 | A page with content Chromium leaves untagged (CSS counters, quotation marks, `aria-hidden` text, a table), "Example Co." header. |
 
+## Typst output (`engine/src/test/resources/typst/`)
+
+| File | Pages | Content |
+|---|---|---|
+| `engine/src/test/resources/typst/typst-ua1-note.pdf` | 1 | "Service note": a heading, a paragraph, a second-level heading and a two-item list, compiled from `typst-ua1-note.typ` (next to it) by Typst 0.15.1 with `--pdf-standard ua-1`, so its XMP carries the `pdfuaid:part` identifier Typst writes itself. Input of the engine's `PDF_UA_IDENTIFIER_WITHDRAWN_V1` tests. |
+
 ## PDFs built at test time (engine)
 
 `engine/src/test/java/com/koldera/pdf/fixtures/SyntheticPdfFactory.java` and the `*Test` helpers that

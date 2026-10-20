@@ -20,16 +20,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * An untagged upload in an embedded font, through the production rules and the real veraPDF: the structure is inferred,
- * the copy fails only the missing identifier, so {@code PDF_UA_IDENTIFIER_V1} writes {@code pdfuaid:part=1} and the
- * identified copy validates with zero failures (a machine-check declaration; human review is still required).
+ * An untagged upload in an embedded font, through the production rules and the real veraPDF: the structure is inferred
+ * and the copy fails only the missing identifier, yet {@code PDF_UA_IDENTIFIER_V1} writes nothing: the identifier is a
+ * conformance declaration, never written by default (and never over inferred structure).
  */
 class UploadIdentifierIT {
 
   @TempDir Path root;
 
   @Test
-  void anEmbeddedFontArticleIsIdentified() throws Exception {
+  void anEmbeddedFontArticleCleanExceptTheIdentifierIsNotDeclared() throws Exception {
     Files.createDirectories(root.resolve("in"));
     JobWorkspace workspace = JobWorkspace.open(root);
     Files.write(workspace.inputFile(), SyntheticPdfFactory.untaggedEmbeddedFontArticle());
@@ -42,10 +42,12 @@ class UploadIdentifierIT {
 
     String context = result.error() + " baseline=" + result.baseline().failedRules() + " final=" + result.finalValidation() + " actions=" + result.actions();
     assertEquals(RemediationStatus.APPLIED, result.remediationStatus(), context);
-    assertEquals(ValidationStatus.PASSED, result.finalValidation().status(), context);
-    assertEquals(0, result.finalValidation().failedRules().size(), context);
+    assertEquals(java.util.List.of("ISO 14289-1:2014 5-1"),
+        result.finalValidation().failedRules().stream().map(WorkerResult.FailedRule::ruleId).toList(), context);
     WorkerResult.Action ua = result.actions().stream().filter(a -> a.ruleId() == RuleId.PDF_UA_IDENTIFIER_V1).findFirst().orElseThrow();
-    assertEquals(ActionOutcome.APPLIED, ua.outcome(), context);
+    assertEquals(ActionOutcome.SKIPPED, ua.outcome(), context);
+    assertEquals(com.koldera.pdf.rules.PdfUaIdentifierStep.NOT_REQUESTED, ua.reason(), context);
+    assertEquals(ValidationStatus.DECLARATION_WITHHELD, result.finalValidation().status(), context);
     assertTrue(result.manualReviewRequired());
   }
 }

@@ -29,6 +29,7 @@ public static class WorkerOrigin
 {
     public const string Upload = "upload";
     public const string HtmlGenerated = "html_generated";
+    public const string DocumentGenerated = "document_generated";
 }
 
 public sealed record WorkerLimits(

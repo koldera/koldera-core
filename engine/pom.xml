@@ -6,11 +6,18 @@
 
   <groupId>com.koldera</groupId>
   <artifactId>koldera-pdf-engine</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>jar</packaging>
 
   <name>Koldera PDF Engine</name>
   <description>Isolated PDF/UA-1 analysis and conservative remediation worker (PDFBox + veraPDF).</description>
+  <licenses>
+    <license>
+      <name>GNU Affero General Public License v3.0 only</name>
+      <url>https://github.com/koldera/koldera-core/blob/main/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
 
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
@@ -19,6 +26,8 @@
 
     <!-- Pinned versions; verified against Maven Central metadata on 2026-09-17. -->
     <pdfbox.version>3.0.8</pdfbox.version>
+    <!-- Recorded in engine-version.properties; the image build sets it from the release tag (-Dkoldera.version). -->
+    <koldera.version>${project.version}</koldera.version>
     <bouncycastle.version>1.86</bouncycastle.version>
     <jackson.version>2.22.3</jackson.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>

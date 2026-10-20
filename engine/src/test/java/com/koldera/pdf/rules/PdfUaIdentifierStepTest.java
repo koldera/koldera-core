@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.koldera.pdf.contracts.WorkerRequest;
+import com.koldera.pdf.contracts.WorkerResult;
 import com.koldera.pdf.fixtures.SyntheticPdfFactory;
 import com.koldera.pdf.fixtures.SyntheticPdfFactory.Options;
 import java.io.ByteArrayInputStream;
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.pdfbox.Loader;
@@ -43,6 +45,35 @@ class PdfUaIdentifierStepTest {
         }
       }
     }
+  }
+
+  @Test
+  void theDeclarationNeedsARequestAReviewAcknowledgementAndAuthorMadeStructureWithoutArtifactedFigures() {
+    WorkerRequest base = request(WorkerRequest.Mode.FIX, WorkerRequest.Origin.UPLOAD);
+    List<WorkerResult.Action> none = List.of();
+    assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, PdfUaIdentifierStep.requestBlocker(base, none), "never by default");
+    assertEquals(PdfUaIdentifierStep.NOT_REQUESTED, PdfUaIdentifierStep.requestBlocker(declaring(base, false, true), none));
+    assertEquals(PdfUaIdentifierStep.NOT_ACKNOWLEDGED, PdfUaIdentifierStep.requestBlocker(declaring(base, true, null), none));
+    assertEquals(PdfUaIdentifierStep.NOT_ACKNOWLEDGED, PdfUaIdentifierStep.requestBlocker(declaring(base, true, false), none));
+    WorkerRequest asked = declaring(base, true, true);
+    assertNull(PdfUaIdentifierStep.requestBlocker(asked, none));
+    for (WorkerResult.RuleId engineMade : List.of(WorkerResult.RuleId.PDF_STRUCTURE_INFERRED_V1, WorkerResult.RuleId.PDF_BASIC_STRUCTURE_FROM_CONTENT_V1)) {
+      assertEquals(PdfUaIdentifierStep.ENGINE_MADE_STRUCTURE,
+          PdfUaIdentifierStep.requestBlocker(asked, List.of(new WorkerResult.Action(engineMade, WorkerResult.ActionOutcome.APPLIED, "r", null, null))));
+      assertNull(PdfUaIdentifierStep.requestBlocker(asked, List.of(new WorkerResult.Action(engineMade, WorkerResult.ActionOutcome.ROLLED_BACK, "r", null, null))),
+          "a rolled-back inference made nothing");
+    }
+    WorkerResult.Action figures = new WorkerResult.Action(WorkerResult.RuleId.PDF_FIGURES_WITHOUT_ALT_V1, WorkerResult.ActionOutcome.APPLIED,
+        "figures without alternative text marked as artifact 1, retagged as paragraph 0 (they show text), kept with alternative text 0, kept 0"
+            + " (they hold an annotation or other tagged content); pages: 1×1", "1 Figure without alternative text", "1 marked as artifact, 0 retagged as paragraph");
+    assertEquals(PdfUaIdentifierStep.FIGURES_MARKED_ARTIFACT, PdfUaIdentifierStep.requestBlocker(asked, List.of(figures)));
+  }
+
+  @Test
+  void aCopyWithoutTaggedTextGetsNoIdentifier() throws Exception {
+    Path plain = dir.resolve("plain.pdf");
+    Files.write(plain, SyntheticPdfFactory.build(Options.plain()));
+    assertEquals(PdfUaIdentifierStep.NO_TAGGED_TEXT, PdfUaIdentifierStep.textBlocker(plain));
   }
 
   @Test
@@ -132,7 +163,12 @@ class PdfUaIdentifierStepTest {
     }
   }
 
-  private static WorkerRequest request(WorkerRequest.Mode mode, WorkerRequest.Origin origin) {
+  private static WorkerRequest declaring(WorkerRequest r, Boolean declare, Boolean acknowledged) {
+    return new WorkerRequest(r.specVersion(), r.jobId(), r.inputPath(), r.outputDirectory(), r.mode(), r.profile(), r.explicitLanguage(),
+        r.explicitTitle(), r.sourceFileName(), r.origin(), r.limits(), declare, acknowledged);
+  }
+
+    private static WorkerRequest request(WorkerRequest.Mode mode, WorkerRequest.Origin origin) {
     return new WorkerRequest(
         "1.0", UUID.fromString("123e4567-e89b-42d3-a456-426614174000"), WorkerRequest.CANONICAL_INPUT_PATH,
         WorkerRequest.CANONICAL_OUTPUT_DIRECTORY, mode, "ua1", null, null, "page.pdf", origin,

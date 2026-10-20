@@ -54,12 +54,12 @@ public sealed class CliEngineIntegrationTests
     }
 
     [DocumentToolsFact]
-    public async Task The_cli_renders_the_invoice_document_to_a_pdf_that_passes_the_machine_check()
+    public async Task The_cli_renders_the_invoice_document_to_a_pdf_whose_only_missing_check_is_the_withheld_declaration()
     {
         var outDir = Directory.CreateTempSubdirectory("koldera-cli-real-out-").FullName;
         var (code, stdout, stderr) = await Run("document", Path.GetFullPath("Fixtures/documents/invoice.json"), "--out", outDir);
         Assert.True(code == 0, $"exit {code}: {stderr}\n{stdout}");
-        Assert.Contains("PDF/UA-1 machine check: passed", stdout);
+        Assert.Contains("PDF/UA-1 machine check: declaration_withheld (1 rule failed: ISO 14289-1:2014 5-1 x1)", stdout);
         var pdf = Assert.Single(Directory.GetFiles(outDir, "invoice.generated_pdf.pdf"));
         Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(await File.ReadAllBytesAsync(pdf), 0, 5));
     }

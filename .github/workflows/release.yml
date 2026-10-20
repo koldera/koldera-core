@@ -7,8 +7,10 @@ on:
 permissions:
   contents: read
 
+# A tagged AGPL release is packaged into a draft GitHub Release for review before publication. The image is
+# included in the bundle; no image is pushed to a registry. See RELEASING.md.
 jobs:
-  # The full CI workflow for the tagged commit: nothing is built, signed or pushed unless every test job passes.
+  # The full CI workflow for the tagged commit: nothing is packaged unless every test job passes.
   ci:
     uses: ./.github/workflows/ci.yml
     permissions:
@@ -25,64 +27,91 @@ jobs:
       - name: The tag points at a commit on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-  image:
+  bundle:
     needs: [ci, on-main]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
-      contents: write # gh release create
-      packages: write # push to ghcr.io
-      id-token: write # keyless cosign signing
-    env:
-      IMAGE: ghcr.io/koldera/core
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0 # the packaging script resolves the tag
           persist-credentials: false
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
-          # Sets org.opencontainers.image.version, .revision and .created next to the Dockerfile's own labels.
-      - id: build
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - id: created
+        run: echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Build the image (linux/amd64, loaded locally, not pushed)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: koldera-core:${{ steps.version.outputs.version }}
+          build-args: KOLDERA_VERSION=${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.created=${{ steps.created.outputs.time }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Sign the image digest (keyless)
-        run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
-      - name: SBOM (SPDX JSON) with syft
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - name: Install gitleaks (pinned release, SHA-256 checked) outside the checkout
+        env:
+          SYFT_CMD: ${{ steps.syft.outputs.cmd }}
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          dirname "$SYFT_CMD" >> "$GITHUB_PATH"
+      - name: Package the bundle
+        run: node scripts/package-release.mjs "$GITHUB_REF_NAME" --image "koldera-core:${GITHUB_REF_NAME#v}" --out "$RUNNER_TEMP/release"
+      - name: Verify the bundle checksums
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          sha256sum -c "koldera-core-${GITHUB_REF_NAME}.tar.gz.sha256"
+          (cd "koldera-core-${GITHUB_REF_NAME}" && sha256sum --quiet -c SHA256SUMS)
+          mkdir assets
+          mv "koldera-core-${GITHUB_REF_NAME}.tar.gz" "koldera-core-${GITHUB_REF_NAME}.tar.gz.sha256" assets/
+          for f in SHA256SUMS release-manifest.json sbom.spdx.json; do
+            cp "koldera-core-${GITHUB_REF_NAME}/$f" "assets/koldera-core-${GITHUB_REF_NAME}-$f"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
-      - name: Attach the SBOM to the image as a signed attestation
-        run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "${IMAGE}@${{ steps.build.outputs.digest }}"
-      - name: GitHub Release with the SBOM
+          name: release-bundle
+          path: ${{ runner.temp }}/release/assets/
+          if-no-files-found: error
+          retention-days: 1 # the draft release keeps the copy
+          compression-level: 0 # already gzipped
+
+  release:
+    needs: bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # gh release create (draft)
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-bundle
+          path: assets
+      - name: Draft GitHub Release with the bundle
+        working-directory: assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          mv sbom.spdx.json "koldera-core-${GITHUB_REF_NAME}.spdx.json"
+          sha256sum -c "koldera-core-${GITHUB_REF_NAME}.tar.gz.sha256"
           flags=""
           case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" "koldera-core-${GITHUB_REF_NAME}.spdx.json" --generate-notes --verify-tag $flags
+          gh release create "$GITHUB_REF_NAME" ./* --draft --generate-notes --verify-tag $flags

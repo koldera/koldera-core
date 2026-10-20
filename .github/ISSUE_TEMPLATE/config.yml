@@ -6,6 +6,3 @@ contact_links:
   - name: Questions and ideas
     url: https://github.com/koldera/koldera-core/discussions
     about: Ask how to use koldera-core or discuss an idea before opening an issue.
-  - name: Commercial licence
-    url: https://github.com/koldera/koldera-core/blob/main/COMMERCIAL.md
-    about: For a product or service built on koldera-core without publishing your code under the AGPL.

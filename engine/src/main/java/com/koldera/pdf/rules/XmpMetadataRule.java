@@ -124,8 +124,9 @@ public final class XmpMetadataRule implements RemediationRule {
     return new WorkerResult.Action(
         id(),
         ActionOutcome.APPLIED,
-        "wrote a minimal XMP packet (" + after + "); a PDF/UA identifier is added only by PDF_UA_IDENTIFIER_V1, in mode fix,"
-            + " when the machine checks pass; whether the title and language are correct"
+        "wrote a minimal XMP packet (" + after + "); no PDF/UA identifier is written: PDF_UA_IDENTIFIER_V1 adds one only in mode fix,"
+            + " on request (declarePdfUa) after human review (humanReviewAcknowledged), when the machine checks pass;"
+            + " whether the title and language are correct"
             + " requires human review",
         null,
         after);

@@ -24,7 +24,6 @@
       "caption": "Revenue by region, in thousands",
       "header": [["Region", "Q1", "Q2"]],
       "rows": [["North", "120", "135"], ["South", "98", "104"], ["East", "75", "91"]],
-      "rowHeaders": true,
       "columnAlign": ["left", "right", "right"]
     },
     { "type": "image", "file": "chart.png", "alt": "Bar chart: revenue rises from Q1 to Q2 in all three regions." },
