@@ -37,5 +37,5 @@ Out of scope:
   address);
 - denial of service by sending very large inputs to an instance that has no limits set (see
   [docs/configuration.md](docs/configuration.md));
-- the known residual risk that Chromium runs without its own sandbox in the supplied container, described in
-  [docs/deployment.md](docs/deployment.md#browser-sandbox). Reports of a way to exploit it are still welcome.
+- the known residual risk that Chromium runs without its own sandbox in the supplied container unless
+  `docker/compose.sandbox.yaml` is used, described in [docs/deployment.md](docs/deployment.md#browser-sandbox). Reports of a way to exploit it are still welcome.
