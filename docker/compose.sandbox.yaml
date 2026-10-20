@@ -1,0 +1,17 @@
+# Adds Chromium's own sandbox to docker/compose.yaml. Use it whenever the renderer or the web scanner handle input you
+# do not control:
+#   KOLDERA_TOKEN=... KOLDERA_PUBLIC_URL=... docker compose -f docker/compose.yaml -f docker/compose.sandbox.yaml up -d
+
+# seccomp-chromium.json is Docker's default profile plus one rule that allows clone, unshare, setns and chroot (Docker
+# allows them only with CAP_SYS_ADMIN / CAP_SYS_CHROOT). The container keeps cap_drop ALL, no-new-privileges, the
+# non-root user and the read-only root filesystem.
+
+# The host must allow unprivileged user namespaces (docs/deployment.md, "Browser sandbox"). If it does not, Chromium
+# refuses to start and the job fails; it never falls back to --no-sandbox.
+
+services:
+  core:
+    environment:
+      KOLDERA_CHROMIUM_SANDBOX: "true"
+    security_opt:
+      - seccomp=./seccomp-chromium.json
