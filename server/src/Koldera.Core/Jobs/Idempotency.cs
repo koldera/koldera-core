@@ -123,18 +123,42 @@ internal sealed class IdempotencyMiddleware(RequestDelegate next, Idempotency st
         }
         var principalKey = principal.Kind == "session" ? "session:" + principal.SessionId : "server";
 
-        // A document body has no size cap by design (see DocumentEndpoints); hashing it must not add one.
+        // A document body has its own cap (see DocumentEndpoints); buffering it for the hash stays within that cap.
+        long? max = null;
         if (request.Path.Value == "/v1/documents/jobs")
         {
-            var limit = http.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
-            if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = null;
+            var options = http.RequestServices.GetRequiredService<CoreOptions>();
+            if (DocumentEndpoints.ApplyBodyLimit(http, options) is { } refused)
+            {
+                await refused.ExecuteAsync(http);
+                return;
+            }
+            max = options.Limits.DocumentMaxBytes;
         }
         request.EnableBuffering(bufferThreshold: 1 << 20, bufferLimit: long.MaxValue);
         using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hasher.AppendData(Encoding.UTF8.GetBytes(request.Method + "\n" + request.Path.Value + "\n"));
         var chunk = new byte[16 * 1024];
         int n;
-        while ((n = await request.Body.ReadAsync(chunk, http.RequestAborted)) > 0) hasher.AppendData(chunk.AsSpan(0, n));
+        long total = 0;
+        try
+        {
+            while ((n = await request.Body.ReadAsync(chunk, http.RequestAborted)) > 0)
+            {
+                // Counted here too: not every host enforces the server body limit (TestServer, the Lambda adapter).
+                if (max is { } m && (total += n) > m)
+                {
+                    await DocumentEndpoints.TooLarge(m).ExecuteAsync(http);
+                    return;
+                }
+                hasher.AppendData(chunk.AsSpan(0, n));
+            }
+        }
+        catch (BadHttpRequestException e) when (e.StatusCode == StatusCodes.Status413PayloadTooLarge && max is { } cap)
+        {
+            await DocumentEndpoints.TooLarge(cap).ExecuteAsync(http);
+            return;
+        }
         request.Body.Position = 0;
         var hash = Convert.ToHexString(hasher.GetHashAndReset());
 

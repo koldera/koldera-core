@@ -31,4 +31,4 @@ body:
     attributes:
       label: Contribution
       options:
-        - label: I would be willing to send a pull request (and sign the CLA).
+        - label: I would be willing to help under the AGPL-3.0-only licence.

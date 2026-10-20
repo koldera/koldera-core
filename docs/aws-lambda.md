@@ -46,7 +46,7 @@ the adapter version, and keep the image's own entrypoint (`serve`). The adapter 
 then forwards each invocation as an HTTP request to port 8080.
 
 ```dockerfile
-FROM ghcr.io/koldera/core:0.1.0
+FROM koldera-core:0.1.0
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 ENV AWS_LWA_PORT=8080 \
     AWS_LWA_READINESS_CHECK_PATH=/healthz \
@@ -133,7 +133,7 @@ export const handler = async (event) => {
       const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
       await writeFile(input, Buffer.from(await object.Body.transformToByteArray()));
 
-      // Exit code 0: machine check passed; 2: completed with failed machine rules (still a result); anything else is an error.
+      // Exit code 0: machine check passed or declaration_withheld; 2: completed with failed machine rules (still a result); anything else is an error.
       let stdout;
       try {
         ({ stdout } = await run("koldera", ["pdf", input, "--fix", "--json", "--out", out], {

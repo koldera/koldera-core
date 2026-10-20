@@ -25,5 +25,6 @@ public interface IJobExecutor
     /// The configured job time limit, or <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> when none is configured.
     /// Executors pass it unchanged to <see cref="IWorkerProcess.RunAsync"/> and throw <see cref="TimeoutException"/> when the worker timed out.
     /// </param>
+    /// <param name="ct">Cancelled at the job deadline as well (see <see cref="JobRunner"/>), so the limit covers all steps together.</param>
     Task<JobOutcome> ExecuteAsync(CoreJob job, string scratch, TimeSpan timeout, CancellationToken ct);
 }

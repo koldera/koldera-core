@@ -26,17 +26,20 @@ variable is marked "set by the image".
 
 ## Limits
 
-All limits are unset by default, which means no limit. Set them for any instance that accepts files from people you
-do not trust.
+The job deadline, the structured-document body and image uploads have a default; the other limits are unset by
+default, which means no limit. Set them for any instance that accepts files from people you do not trust;
+`docker/compose.yaml` sets all of them (see [deployment.md](deployment.md#production-profile)).
 
-| Variable | Meaning |
-| --- | --- |
-| `KOLDERA_PDF_MAX_BYTES` | Largest PDF upload, in bytes. Larger declarations are refused with `422 FILE_TOO_LARGE`. |
-| `KOLDERA_PDF_MAX_PAGES` | Most pages a PDF (or a generated PDF) may have. |
-| `KOLDERA_HTML_MAX_BYTES` | Largest HTML upload, in bytes. |
-| `KOLDERA_JOB_TIMEOUT_SECONDS` | Time one job may run before it fails with `WORKER_TIMEOUT`. |
-| `KOLDERA_WEB_MAX_RESPONSE_BYTES` | Most response bytes a web scan may download. |
-| `KOLDERA_WEB_MAX_REQUESTS` | Most network requests a web scan may make. |
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `KOLDERA_PDF_MAX_BYTES` | no limit | Largest PDF upload, in bytes. Larger declarations are refused with `422 FILE_TOO_LARGE`. |
+| `KOLDERA_PDF_MAX_PAGES` | no limit | Most pages a PDF (or a generated PDF) may have. |
+| `KOLDERA_HTML_MAX_BYTES` | no limit | Largest HTML upload, in bytes. |
+| `KOLDERA_IMAGE_MAX_BYTES` | `20971520` (20 MiB) | Largest image upload (PNG, JPEG, SVG), in bytes. Larger declarations are refused with `422 FILE_TOO_LARGE`. |
+| `KOLDERA_DOCUMENT_MAX_BYTES` | `10485760` (10 MiB) | Largest `POST /v1/documents/jobs` request body, in bytes. Images are separate uploads, so this is text only. A larger body is refused with `422 FILE_TOO_LARGE` before it is parsed or buffered for an `Idempotency-Key`. |
+| `KOLDERA_JOB_TIMEOUT_SECONDS` | `900` (15 minutes) | One deadline for the whole job, from the moment it starts running: every step (render, probe, PDF engine, veraPDF, re-validation) gets only the time that is left. When it passes, the running worker is stopped and the job fails with `WORKER_TIMEOUT`. Time spent waiting in the queue does not count. |
+| `KOLDERA_WEB_MAX_RESPONSE_BYTES` | no limit | Most response bytes a web scan may download. |
+| `KOLDERA_WEB_MAX_REQUESTS` | no limit | Most network requests a web scan may make. |
 
 ## Web scans and Chromium
 
@@ -65,7 +68,8 @@ The image sets `KOLDERA_TYPST_CMD`, `VERAPDF_CMD`, `KOLDERA_CONTRACTS_DIR` and `
 ## Command line
 
 `koldera pdf|html|scan|document` reads the same variables (data directory, limits, Typst and worker locations,
-`KOLDERA_WEB_PROXY`, `KOLDERA_WEB_ALLOW_HTTP`, `KOLDERA_CHROMIUM_SANDBOX`). Exit codes: `0` machine check passed, `2` completed with failed
+`KOLDERA_WEB_PROXY`, `KOLDERA_WEB_ALLOW_HTTP`, `KOLDERA_CHROMIUM_SANDBOX`); `KOLDERA_DOCUMENT_MAX_BYTES` and
+`KOLDERA_IMAGE_MAX_BYTES` apply to the HTTP API only, since the command line reads files you chose. Exit codes: `0` machine check passed or `declaration_withheld` (only the PDF/UA identifier is missing, pending human review), `2` completed with failed
 machine rules, `3` job failed, unsupported or no machine verdict, `64` usage error, `130` interrupted (Ctrl+C).
 
 ## What survives a restart

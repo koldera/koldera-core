@@ -9,7 +9,19 @@ public sealed record Limits(
     long? HtmlMaxBytes,
     int? JobTimeoutSeconds,
     long? WebMaxResponseBytes,
-    int? WebMaxRequests);
+    int? WebMaxRequests,
+    long? DocumentMaxBytes = null,
+    long? ImageMaxBytes = null)
+{
+    /// <summary>KOLDERA_DOCUMENT_MAX_BYTES default: a structured document is text only (images are separate uploads).</summary>
+    public const long DefaultDocumentMaxBytes = 10L * 1024 * 1024;
+
+    /// <summary>KOLDERA_IMAGE_MAX_BYTES default.</summary>
+    public const long DefaultImageMaxBytes = 20L * 1024 * 1024;
+
+    /// <summary>KOLDERA_JOB_TIMEOUT_SECONDS default: one deadline for all steps of a job.</summary>
+    public const int DefaultJobTimeoutSeconds = 900;
+}
 
 /// <param name="ChromiumSandbox">KOLDERA_CHROMIUM_SANDBOX (default false): start the renderer's and scanner's Chromium with its own sandbox. Needs unprivileged user namespaces; AWS Lambda and default Docker need false.</param>
 /// <param name="CorsOrigins">KOLDERA_CORS_ORIGINS: exact origins (comma separated). A literal * is not supported and allows nothing (fails safe).</param>
@@ -129,9 +141,11 @@ public sealed record CoreOptions(
                 Long("PDF_MAX_BYTES"),
                 OptionalInt("PDF_MAX_PAGES"),
                 Long("HTML_MAX_BYTES"),
-                OptionalInt("JOB_TIMEOUT_SECONDS"),
+                OptionalInt("JOB_TIMEOUT_SECONDS") ?? Limits.DefaultJobTimeoutSeconds,
                 Long("WEB_MAX_RESPONSE_BYTES"),
-                OptionalInt("WEB_MAX_REQUESTS")),
+                OptionalInt("WEB_MAX_REQUESTS"),
+                Long("DOCUMENT_MAX_BYTES") ?? Limits.DefaultDocumentMaxBytes,
+                Long("IMAGE_MAX_BYTES") ?? Limits.DefaultImageMaxBytes),
             TypstCommand: Text("TYPST_CMD") ?? DefaultTypstCommand,
             ChromiumSandbox: chromiumSandbox is not null && bool.Parse(chromiumSandbox),
             AllowedHosts: Text("ALLOWED_HOSTS") is { } hosts

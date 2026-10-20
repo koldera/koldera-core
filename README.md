@@ -6,7 +6,7 @@ rendered to tagged PDF, and axe-core scans of web pages. One container, an HTTP 
 Everything it reports is a **machine check**: PDF/UA-1 rules through veraPDF and WCAG 2.2 AA automated rules through
 axe-core. Automated checks cannot decide everything, so a person still has to review the result.
 
-Status: early release (0.1.0). The API may change before 1.0.
+**Status:** 0.1 source preview. No prebuilt image or GitHub Release is available yet; the API may change before 1.0.
 
 No telemetry: koldera-core does not send data anywhere; documents stay on your server.
 
@@ -29,23 +29,33 @@ No telemetry: koldera-core does not send data anywhere; documents stay on your s
 - Generate alternative text, or guess headings, tables, lists or reading order beyond the documented inference.
 - Decide that a reading order or a page is right. Findings carry `needsHumanReview`, and `manualReviewRequired` is
   always `true`.
-- Claim conformance. A `pdfuaid:part=1` identifier is written only when veraPDF and the engine's own checks report
-  nothing left; it is a machine-check declaration, not a statement that the document is accessible.
+- Claim conformance. A `pdfuaid:part=1` identifier is a PDF/UA-1 conformance declaration, so the engine never writes
+  it by default; the API offers no way to request it. The engine writes it only for an explicit worker request after
+  human review, and never over structure it inferred or figures it marked as artifact.
 
-Known limits: Typst 0.15.1 tags row headers as bold data cells (TD), not TH; links in a document's header and footer
+Known limits: Typst 0.15.1 cannot tag row headers as TH, so a structured-document table with `rowHeaders: true` is
+refused (`422 VALIDATION_ERROR`) instead of rendered with untagged row headers; links in a document's header and footer
 render as plain text; Chromium runs without its own sandbox in the supplied container (see
 [docs/deployment.md](docs/deployment.md#browser-sandbox)); idempotency keys and client-session budgets are held in
 memory and lost on restart; it is a single instance and does not scale horizontally.
 
 ## Quick start: Docker
 
-The image `ghcr.io/koldera/core:0.1.0` is published with the first release. Until then build it locally with
-`docker build -f docker/Dockerfile -t koldera-core .` and use `koldera-core` in place of the image name below.
+No prebuilt image or GitHub Release is available yet. Clone this repository and build the image from source:
+
+```bash
+git clone https://github.com/koldera/koldera-core.git
+cd koldera-core
+docker build -f docker/Dockerfile -t koldera-core:0.1.0 .
+```
+
+The build downloads pinned upstream tools and can take time. Review [deployment guidance](docs/deployment.md) before
+serving untrusted users.
 
 ```bash
 export KOLDERA_TOKEN="$(openssl rand -base64 32)"
 docker run -d --name koldera -p 8080:8080 -v koldera-data:/data \
-  -e KOLDERA_TOKEN ghcr.io/koldera/core:0.1.0
+  -e KOLDERA_TOKEN koldera-core:0.1.0
 curl -H "Authorization: Bearer $KOLDERA_TOKEN" http://localhost:8080/v1/info
 ```
 
@@ -89,7 +99,7 @@ The image contains the command-line tool, so no server is needed:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD:/work" -w /work ghcr.io/koldera/core:0.1.0 pdf report.pdf --fix
+  -v "$PWD:/work" -w /work koldera-core:0.1.0 pdf report.pdf --fix
 ```
 
 It writes `report.remediated.pdf` and the reports to the current directory (or to `--out <dir>`) and never touches the
@@ -97,7 +107,7 @@ original. Commands: `pdf`, `html`, `scan`, `document`; add `--json` for machine-
 
 | Exit code | Meaning |
 | --- | --- |
-| `0` | The machine check passed. |
+| `0` | The machine check passed, or only the PDF/UA identifier is missing because declaring PDF/UA needs a human review (`declaration_withheld`, not a pass). |
 | `2` | The job completed but machine rules failed. |
 | `3` | The job failed, the input is unsupported, or there is no machine verdict. |
 | `64` | Usage error. |
@@ -109,7 +119,7 @@ GitHub Actions:
 - name: Check PDFs for PDF/UA-1 machine rules
   run: |
     docker run --rm --user "$(id -u):$(id -g)" \
-      -v "$PWD:/work" -w /work ghcr.io/koldera/core:0.1.0 pdf docs/report.pdf --out koldera-out
+      -v "$PWD:/work" -w /work koldera-core:0.1.0 pdf docs/report.pdf --out koldera-out
 ```
 
 The step fails on exit code 2 or 3. Remember that a pass is a machine check, not a review.
@@ -126,7 +136,9 @@ The most used options (all of them, with defaults, are in [docs/configuration.md
 | `KOLDERA_FEATURES` | `pdf,html,web,document` | Enabled features. Turn `web` off if you do not need scans. |
 | `KOLDERA_RETENTION_HOURS` | `24` | How long results are kept. |
 | `KOLDERA_PDF_MAX_BYTES` | no limit | Largest PDF upload; set it for untrusted users. |
-| `KOLDERA_JOB_TIMEOUT_SECONDS` | no limit | Time one job may run. |
+| `KOLDERA_JOB_TIMEOUT_SECONDS` | `900` | Time one job may run, all its steps together. |
+| `KOLDERA_DOCUMENT_MAX_BYTES` | `10485760` (10 MiB) | Largest structured-document request body. |
+| `KOLDERA_IMAGE_MAX_BYTES` | `20971520` (20 MiB) | Largest image upload. |
 | `KOLDERA_CONCURRENCY` | half the CPUs | Jobs that run at once. |
 
 ## Secure deployment
@@ -139,12 +151,13 @@ To run on AWS Lambda see [docs/aws-lambda.md](docs/aws-lambda.md).
 
 ## SDKs and command-line client
 
-These are separate projects under the Apache-2.0 licence, planned and not yet published:
+These are separate Apache-2.0 projects. Their source repositories are being prepared for public access; registry
+packages are not published yet:
 
 - `koldera-cli`, a Rust command-line client for a remote server or the local Docker image
 - `koldera-js` (TypeScript and Node.js, with React), `koldera-python`, `koldera-dotnet`, `koldera-go`
 
-They will live under github.com/koldera. Until they are published, use the HTTP API directly.
+Use the HTTP API directly until their repositories are public.
 
 ## Components
 
@@ -159,16 +172,16 @@ They will live under github.com/koldera. Until they are published, use the HTTP 
 
 ## Licensing
 
-koldera-core is licensed under **AGPL-3.0-only** ([LICENSE](LICENSE)). If you modify it and let users interact with it
-over a network, or distribute it or a work based on it, the AGPL requires you to offer the corresponding source under
-the same licence. A commercial licence lets you do this without the AGPL obligations. Using an unmodified
-koldera-core, including inside a company or behind your own service over its HTTP API, is free.
-For embedding or redistribution without source, OEM terms or support, see [COMMERCIAL.md](COMMERCIAL.md) or write to
-licensing@koldera-accessibility.dev. Third-party components and their licences are listed in [NOTICE](NOTICE).
+koldera-core is open source under the [GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only).
+You may use, modify and redistribute it under that licence. If you modify the server and let users interact with it
+over a network, AGPL section 13 requires you to offer those users the corresponding source of your version.
+The SDKs, CLI and contract kit have their own Apache-2.0 licences. Third-party components keep their own licences,
+listed in [NOTICE](NOTICE). For a separate commercial licence, contact licensing@koldera-accessibility.dev;
+no commercial licence is required to use Core under AGPL-3.0-only.
 
 ## Contributing and security
 
-Contributions need a signed [CLA](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
+Contributions are welcome under AGPL-3.0-only; see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
 described in [SECURITY.md](SECURITY.md), not in a public issue. Participation is governed by the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 

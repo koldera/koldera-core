@@ -216,11 +216,45 @@ jobs:
           dotnet restore server/Koldera.Core.slnx
       - run: node scripts/check-licences.mjs
 
+  vulnerabilities:
+    # Known vulnerabilities in the locked dependencies (pnpm, Maven, NuGet lockfiles). Fails on HIGH/CRITICAL that
+    # have a fixed version; accepted findings go into .trivyignore.yaml with a statement and an expiry date.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: engine/pom.xml
+      # Trivy reads the Maven tree from ~/.m2; resolving it first keeps Trivy off Maven Central (which rate-limits it).
+      - name: Resolve the Maven dependencies
+        run: mvn -B -q dependency:resolve
+        working-directory: engine
+      - name: Install Trivy (pinned release, SHA-256 checked)
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz
+          echo "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a  trivy.tar.gz" | sha256sum -c -
+          tar -xzf trivy.tar.gz trivy
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Scan the lockfiles
+        run: trivy fs --no-progress --skip-version-check --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile .trivyignore.yaml .
+
   docker:
-    needs: [hygiene, engine, renderer, scanner, server, real-tools, licences]
+    needs: [hygiene, engine, renderer, scanner, server, real-tools, licences, vulnerabilities]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
+      # The image, its layer cache and Trivy's Java DB do not fit next to the runner's preinstalled toolchains.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -250,16 +284,25 @@ jobs:
       - name: Container log on failure
         if: failure()
         run: docker logs core || true
+      - name: Install Trivy (pinned release, SHA-256 checked)
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz
+          echo "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a  trivy.tar.gz" | sha256sum -c -
+          tar -xzf trivy.tar.gz trivy
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Scan the image (OS packages and bundled runtimes/libraries)
+        run: trivy image --no-progress --skip-version-check --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile .trivyignore.yaml koldera-core:ci
       - name: Compose files are valid
         run: |
-          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy docker compose -f docker/compose.yaml config -q
-          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy OIDC_ISSUER_URL=https://idp.example/ OIDC_CLIENT_ID=x             OIDC_CLIENT_SECRET=x SSO_EMAIL_DOMAIN=example.com OAUTH2_COOKIE_SECRET=x OIDC_REDIRECT_URL=https://x.example/oauth2/callback             docker compose -f docker/compose.yaml -f docker/compose.sso.yaml config -q
+          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy KOLDERA_PUBLIC_URL=http://localhost:8080 docker compose -f docker/compose.yaml config -q
+          KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN=dummy KOLDERA_PUBLIC_URL=https://x.example OIDC_ISSUER_URL=https://idp.example/ OIDC_CLIENT_ID=x             OIDC_CLIENT_SECRET=x SSO_EMAIL_DOMAIN=example.com OAUTH2_COOKIE_SECRET=x OIDC_REDIRECT_URL=https://x.example/oauth2/callback             docker compose -f docker/compose.yaml -f docker/compose.sso.yaml config -q
       - name: Web scan through the egress proxy in the compose setup
         # core has no DNS and no route out; the scan must go through Squid, and a name resolving to loopback is refused.
         run: |
           docker rm -f core # the probe container above holds port 8080
           KOLDERA_TOKEN="ci-$(openssl rand -hex 24)"
-          export KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN
+          export KOLDERA_IMAGE=koldera-core:ci KOLDERA_TOKEN KOLDERA_PUBLIC_URL=http://localhost:8080
           docker compose -f docker/compose.yaml up -d --build --wait
           scan() {
             curl -fsS -X POST -H "Authorization: Bearer $KOLDERA_TOKEN" -H "Content-Type: application/json" -H "Prefer: wait=120"               http://localhost:8080/v1/web/jobs -d "{\"url\":\"$1\"}"

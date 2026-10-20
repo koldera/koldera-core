@@ -48,6 +48,14 @@ final class ResultAssembler {
     this.finalValidation = outcome.toContract(reportPathIfPresent(reportName));
   }
 
+  /**
+   * The final validation fails only the missing identifier, which was withheld pending human review: reported as
+   * {@code declaration_withheld}, never as passed. The failed rule stays listed.
+   */
+  void declarationWithheld() {
+    finalValidation = new Validation(finalValidation.profile(), WorkerResult.ValidationStatus.DECLARATION_WITHHELD, finalValidation.failedRules(), finalValidation.rawReportPath());
+  }
+
   void actions(List<Action> applied) {
     actions.clear();
     actions.addAll(applied);

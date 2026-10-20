@@ -20,13 +20,31 @@ public record WorkerRequest(
     String explicitTitle,
     String sourceFileName,
     Origin origin,
-    Limits limits) {
+    Limits limits,
+    Boolean declarePdfUa,
+    Boolean humanReviewAcknowledged) {
 
   /** Canonical container path of the immutable input document. */
   public static final String CANONICAL_INPUT_PATH = "/work/in/document.pdf";
 
   /** Canonical container path of the per-job writable output directory. */
   public static final String CANONICAL_OUTPUT_DIRECTORY = "/work/out";
+
+  /** Pre-{@code declarePdfUa} shape: no PDF/UA declaration requested. */
+  public WorkerRequest(
+      String specVersion,
+      UUID jobId,
+      String inputPath,
+      String outputDirectory,
+      Mode mode,
+      String profile,
+      String explicitLanguage,
+      String explicitTitle,
+      String sourceFileName,
+      Origin origin,
+      Limits limits) {
+    this(specVersion, jobId, inputPath, outputDirectory, mode, profile, explicitLanguage, explicitTitle, sourceFileName, origin, limits, null, null);
+  }
 
   /** Pre-{@code origin} shape; kept so callers and tests that predate it still compile. */
   public WorkerRequest(
@@ -64,12 +82,14 @@ public record WorkerRequest(
     FIX
   }
 
-  /** Where the PDF being processed came from: an upload, or a PDF generated from HTML. */
+  /** Where the PDF being processed came from: an upload, a PDF generated from HTML, or a structured document rendered by Typst. */
   public enum Origin {
     @JsonProperty("upload")
     UPLOAD,
     @JsonProperty("html_generated")
-    HTML_GENERATED
+    HTML_GENERATED,
+    @JsonProperty("document_generated")
+    DOCUMENT_GENERATED
   }
 
   /** Resolved limits: a limit the request left out is {@code Long.MAX_VALUE} / {@code Integer.MAX_VALUE} (effectively unlimited). */
@@ -92,5 +112,18 @@ public record WorkerRequest(
   /** Whether this PDF was generated from HTML, rather than uploaded by a caller. */
   public boolean isHtmlGenerated() {
     return origin == Origin.HTML_GENERATED;
+  }
+
+  /** A structured document rendered by Typst: in {@code fix} only the renderer's PDF/UA identifier is withdrawn. */
+  public boolean isDocumentGenerated() {
+    return origin == Origin.DOCUMENT_GENERATED;
+  }
+
+  /**
+   * The caller asks for {@code pdfuaid:part=1} and states that a person reviewed the document. Both are required; the
+   * identifier step still refuses engine-made structure, auto-artifacted figures and any remaining failure.
+   */
+  public boolean declaresPdfUaAfterReview() {
+    return Boolean.TRUE.equals(declarePdfUa) && Boolean.TRUE.equals(humanReviewAcknowledged);
   }
 }

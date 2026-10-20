@@ -12,7 +12,7 @@ body:
     attributes:
       label: Version
       description: Image tag or commit, from `GET /v1/info` or `koldera --version`
-      placeholder: ghcr.io/koldera/core:0.1.0
+      placeholder: koldera-core:0.1.0
     validations:
       required: true
   - type: dropdown

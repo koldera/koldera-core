@@ -1,21 +1,20 @@
 # Contributing
 
-Thanks for helping. Please read this page, the [Code of Conduct](CODE_OF_CONDUCT.md) and the [CLA](CLA.md) first.
+This page describes how koldera-core is developed. Please read it and the [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 ## Before you start
 
-- For a bug or a small fix, open a pull request or an issue.
+- For a bug, open an issue with a synthetic reproducer.
 - For a new feature or a change to the API, open an issue first so we can agree on the shape before you write code.
 - Report security problems privately, see [SECURITY.md](SECURITY.md).
 - What the project promises, and what it never does, is in the [README](README.md). Changes must not add claims
   of conformance, generated alternative text or guessed structure.
 
-## CLA
+## External contributions
 
-Contributions need a signed [CLA](CLA.md) because koldera-core is offered under AGPL-3.0-only and under a commercial
-licence. The automatic CLA check ships with the CI workflows, which are pending; once it is active a bot comments on
-your first pull request and you reply with the sentence it asks for. Until then the Koldera team will ask you to confirm
-in the pull request.
+Issues and pull requests are welcome. By submitting a contribution, you agree to license that contribution under
+[AGPL-3.0-only](LICENSE) and confirm that you have the right to do so. Include the applicable copyright and licence
+notices for code you add. Please open an issue before a large change so the design can be discussed.
 
 ## Repository layout and setup
 
