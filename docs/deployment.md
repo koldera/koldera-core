@@ -101,6 +101,36 @@ The renderer and the web scanner drive Chromium through Playwright, which starts
 which Docker's default seccomp profile blocks, so the process runs without it. A browser exploit would therefore
 not be stopped by Chromium's sandbox. This is a known residual risk, not something the image hides.
 
+**If the renderer or the web scanner handle input you do not control, run with the sandbox.** Add the override file
+and the seccomp profile that ship next to `compose.yaml`:
+
+```bash
+KOLDERA_TOKEN=... KOLDERA_PUBLIC_URL=... \
+  docker compose -f docker/compose.yaml -f docker/compose.sandbox.yaml up -d
+```
+
+`compose.sandbox.yaml` sets `KOLDERA_CHROMIUM_SANDBOX=true` and uses `docker/seccomp-chromium.json`: Docker's own
+default profile plus one rule that allows `clone`, `unshare`, `setns` and `chroot` without `CAP_SYS_ADMIN` or
+`CAP_SYS_CHROOT`, which is what Chromium needs to build its sandbox from unprivileged user namespaces. The container
+still runs as uid 10001 with `cap_drop: [ALL]`, `no-new-privileges`, a read-only root filesystem and the same limits.
+It never falls back: if the host does not allow user namespaces, Chromium refuses to start and the job fails with
+`RENDER_FAILED`.
+
+What you trade: user namespaces give a process inside the container more kernel surface to reach (a kernel bug in
+that code is reachable from the container), in exchange for a browser exploit having to escape Chromium's sandbox
+first. Choose it where input is untrusted; the default stays without it because it works on every Docker host.
+
+Checked on Docker Engine 29.8 (Docker Desktop, WSL2 kernel 5.15): the HTML renderer and a web scan through the egress
+proxy run with the sandbox, and the same job without the profile fails closed. Not checked on a Linux host with
+AppArmor restrictions on unprivileged user namespaces (Ubuntu 24.04 sets `kernel.apparmor_restrict_unprivileged_userns=1`);
+there the sandbox may not start until the host policy is adjusted, and then it fails closed as above. Test with a
+sample job before relying on it:
+
+```bash
+docker compose -f docker/compose.yaml -f docker/compose.sandbox.yaml exec core \
+  sh -c 'printf "<!doctype html><html lang=en><title>t</title><main><h1>t</h1></main>" > /tmp/t.html && koldera html /tmp/t.html --out /tmp/out'
+```
+
 Compensating controls in the supplied setup:
 
 - the whole container runs as uid 10001, never root;
@@ -112,8 +142,8 @@ Compensating controls in the supplied setup:
   setup (egress proxy in front, public destinations only), not with `docker run` on a host network, and leave the
   `web` feature off (`KOLDERA_FEATURES`) if you do not need it.
 
-If you run the image outside this setup, apply the same controls. A custom seccomp profile that allows user
-namespaces would let Chromium sandbox itself, but that weakens the container boundary and is not done here.
+If you run the image outside this setup, apply the same controls. Outside compose, the same two settings are
+`-e KOLDERA_CHROMIUM_SANDBOX=true --security-opt seccomp=docker/seccomp-chromium.json`.
 
 ### `KOLDERA_CHROMIUM_SANDBOX`
 
@@ -127,4 +157,5 @@ Playwright's `chromiumSandbox` launch option is always set explicitly:
 | `true` | `true` | uses its own sandbox; only works where unprivileged user namespaces are allowed |
 
 AWS Lambda and Docker's default seccomp profile do not allow those namespaces, so leave it at the default there; a
-value of `true` makes Chromium fail to start on such hosts. See [aws-lambda.md](aws-lambda.md) for running on Lambda.
+value of `true` makes Chromium fail to start on such hosts. With Docker, `docker/compose.sandbox.yaml` sets the
+variable together with a seccomp profile that allows them. See [aws-lambda.md](aws-lambda.md) for running on Lambda.
