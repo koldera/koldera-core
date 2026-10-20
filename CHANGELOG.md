@@ -5,6 +5,11 @@ dated on the day its tag is created.
 
 ## Unreleased
 
+- Security: the image no longer ships the eight HIGH Jackson CVEs bundled in veraPDF 1.30.2 (jackson-core and
+  jackson-databind 2.21.1). The two Jackson libraries are cut out of veraPDF's fat jar and replaced by 2.21.7 jars
+  (checksum-pinned) beside it; no veraPDF class changes. The veraPDF Swing GUI and installer uninstaller are removed
+  from the image. `.trivyignore.yaml` is empty again.
+
 - Security: `docker/compose.sandbox.yaml` and `docker/seccomp-chromium.json` run Chromium with its own sandbox inside
   the hardened container (Docker's default seccomp profile plus `clone`, `unshare`, `setns`, `chroot`). Recommended
   when the renderer or the web scanner handle untrusted input; it fails closed on hosts without user namespaces.
