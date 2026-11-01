@@ -29,7 +29,7 @@ COPY engine/src ./src
 RUN mvn -q -B -DskipTests -Dkoldera.version="${KOLDERA_VERSION}" package
 
 # ---------- renderer and scanner: build, then keep production dependencies only ----------
-FROM node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7 AS node
+FROM node:22-bookworm@sha256:18a6d90fd60542269850c80ca03b29b1d9b14d6b221ac7ee8e35b0d33ef904bd AS node
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm install -g pnpm@10 --no-fund --no-audit
 # Each package has its own lockfile (no workspace), so each is installed, built and pruned on its own.
@@ -137,7 +137,7 @@ RUN case "${TARGETARCH:-amd64}" in \
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
 FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS dotnet
-FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS nodejs
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS nodejs
 
 # ---------- runtime ----------
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
