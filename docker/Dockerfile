@@ -114,7 +114,7 @@ RUN mkdir -p /licenses \
     && echo "af175b9d96ee93c21a036152e1b905b0b95304d4ae8c2c921c7609100ba8df7e  /licenses/verapdf-LICENSE.MPL" | sha256sum -c -
 
 # ---------- Typst (static musl binary, checksum per architecture) ----------
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS typst
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS typst
 ARG TARGETARCH
 ARG TYPST_VERSION=v0.15.1
 ARG TYPST_SHA256_AMD64=a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
