@@ -20,7 +20,7 @@
 ARG KOLDERA_VERSION=0.1.0
 
 # ---------- PDF engine jar ----------
-FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS engine
+FROM maven:3.9-eclipse-temurin-26@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS engine
 ARG KOLDERA_VERSION
 WORKDIR /src
 COPY engine/pom.xml .
@@ -49,7 +49,7 @@ RUN pnpm run build && pnpm prune --prod
 RUN mkdir -p /licenses && cp -L node_modules/axe-core/LICENSE /licenses/axe-core-LICENSE
 
 # ---------- ASP.NET server ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0.402@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS server
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS server
 ARG KOLDERA_VERSION
 WORKDIR /src
 COPY server/Directory.Build.props server/Directory.Packages.props ./server/
@@ -136,13 +136,13 @@ RUN case "${TARGETARCH:-amd64}" in \
 
 # ---------- donor stages: runtimes copied instead of installed through apt ----------
 FROM eclipse-temurin:21-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c AS jre
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS dotnet
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble@sha256:de0ee358cdd672f7017a003bed21e9ac9ed48a27c922a59b18175b6e82fa7fee AS dotnet
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS nodejs
 
 # ---------- runtime ----------
 # Plain Ubuntu plus Node and only the Chromium headless shell: the stock Playwright image ships Firefox and
 # WebKit too, and deleting them in a later layer would not make the image smaller.
-FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+FROM ubuntu:24.10@sha256:cdf755952ed117f6126ff4e65810bf93767d4c38f5c7185b50ec1f1078b464cc
 ARG KOLDERA_VERSION
 LABEL org.opencontainers.image.title="koldera-core" \
       org.opencontainers.image.description="Self-hosted PDF accessibility analysis and conservative remediation: HTTP server and CLI over PDFBox, veraPDF, Chromium and Typst" \
